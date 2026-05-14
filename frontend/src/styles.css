@@ -194,9 +194,33 @@ button:hover {
   background: #285f5d;
 }
 
+button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
 button.secondary {
   background: #ffffff;
   color: #2f6f6d;
+}
+
+.statusMessage {
+  margin: 0;
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-weight: 600;
+}
+
+.statusMessage.success {
+  background: #e6fffa;
+  color: #0f5132;
+  border: 1px solid #9ae6b4;
+}
+
+.statusMessage.error {
+  background: #fff5f5;
+  color: #842029;
+  border: 1px solid #f5c2c7;
 }
 
 .resultPanel {

@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { formQuestions } from './formQuestions.js';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+
 function buildInitialAnswers(questions) {
   return questions.reduce((answers, question) => {
     answers[question.id] = question.type === 'range' ? String(question.min ?? 1) : '';
@@ -114,6 +116,9 @@ export default function App() {
   const initialAnswers = useMemo(() => buildInitialAnswers(formQuestions), []);
   const [answers, setAnswers] = useState(initialAnswers);
   const [submittedAnswers, setSubmittedAnswers] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionError, setSubmissionError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   function handleAnswerChange(questionId, value) {
     setAnswers((currentAnswers) => ({
@@ -122,9 +127,39 @@ export default function App() {
     }));
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
-    setSubmittedAnswers(answers);
+    setIsSubmitting(true);
+    setSubmissionError('');
+    setSuccessMessage('');
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/submissions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(answers),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(errorBody || 'No se pudo guardar el formulario');
+      }
+
+      const savedSubmission = await response.json();
+      setSubmittedAnswers(savedSubmission);
+      setSuccessMessage('Formulario guardado correctamente en la base de datos.');
+      setAnswers(initialAnswers);
+    } catch (error) {
+      setSubmissionError(
+        error instanceof Error
+          ? error.message
+          : 'Ocurrio un error inesperado al guardar el formulario.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -133,8 +168,8 @@ export default function App() {
         <p className="eyebrow">SGCIU</p>
         <h1>Formulario de captura</h1>
         <p>
-          Edita las preguntas desde <code>src/formQuestions.js</code> para adaptar
-          este formulario a tu investigacion.
+          Este formulario envia los campos <code>name</code>, <code>email</code> y{' '}
+          <code>message</code> directamente al backend FastAPI.
         </p>
       </section>
 
@@ -149,16 +184,35 @@ export default function App() {
         ))}
 
         <div className="actions">
-          <button type="submit">Guardar respuestas</button>
-          <button type="button" className="secondary" onClick={() => setAnswers(initialAnswers)}>
+          <button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Guardando...' : 'Guardar respuestas'}
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={isSubmitting}
+            onClick={() => setAnswers(initialAnswers)}
+          >
             Limpiar
           </button>
         </div>
+
+        {submissionError && (
+          <p className="statusMessage error" aria-live="polite">
+            {submissionError}
+          </p>
+        )}
+
+        {successMessage && (
+          <p className="statusMessage success" aria-live="polite">
+            {successMessage}
+          </p>
+        )}
       </form>
 
       {submittedAnswers && (
         <section className="resultPanel" aria-live="polite">
-          <h2>Ultimas respuestas</h2>
+          <h2>Ultimo registro guardado</h2>
           <pre>{JSON.stringify(submittedAnswers, null, 2)}</pre>
         </section>
       )}

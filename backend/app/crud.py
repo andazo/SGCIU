@@ -12,3 +12,6 @@ def create_form_submission(db: Session, payload: FormSubmissionCreate):
     db.commit()
     db.refresh(row)
     return row
+
+def list_form_submissions(db: Session):
+    return db.query(FormSubmission).order_by(FormSubmission.created_at.desc()).all()
