@@ -1,6 +1,6 @@
 :root {
   color: #1f2933;
-  background: #f5f7fa;
+  background: #eef3f7;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
@@ -26,13 +26,13 @@ textarea {
 }
 
 .appShell {
-  width: min(960px, calc(100% - 32px));
+  width: min(1080px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 48px 0;
+  padding: 42px 0;
 }
 
 .intro {
-  margin-bottom: 28px;
+  margin-bottom: 26px;
 }
 
 .eyebrow {
@@ -52,24 +52,20 @@ p {
 
 h1 {
   margin-bottom: 12px;
-  font-size: clamp(2rem, 5vw, 3.6rem);
-  line-height: 1;
+  font-size: clamp(2rem, 5vw, 3.3rem);
+  line-height: 1.05;
 }
 
 h2 {
-  margin-bottom: 16px;
-  font-size: 1.25rem;
+  margin: 0 0 6px;
+  font-size: 1.2rem;
 }
 
-.intro p:not(.eyebrow) {
-  max-width: 680px;
+.intro p:not(.eyebrow),
+.sectionHeader p {
+  max-width: 720px;
   color: #52616f;
-  line-height: 1.6;
-}
-
-code {
-  color: #234e52;
-  font-weight: 700;
+  line-height: 1.55;
 }
 
 .formPanel,
@@ -82,26 +78,50 @@ code {
 
 .formPanel {
   display: grid;
-  gap: 22px;
+  gap: 28px;
   padding: 28px;
+}
+
+.formSection {
+  display: grid;
+  gap: 18px;
+}
+
+.sectionHeader {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.sectionHeader > span {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 8px;
+  background: #e0f2f1;
+  color: #234e52;
+  font-weight: 900;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .field {
   display: grid;
   gap: 8px;
-  margin: 0;
-  border: 0;
-  padding: 0;
 }
 
-.field > span,
-legend {
+.field > span {
   color: #334e68;
   font-weight: 700;
 }
 
 input,
-select,
 textarea {
   width: 100%;
   border: 1px solid #bcccdc;
@@ -111,72 +131,169 @@ textarea {
   outline: none;
 }
 
-input,
-select {
+input {
   height: 44px;
   padding: 0 12px;
 }
 
 textarea {
-  min-height: 118px;
+  min-height: 112px;
   resize: vertical;
   padding: 12px;
+  line-height: 1.45;
 }
 
 input:focus,
-select:focus,
 textarea:focus {
   border-color: #2f6f6d;
   box-shadow: 0 0 0 3px rgba(47, 111, 109, 0.16);
 }
 
-.optionGrid {
+.chatPanel {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
-}
-
-.option {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  gap: 10px;
+  gap: 14px;
   border: 1px solid #d8dee6;
-  border-radius: 6px;
-  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 16px;
 }
 
-.option input {
+.chatMessages {
+  display: grid;
+  max-height: 430px;
+  overflow-y: auto;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.chatBubble {
+  width: min(82%, 720px);
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px 14px;
+}
+
+.chatBubble.user {
+  justify-self: end;
+  border-color: #9fb3c8;
+  background: #edf2f7;
+}
+
+.chatBubble strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #243b53;
+  font-size: 0.84rem;
+}
+
+.chatBubble p {
+  margin: 0;
+  color: #334e68;
+  line-height: 1.5;
+}
+
+.aiStatusRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.statusPill {
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.85rem;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+
+.statusPill.complete {
+  background: #e6fffa;
+  color: #0f5132;
+}
+
+.missingText {
+  color: #52616f;
+  font-size: 0.9rem;
+}
+
+.chatInputRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.chatInputRow textarea {
+  min-height: 76px;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.summaryItem {
+  min-height: 88px;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.summaryItem dt {
+  margin-bottom: 8px;
+  color: #52616f;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.summaryItem dd {
+  margin: 0;
+  color: #1f2933;
+  line-height: 1.45;
+  text-transform: none;
+}
+
+.pendingValue {
+  color: #9a3412 !important;
+  font-weight: 700;
+}
+
+.consentGroup {
+  display: grid;
+  gap: 10px;
+}
+
+.checkField {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 10px;
+  align-items: start;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.checkField input {
   width: 18px;
   height: 18px;
-  flex: 0 0 auto;
+  margin: 2px 0 0;
 }
 
-.rangeRow {
-  display: grid;
-  grid-template-columns: 1fr 44px;
-  align-items: center;
-  gap: 14px;
-}
-
-.rangeRow input {
-  padding: 0;
-}
-
-.rangeRow strong {
-  display: grid;
-  min-height: 36px;
-  place-items: center;
-  border-radius: 6px;
-  background: #e0f2f1;
-  color: #234e52;
+.checkField span {
+  color: #334e68;
+  line-height: 1.45;
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  padding-top: 6px;
 }
 
 button {
@@ -195,13 +312,8 @@ button:hover {
 }
 
 button:disabled {
-  opacity: 0.7;
-  cursor: wait;
-}
-
-button.secondary {
-  background: #ffffff;
-  color: #2f6f6d;
+  opacity: 0.62;
+  cursor: not-allowed;
 }
 
 .statusMessage {
@@ -212,15 +324,21 @@ button.secondary {
 }
 
 .statusMessage.success {
+  border: 1px solid #9ae6b4;
   background: #e6fffa;
   color: #0f5132;
-  border: 1px solid #9ae6b4;
 }
 
 .statusMessage.error {
+  border: 1px solid #f5c2c7;
   background: #fff5f5;
   color: #842029;
-  border: 1px solid #f5c2c7;
+}
+
+.statusMessage.warning {
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
 }
 
 .resultPanel {
@@ -238,14 +356,37 @@ pre {
   line-height: 1.5;
 }
 
+@media (max-width: 820px) {
+  .fieldGrid,
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .chatInputRow {
+    grid-template-columns: 1fr;
+  }
+
+  .chatInputRow button {
+    width: 100%;
+  }
+}
+
 @media (max-width: 640px) {
   .appShell {
-    width: min(100% - 24px, 960px);
+    width: min(100% - 24px, 1080px);
     padding: 28px 0;
   }
 
   .formPanel,
   .resultPanel {
     padding: 20px;
+  }
+
+  .sectionHeader {
+    grid-template-columns: 1fr;
+  }
+
+  .chatBubble {
+    width: 100%;
   }
 }
