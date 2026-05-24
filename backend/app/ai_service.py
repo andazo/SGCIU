@@ -19,9 +19,19 @@ Eres un asistente institucional para recopilar información de denuncias ciudada
 del cantón de Flores, Costa Rica. Responde siempre en español, con tono claro,
 respetuoso y profesional.
 
-Tu objetivo es completar estos datos: descripción detallada, relación con el
-incidente, categoría preliminar, distrito dentro de Flores, dirección exacta,
-tipo de lugar, fecha/hora aproximada y si el incidente es recurrente.
+Tu objetivo es completar estos datos: descripción detallada del incidente descrito por el usuario, 
+relación con el incidente, categoría preliminar, distrito dentro de Flores, dirección exacta,
+tipo de lugar y fecha/hora aproximada.
+
+No preguntes si el incidente es recurrente, si continúa ocurriendo o si ha
+ocurrido antes. La recurrencia no es un dato requerido y no debe extraerse.
+
+La conversación puede incluir un bloque de estado con información ya extraída.
+Debes tratar ese estado como memoria persistente. Conserva todos los campos que
+ya tengan valor, salvo que el usuario corrija explícitamente ese dato. Si el
+usuario continúa hablando de otros temas, no borres ni conviertas a null los
+datos ya capturados. Usa la conversación completa y el estado actual para
+devolver siempre la versión acumulada más completa de extracted_data.
 
 Haz una o pocas preguntas por turno. No des asesoría legal, no juzgues, no
 confirmes culpabilidad y no inventes datos. Si el usuario describe una emergencia
@@ -50,7 +60,6 @@ INTAKE_RESPONSE_SCHEMA = {
                 "direccion_exacta",
                 "tipo_lugar",
                 "fecha_hora_aproximada",
-                "es_recurrente",
             ],
             "properties": {
                 "descripcion_detallada": {"type": ["string", "null"]},
@@ -83,30 +92,27 @@ INTAKE_RESPONSE_SCHEMA = {
                     "enum": ["establecimiento", "casa", "parque", "escuela", "otro", None],
                 },
                 "fecha_hora_aproximada": {"type": ["string", "null"]},
-                "es_recurrente": {
-                    "type": ["string", "null"],
-                    "enum": ["si", "no", "no_aplica", None],
-                },
             },
         },
     },
 }
+
+REQUIRED_EXTRACTED_FIELDS = [
+    "descripcion_detallada",
+    "relacion_incidente",
+    "categoria_preliminar",
+    "distrito",
+    "direccion_exacta",
+    "tipo_lugar",
+    "fecha_hora_aproximada",
+]
 
 
 def _empty_chat_response(message: str):
     return ComplaintIntakeChatResponse(
         assistant_message=message,
         is_complete=False,
-        missing_fields=[
-            "descripcion_detallada",
-            "relacion_incidente",
-            "categoria_preliminar",
-            "distrito",
-            "direccion_exacta",
-            "tipo_lugar",
-            "fecha_hora_aproximada",
-            "es_recurrente",
-        ],
+        missing_fields=REQUIRED_EXTRACTED_FIELDS,
         extracted_data=ComplaintExtractedData(),
     )
 
@@ -117,7 +123,7 @@ def run_complaint_intake_chat(
     if not payload.messages:
         return _empty_chat_response(
             "Para iniciar, describa la denuncia con el mayor detalle posible. "
-            "Incluya qué ocurrió, dónde ocurrió, cuándo ocurrió y quiénes estuvieron involucrados si lo sabe."
+            "Incluya qué ocurrió, dónde ocurrió, cuándo ocurrió y los involucrados"
         )
 
     api_key = os.getenv("OPENAI_API_KEY")
@@ -137,7 +143,15 @@ def run_complaint_intake_chat(
 
     client = OpenAI(api_key=api_key)
     model = os.getenv("OPENAI_MODEL", "gpt-5.4-mini")
-    input_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + [
+    state_message = {
+        "role": "system",
+        "content": (
+            "Estado actual de datos extraídos. Debes conservar estos valores "
+            "en la respuesta si el usuario no los corrige explícitamente:\n"
+            f"{json.dumps((payload.current_extracted_data or ComplaintExtractedData()).model_dump(), ensure_ascii=False)}"
+        ),
+    }
+    input_messages = [{"role": "system", "content": SYSTEM_PROMPT}, state_message] + [
         message.model_dump() for message in payload.messages
     ]
 
@@ -162,7 +176,14 @@ def run_complaint_intake_chat(
 
     try:
         parsed = json.loads(response.output_text)
-        return ComplaintIntakeChatResponse.model_validate(parsed)
+        validated = ComplaintIntakeChatResponse.model_validate(parsed)
+        extracted = validated.extracted_data.model_dump()
+        missing_fields = [
+            field for field in REQUIRED_EXTRACTED_FIELDS if not extracted.get(field)
+        ]
+        validated.missing_fields = missing_fields
+        validated.is_complete = len(missing_fields) == 0
+        return validated
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

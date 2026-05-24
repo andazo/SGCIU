@@ -10,18 +10,16 @@ const INITIAL_EXTRACTED_DATA = {
   direccion_exacta: null,
   tipo_lugar: null,
   fecha_hora_aproximada: null,
-  es_recurrente: null,
 };
 
 const SUMMARY_LABELS = {
-  descripcion_detallada: 'Descripción detallada',
+  descripcion_detallada: 'Descripción incidente',
   relacion_incidente: 'Relación con el incidente',
   categoria_preliminar: 'Categoría preliminar',
   distrito: 'Distrito',
   direccion_exacta: 'Dirección exacta',
   tipo_lugar: 'Tipo de lugar',
   fecha_hora_aproximada: 'Fecha y hora aproximada',
-  es_recurrente: '¿Es recurrente?',
 };
 
 const INITIAL_AI_MESSAGE = {
@@ -50,6 +48,15 @@ function SummaryList({ extractedData }) {
         </div>
       ))}
     </dl>
+  );
+}
+
+function mergeExtractedData(currentData, nextData) {
+  return Object.fromEntries(
+    Object.keys(INITIAL_EXTRACTED_DATA).map((key) => [
+      key,
+      nextData?.[key] ?? currentData[key] ?? null,
+    ]),
   );
 }
 
@@ -112,6 +119,7 @@ export default function App() {
         },
         body: JSON.stringify({
           messages: nextMessages.filter((message) => message.role !== 'system'),
+          current_extracted_data: extractedData,
         }),
       });
 
@@ -125,7 +133,9 @@ export default function App() {
         ...current,
         { role: 'assistant', content: aiResponse.assistant_message },
       ]);
-      setExtractedData(aiResponse.extracted_data ?? INITIAL_EXTRACTED_DATA);
+      setExtractedData((currentData) =>
+        mergeExtractedData(currentData, aiResponse.extracted_data),
+      );
       setMissingFields(aiResponse.missing_fields ?? []);
       setIsAiComplete(Boolean(aiResponse.is_complete));
     } catch (error) {
@@ -192,21 +202,21 @@ export default function App() {
   return (
     <main className="appShell">
       <section className="intro">
-        <p className="eyebrow">SGCIU</p>
-        <h1>Formulario de denuncia ciudadana</h1>
+        <p className="eyebrow">Sistema de Gestión y Clasificación de Incidentes Urbanos - Municipalidad de Flores</p>
+        <h1>Formulario Denuncia Ciudadana</h1>
         <p>
-          Complete la información general, converse con el asistente para estructurar la
-          denuncia y confirme la veracidad de los datos antes de enviarla.
+          Complete la información a continuación para registrar su denuncia. 
+          Recuerde que la información proporcionada debe ser veraz y que sus datos serán utilizados para la gestión de esta denuncia.
         </p>
       </section>
 
       <form className="formPanel" onSubmit={handleSubmit}>
         <section className="formSection">
           <div className="sectionHeader">
-            <span>01</span>
+            <span>1</span>
             <div>
-              <h2>Información General</h2>
-              <p>Estos datos son opcionales.</p>
+              <h2>Información General - Usuario</h2>
+              <p>Datos opcionales</p>
             </div>
           </div>
 
@@ -217,7 +227,7 @@ export default function App() {
                 id="name"
                 name="name"
                 type="text"
-                placeholder="Ej. Ana Martínez"
+                placeholder="Ej. Esmeralda Delgado"
                 value={contactData.name}
                 onChange={handleContactChange}
               />
@@ -251,10 +261,10 @@ export default function App() {
 
         <section className="formSection">
           <div className="sectionHeader">
-            <span>02</span>
+            <span>2</span>
             <div>
-              <h2>Asistente IA</h2>
-              <p>El asistente hará preguntas para completar la descripción de la denuncia.</p>
+              <h2>Asistente Inteligente</h2>
+              <p>Dale al asistente una descripción de la denuncia y él hará el resto de preguntas.</p>
             </div>
           </div>
 
@@ -307,10 +317,10 @@ export default function App() {
 
         <section className="formSection">
           <div className="sectionHeader">
-            <span>03</span>
+            <span>3</span>
             <div>
               <h2>Resumen extraído</h2>
-              <p>Revise la información que el asistente estructuró antes de guardar.</p>
+              <p>Información extraida por el asistente.</p>
             </div>
           </div>
 
@@ -319,9 +329,9 @@ export default function App() {
 
         <section className="formSection">
           <div className="sectionHeader">
-            <span>04</span>
+            <span>4</span>
             <div>
-              <h2>Consentimiento sobre información y veracidad legal</h2>
+              <h2>Consentimiento sobre información y veracidad</h2>
               <p>Estas confirmaciones son obligatorias para enviar la denuncia.</p>
             </div>
           </div>

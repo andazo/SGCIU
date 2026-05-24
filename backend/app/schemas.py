@@ -33,7 +33,6 @@ CategoriaPreliminar = Literal[
 ]
 Distrito = Literal["San Joaquin", "Barrantes", "Llorente"]
 TipoLugar = Literal["establecimiento", "casa", "parque", "escuela", "otro"]
-Recurrencia = Literal["si", "no", "no_aplica"]
 
 
 class ComplaintExtractedData(BaseModel):
@@ -44,7 +43,6 @@ class ComplaintExtractedData(BaseModel):
     direccion_exacta: Optional[str] = None
     tipo_lugar: Optional[TipoLugar] = None
     fecha_hora_aproximada: Optional[str] = None
-    es_recurrente: Optional[Recurrencia] = None
 
 
 class ChatMessage(BaseModel):
@@ -61,6 +59,7 @@ class ChatMessage(BaseModel):
 
 class ComplaintIntakeChatRequest(BaseModel):
     messages: list[ChatMessage]
+    current_extracted_data: Optional[ComplaintExtractedData] = None
 
 
 class ComplaintIntakeChatResponse(BaseModel):
