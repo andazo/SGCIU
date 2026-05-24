@@ -22,6 +22,34 @@ const SUMMARY_LABELS = {
   fecha_hora_aproximada: 'Fecha y hora aproximada',
 };
 
+const VALUE_LABELS = {
+  ruido: 'Ruido',
+  vehiculo_sospechoso: 'Vehículo sospechoso',
+  venta_drogas: 'Venta de drogas',
+  violencia: 'Violencia',
+  robo: 'Robo',
+  vandalismo: 'Vandalismo',
+  persona_sospechosa: 'Persona sospechosa',
+  emergencia: 'Emergencia',
+  disturbio_publico: 'Disturbio público',
+  basura_o_contaminacion: 'Basura o contaminación',
+  alumbrado_publico: 'Alumbrado público',
+  obstruccion_via_publica: 'Obstrucción de vía pública',
+  animal_peligroso: 'Animal peligroso',
+  consumo_alcohol_drogas: 'Consumo de alcohol o drogas',
+  acoso_o_amenaza: 'Acoso o amenaza',
+  problema_transito: 'Problema de tránsito',
+  otro: 'Otro',
+  victima: 'Víctima',
+  testigo: 'Testigo',
+  vecino: 'Vecino',
+  comerciante: 'Comerciante',
+  establecimiento: 'Establecimiento',
+  casa: 'Casa',
+  parque: 'Parque',
+  escuela: 'Escuela',
+};
+
 const INITIAL_AI_MESSAGE = {
   role: 'assistant',
   content:
@@ -33,7 +61,7 @@ function normalizeValue(value) {
     return 'Pendiente';
   }
 
-  return String(value).replaceAll('_', ' ');
+  return VALUE_LABELS[value] ?? String(value).replaceAll('_', ' ');
 }
 
 function SummaryList({ extractedData }) {

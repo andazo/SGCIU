@@ -29,6 +29,14 @@ CategoriaPreliminar = Literal[
     "vandalismo",
     "persona_sospechosa",
     "emergencia",
+    "disturbio_publico",
+    "basura_o_contaminacion",
+    "alumbrado_publico",
+    "obstruccion_via_publica",
+    "animal_peligroso",
+    "consumo_alcohol_drogas",
+    "acoso_o_amenaza",
+    "problema_transito",
     "otro",
 ]
 Distrito = Literal["San Joaquin", "Barrantes", "Llorente"]
