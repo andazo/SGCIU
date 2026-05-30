@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from .ai_service import run_complaint_intake_chat
 from .db import Base, engine, get_db
@@ -23,6 +24,13 @@ from .crud import (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "ALTER TABLE complaint_submissions "
+                "ADD COLUMN IF NOT EXISTS ai_summary_text TEXT"
+            )
+        )
     yield
 
 

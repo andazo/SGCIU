@@ -53,7 +53,7 @@ const VALUE_LABELS = {
 const INITIAL_AI_MESSAGE = {
   role: 'assistant',
   content:
-    'Para iniciar, describa la denuncia con el mayor detalle posible. Incluya qué ocurrió, dónde ocurrió, cuándo ocurrió y quiénes estuvieron involucrados si lo sabe.',
+    'Describa la denuncia cuando esté listo. Le haré preguntas solo si falta algún dato importante. Si detecto información incorrecta, puede indicármelo para corregirla.',
 };
 
 function normalizeValue(value) {
@@ -64,19 +64,13 @@ function normalizeValue(value) {
   return VALUE_LABELS[value] ?? String(value).replaceAll('_', ' ');
 }
 
-function SummaryList({ extractedData }) {
-  return (
-    <dl className="summaryGrid">
-      {Object.entries(SUMMARY_LABELS).map(([key, label]) => (
-        <div className="summaryItem" key={key}>
-          <dt>{label}</dt>
-          <dd className={!extractedData[key] ? 'pendingValue' : undefined}>
-            {normalizeValue(extractedData[key])}
-          </dd>
-        </div>
-      ))}
-    </dl>
-  );
+function buildDetailBullets(extractedData) {
+  return Object.entries(SUMMARY_LABELS)
+    .filter(([key]) => key !== 'descripcion_detallada' && extractedData[key])
+    .map(([key, label]) => ({
+      label,
+      value: normalizeValue(extractedData[key]),
+    }));
 }
 
 function mergeExtractedData(currentData, nextData) {
@@ -97,8 +91,8 @@ export default function App() {
   const [messages, setMessages] = useState([INITIAL_AI_MESSAGE]);
   const [currentMessage, setCurrentMessage] = useState('');
   const [extractedData, setExtractedData] = useState(INITIAL_EXTRACTED_DATA);
-  const [missingFields, setMissingFields] = useState(Object.keys(INITIAL_EXTRACTED_DATA));
   const [isAiComplete, setIsAiComplete] = useState(false);
+  const [summaryText, setSummaryText] = useState('');
   const [truthConfirmation, setTruthConfirmation] = useState(false);
   const [dataUsageConsent, setDataUsageConsent] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
@@ -111,10 +105,17 @@ export default function App() {
   const canSubmit = useMemo(
     () =>
       Boolean(extractedData.descripcion_detallada) &&
+      isAiComplete &&
       truthConfirmation &&
       dataUsageConsent &&
       !isSubmitting,
-    [dataUsageConsent, extractedData.descripcion_detallada, isSubmitting, truthConfirmation],
+    [
+      dataUsageConsent,
+      extractedData.descripcion_detallada,
+      isAiComplete,
+      isSubmitting,
+      truthConfirmation,
+    ],
   );
 
   function handleContactChange(event) {
@@ -164,8 +165,8 @@ export default function App() {
       setExtractedData((currentData) =>
         mergeExtractedData(currentData, aiResponse.extracted_data),
       );
-      setMissingFields(aiResponse.missing_fields ?? []);
       setIsAiComplete(Boolean(aiResponse.is_complete));
+      setSummaryText(aiResponse.summary_text ?? '');
     } catch (error) {
       setChatError(
         error instanceof Error
@@ -195,6 +196,7 @@ export default function App() {
           email: contactData.email || null,
           phone: contactData.phone || null,
           ai_extracted_data: extractedData,
+          ai_summary_text: summaryText || null,
           truth_confirmation: truthConfirmation,
           data_usage_consent: dataUsageConsent,
         }),
@@ -212,8 +214,8 @@ export default function App() {
       setMessages([INITIAL_AI_MESSAGE]);
       setCurrentMessage('');
       setExtractedData(INITIAL_EXTRACTED_DATA);
-      setMissingFields(Object.keys(INITIAL_EXTRACTED_DATA));
       setIsAiComplete(false);
+      setSummaryText('');
       setTruthConfirmation(false);
       setDataUsageConsent(false);
     } catch (error) {
@@ -292,41 +294,37 @@ export default function App() {
             <span>2</span>
             <div>
               <h2>Asistente Inteligente</h2>
-              <p>Dale al asistente una descripción de la denuncia y él hará el resto de preguntas.</p>
+              <p>Escriba una descripción inicial lo más completa posible.</p>
             </div>
           </div>
+
+          <ul className="guidanceList">
+            <li>Qué ocurrió y qué comportamiento observó.</li>
+            <li>Dónde ocurrió: distrito, dirección exacta o punto de referencia.</li>
+            <li>Cuándo ocurrió: fecha y hora aproximada.</li>
+            <li>Su relación con el incidente, si no queda clara por la descripción.</li>
+            <li>Personas, vehículos u objetos relacionados, si aplica.</li>
+            <li>Puede corregir al asistente si detecta algún dato incorrecto.</li>
+          </ul>
 
           <div className="chatPanel" aria-live="polite">
             <div className="chatMessages">
               {messages.map((message, index) => (
                 <div className={`chatBubble ${message.role}`} key={`${message.role}-${index}`}>
-                  <strong>{message.role === 'assistant' ? 'Asistente' : 'Usuario'}</strong>
                   <p>{message.content}</p>
                 </div>
               ))}
               {isChatLoading && (
                 <div className="chatBubble assistant">
-                  <strong>Asistente</strong>
                   <p>Analizando la información...</p>
                 </div>
-              )}
-            </div>
-
-            <div className="aiStatusRow">
-              <span className={isAiComplete ? 'statusPill complete' : 'statusPill'}>
-                {isAiComplete ? 'Información completa' : 'Información pendiente'}
-              </span>
-              {missingFields.length > 0 && (
-                <span className="missingText">
-                  Pendiente: {missingFields.map((field) => SUMMARY_LABELS[field] ?? field).join(', ')}
-                </span>
               )}
             </div>
 
             <div className="chatInputRow">
               <textarea
                 aria-label="Mensaje para el asistente IA"
-                placeholder="Escriba su respuesta aquí..."
+                placeholder="Escriba aquí..."
                 value={currentMessage}
                 onChange={(event) => setCurrentMessage(event.target.value)}
               />
@@ -348,11 +346,25 @@ export default function App() {
             <span>3</span>
             <div>
               <h2>Resumen extraído</h2>
-              <p>Información extraida por el asistente.</p>
+              <p>Revise la información recolectada antes de enviar la denuncia.</p>
             </div>
           </div>
 
-          <SummaryList extractedData={extractedData} />
+          {isAiComplete ? (
+            <div className="finalSummary">
+              <ul>
+                {buildDetailBullets(extractedData).map((item) => (
+                  <li key={`${item.label ?? 'detalle'}-${item.value}`}>
+                    {item.label ? <strong>{item.label}:</strong> : null} {item.value}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="summaryPlaceholder">
+              El resumen aparecerá cuando el asistente termine de recolectar la información.
+            </p>
+          )}
         </section>
 
         <section className="formSection">
@@ -394,6 +406,12 @@ export default function App() {
         {!extractedData.descripcion_detallada && (
           <p className="statusMessage warning">
             La descripción detallada es obligatoria. Converse con el asistente para completarla.
+          </p>
+        )}
+
+        {extractedData.descripcion_detallada && !isAiComplete && (
+          <p className="statusMessage warning">
+            Termine la interacción con el asistente antes de guardar la denuncia.
           </p>
         )}
 

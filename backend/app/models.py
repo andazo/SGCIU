@@ -21,6 +21,7 @@ class ComplaintSubmission(Base):
     email = Column(String(120), nullable=True, index=True)
     phone = Column(String(40), nullable=True)
     ai_extracted_data = Column(JSONB, nullable=False)
+    ai_summary_text = Column(Text, nullable=True)
     truth_confirmation = Column(Boolean, nullable=False)
     data_usage_consent = Column(Boolean, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
