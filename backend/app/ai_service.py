@@ -23,6 +23,15 @@ Tu objetivo es completar estos datos: descripción detallada del incidente descr
 relación con el incidente, categoría preliminar, distrito dentro de Flores, dirección exacta,
 tipo de lugar y fecha/hora aproximada.
 
+Debes deducir relacion_incidente a partir de la forma en que escribe el usuario
+cuando sea razonable. Por ejemplo: "me asaltaron", "me amenazaron", "fui
+agredido" o "me robaron" indican victima; "vi", "observé", "presencié" o
+"escuché" indican testigo; "en mi barrio", "cerca de mi casa", "soy vecino" o
+"vivo cerca" indican vecino; "en mi negocio", "mi local", "soy comerciante" o
+"frente a mi comercio" indican comerciante. Si hay señales contradictorias o
+insuficientes, pregunta para confirmar. Si haces una deducción, indica al
+usuario que puede corregirte si detecta información incorrecta.
+
 No preguntes si el incidente es recurrente, si continúa ocurriendo o si ha
 ocurrido antes. La recurrencia no es un dato requerido y no debe extraerse.
 
@@ -32,6 +41,20 @@ ya tengan valor, salvo que el usuario corrija explícitamente ese dato. Si el
 usuario continúa hablando de otros temas, no borres ni conviertas a null los
 datos ya capturados. Usa la conversación completa y el estado actual para
 devolver siempre la versión acumulada más completa de extracted_data.
+
+Cuando la información esté completa, genera también un resumen final para el
+usuario. summary_text debe ser un párrafo en prosa de 3 a 4 oraciones basado en
+toda la información recolectada. Redacta summary_text con tono profesional de
+reporte policial o reporte administrativo institucional, por ejemplo: "El día
+lunes 2 de enero, la víctima reportó que su vehículo fue robado cerca de
+Almacenes El Rey, en el distrito de Llorente." No uses lenguaje conversacional,
+no escribas en primera persona y no agregues conclusiones no reportadas por el
+usuario. No uses el término "persona usuaria" en el resumen; si no hay una
+relación más específica como víctima, testigo, vecino o comerciante, utiliza
+"persona denunciante". summary_bullets debe incluir puntos específicos y
+fáciles de revisar, pero no debe incluir un bullet de descripción detallada. Si
+la información aún no está completa, summary_text debe ser null y
+summary_bullets debe ser una lista vacía.
 
 Haz una o pocas preguntas por turno. No des asesoría legal, no juzgues, no
 confirmes culpabilidad y no inventes datos. Si el usuario describe una emergencia
@@ -44,11 +67,20 @@ Devuelve únicamente JSON válido con la forma solicitada.
 INTAKE_RESPONSE_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["assistant_message", "is_complete", "missing_fields", "extracted_data"],
+    "required": [
+        "assistant_message",
+        "is_complete",
+        "missing_fields",
+        "extracted_data",
+        "summary_text",
+        "summary_bullets",
+    ],
     "properties": {
         "assistant_message": {"type": "string"},
         "is_complete": {"type": "boolean"},
         "missing_fields": {"type": "array", "items": {"type": "string"}},
+        "summary_text": {"type": ["string", "null"]},
+        "summary_bullets": {"type": "array", "items": {"type": "string"}},
         "extracted_data": {
             "type": "object",
             "additionalProperties": False,
@@ -122,6 +154,8 @@ def _empty_chat_response(message: str):
         is_complete=False,
         missing_fields=REQUIRED_EXTRACTED_FIELDS,
         extracted_data=ComplaintExtractedData(),
+        summary_text=None,
+        summary_bullets=[],
     )
 
 
@@ -131,7 +165,8 @@ def run_complaint_intake_chat(
     if not payload.messages:
         return _empty_chat_response(
             "Para iniciar, describa la denuncia con el mayor detalle posible. "
-            "Incluya qué ocurrió, dónde ocurrió, cuándo ocurrió y los involucrados"
+            "Incluya qué ocurrió, dónde ocurrió, cuándo ocurrió y los involucrados. "
+            "Si detecto algún dato incorrecto, puede indicármelo para corregirlo."
         )
 
     api_key = os.getenv("OPENAI_API_KEY")
@@ -191,9 +226,64 @@ def run_complaint_intake_chat(
         ]
         validated.missing_fields = missing_fields
         validated.is_complete = len(missing_fields) == 0
+        if not validated.is_complete:
+            validated.summary_text = None
+            validated.summary_bullets = []
+        else:
+            validated.summary_text = validated.summary_text or _build_summary_text(
+                validated.extracted_data
+            )
+            validated.summary_bullets = validated.summary_bullets or _build_summary_bullets(
+                validated.extracted_data
+            )
         return validated
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="La respuesta del asistente IA no tuvo el formato esperado.",
         ) from exc
+
+
+def _build_summary_text(extracted_data: ComplaintExtractedData) -> str:
+    data = extracted_data.model_dump()
+    fecha = data.get("fecha_hora_aproximada") or "fecha y hora no especificadas"
+    relacion_labels = {
+        "victima": "víctima",
+        "testigo": "testigo",
+        "vecino": "vecino",
+        "comerciante": "comerciante",
+        "otro": "persona denunciante",
+    }
+    relacion = relacion_labels.get(
+        data.get("relacion_incidente"),
+        "persona denunciante",
+    )
+    categoria = data.get("categoria_preliminar") or "incidente reportado"
+    distrito = data.get("distrito") or "distrito no especificado"
+    direccion = data.get("direccion_exacta") or "ubicación no especificada"
+    tipo_lugar = data.get("tipo_lugar") or "lugar no especificado"
+    descripcion = data.get("descripcion_detallada") or "No se registraron detalles adicionales."
+
+    return (
+        f"El día {fecha}, la {relacion} reportó un caso clasificado preliminarmente como "
+        f"{categoria} en la ubicación {direccion}, distrito de {distrito}. "
+        f"El incidente fue ubicado en un sitio identificado como {tipo_lugar}. "
+        f"Según la información aportada, {descripcion}"
+    )
+
+
+def _build_summary_bullets(extracted_data: ComplaintExtractedData) -> list[str]:
+    data = extracted_data.model_dump()
+    labels = {
+        "relacion_incidente": "Relación con el incidente",
+        "categoria_preliminar": "Categoría preliminar",
+        "distrito": "Distrito",
+        "direccion_exacta": "Dirección exacta",
+        "tipo_lugar": "Tipo de lugar",
+        "fecha_hora_aproximada": "Fecha y hora aproximada",
+    }
+    return [
+        f"{label}: {data[key]}"
+        for key, label in labels.items()
+        if data.get(key)
+    ]

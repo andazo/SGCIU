@@ -23,6 +23,7 @@ def create_complaint_submission(db: Session, payload: ComplaintSubmissionCreate)
         email=str(payload.email) if payload.email else None,
         phone=payload.phone,
         ai_extracted_data=payload.ai_extracted_data.model_dump(),
+        ai_summary_text=payload.ai_summary_text,
         truth_confirmation=payload.truth_confirmation,
         data_usage_consent=payload.data_usage_consent,
     )

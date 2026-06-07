@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from pydantic import ConfigDict, field_validator, model_validator
 from typing import Literal, Optional
 from datetime import datetime
@@ -75,6 +75,8 @@ class ComplaintIntakeChatResponse(BaseModel):
     is_complete: bool
     missing_fields: list[str]
     extracted_data: ComplaintExtractedData
+    summary_text: Optional[str] = None
+    summary_bullets: list[str] = Field(default_factory=list)
 
 
 class ComplaintSubmissionCreate(BaseModel):
@@ -82,10 +84,11 @@ class ComplaintSubmissionCreate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     ai_extracted_data: ComplaintExtractedData
+    ai_summary_text: Optional[str] = None
     truth_confirmation: bool
     data_usage_consent: bool
 
-    @field_validator("name", "phone", mode="before")
+    @field_validator("name", "phone", "ai_summary_text", mode="before")
     @classmethod
     def empty_strings_to_none(cls, value):
         if isinstance(value, str) and not value.strip():
@@ -118,6 +121,7 @@ class ComplaintSubmissionResponse(BaseModel):
     email: Optional[str]
     phone: Optional[str]
     ai_extracted_data: ComplaintExtractedData
+    ai_summary_text: Optional[str]
     truth_confirmation: bool
     data_usage_consent: bool
     created_at: datetime
