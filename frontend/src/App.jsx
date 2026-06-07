@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import logoFlores from '../branding/logoFlores.png';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
@@ -232,12 +233,13 @@ export default function App() {
   return (
     <main className="appShell">
       <section className="intro">
-        <p className="eyebrow">Sistema de Gestión y Clasificación de Incidentes Urbanos - Municipalidad de Flores</p>
+        <img
+          className="municipalityLogo"
+          src={logoFlores}
+          alt="Logo Municipalidad de Flores"
+        />
+        <p className="eyebrow">Sistema de Gestión y Clasificación de Incidentes Urbanos</p>
         <h1>Formulario Denuncia Ciudadana</h1>
-        <p>
-          Complete la información a continuación para registrar su denuncia. 
-          Recuerde que la información proporcionada debe ser veraz y que sus datos serán utilizados para la gestión de esta denuncia.
-        </p>
       </section>
 
       <form className="formPanel" onSubmit={handleSubmit}>

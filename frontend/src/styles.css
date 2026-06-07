@@ -1,6 +1,6 @@
 :root {
   color: #1f2933;
-  background: #eef3f7;
+  background: #f6f8f1;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
@@ -16,6 +16,9 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(250, 204, 21, 0.16), rgba(255, 255, 255, 0) 260px),
+    #f6f8f1;
 }
 
 button,
@@ -32,12 +35,32 @@ textarea {
 }
 
 .intro {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  min-height: 150px;
   margin-bottom: 26px;
+  border: 1px solid rgba(34, 102, 65, 0.18);
+  border-top: 6px solid #f2c94c;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 16px 48px rgba(31, 41, 51, 0.08);
+  padding: 26px 160px;
+  text-align: center;
+}
+
+.municipalityLogo {
+  position: absolute;
+  top: 22px;
+  left: 28px;
+  width: 92px;
+  height: auto;
+  object-fit: contain;
 }
 
 .eyebrow {
   margin: 0 0 8px;
-  color: #2f6f6d;
+  color: #226641;
   font-size: 0.8rem;
   font-weight: 800;
   letter-spacing: 0;
@@ -51,7 +74,8 @@ p {
 }
 
 h1 {
-  margin-bottom: 12px;
+  margin-bottom: 0;
+  color: #184f34;
   font-size: clamp(2rem, 5vw, 3.3rem);
   line-height: 1.05;
 }
@@ -70,7 +94,7 @@ h2 {
 
 .formPanel,
 .resultPanel {
-  border: 1px solid #d8dee6;
+  border: 1px solid rgba(34, 102, 65, 0.18);
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 16px 48px rgba(31, 41, 51, 0.08);
@@ -80,6 +104,7 @@ h2 {
   display: grid;
   gap: 28px;
   padding: 28px;
+  border-top: 6px solid #226641;
 }
 
 .formSection {
@@ -100,8 +125,8 @@ h2 {
   height: 40px;
   place-items: center;
   border-radius: 8px;
-  background: #e0f2f1;
-  color: #234e52;
+  background: #f2c94c;
+  color: #184f34;
   font-weight: 900;
 }
 
@@ -117,7 +142,7 @@ h2 {
 }
 
 .field > span {
-  color: #334e68;
+  color: #184f34;
   font-weight: 700;
 }
 
@@ -125,7 +150,13 @@ h2 {
   display: grid;
   gap: 8px;
   margin: 0;
+  border-left: 4px solid #f2c94c;
+  border-radius: 0 8px 8px 0;
+  background: #fffdf2;
   padding-left: 22px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+  padding-right: 16px;
   color: #334e68;
   line-height: 1.5;
 }
@@ -133,7 +164,7 @@ h2 {
 input,
 textarea {
   width: 100%;
-  border: 1px solid #bcccdc;
+  border: 1px solid #b7c9bd;
   border-radius: 6px;
   background: #ffffff;
   color: #1f2933;
@@ -154,16 +185,16 @@ textarea {
 
 input:focus,
 textarea:focus {
-  border-color: #2f6f6d;
-  box-shadow: 0 0 0 3px rgba(47, 111, 109, 0.16);
+  border-color: #226641;
+  box-shadow: 0 0 0 3px rgba(34, 102, 65, 0.16);
 }
 
 .chatPanel {
   display: grid;
   gap: 14px;
-  border: 1px solid #d8dee6;
+  border: 1px solid rgba(34, 102, 65, 0.18);
   border-radius: 8px;
-  background: #f8fafc;
+  background: #f8fbf4;
   padding: 16px;
 }
 
@@ -177,7 +208,7 @@ textarea:focus {
 
 .chatBubble {
   width: min(82%, 720px);
-  border: 1px solid #d8dee6;
+  border: 1px solid rgba(34, 102, 65, 0.18);
   border-radius: 8px;
   background: #ffffff;
   padding: 12px 14px;
@@ -185,8 +216,8 @@ textarea:focus {
 
 .chatBubble.user {
   justify-self: end;
-  border-color: #9fb3c8;
-  background: #edf2f7;
+  border-color: rgba(242, 201, 76, 0.7);
+  background: #fff8d7;
 }
 
 .chatBubble p {
@@ -209,9 +240,9 @@ textarea:focus {
 .finalSummary {
   display: grid;
   gap: 14px;
-  border: 1px solid #d8dee6;
+  border: 1px solid rgba(34, 102, 65, 0.18);
   border-radius: 8px;
-  background: #f8fafc;
+  background: #f8fbf4;
   padding: 16px;
 }
 
@@ -231,14 +262,14 @@ textarea:focus {
 }
 
 .finalSummary li strong {
-  color: #243b53;
+  color: #184f34;
 }
 
 .summaryPlaceholder {
   margin: 0;
-  border: 1px dashed #bcccdc;
+  border: 1px dashed #b7c9bd;
   border-radius: 8px;
-  background: #f8fafc;
+  background: #f8fbf4;
   color: #52616f;
   padding: 16px;
   line-height: 1.5;
@@ -254,8 +285,9 @@ textarea:focus {
   grid-template-columns: 20px 1fr;
   gap: 10px;
   align-items: start;
-  border: 1px solid #d8dee6;
+  border: 1px solid rgba(34, 102, 65, 0.18);
   border-radius: 8px;
+  background: #fffdf7;
   padding: 12px;
 }
 
@@ -278,9 +310,9 @@ textarea:focus {
 
 button {
   min-height: 44px;
-  border: 1px solid #2f6f6d;
+  border: 1px solid #226641;
   border-radius: 6px;
-  background: #2f6f6d;
+  background: #226641;
   color: #ffffff;
   cursor: pointer;
   font-weight: 800;
@@ -288,7 +320,7 @@ button {
 }
 
 button:hover {
-  background: #285f5d;
+  background: #184f34;
 }
 
 button:disabled {
@@ -304,9 +336,9 @@ button:disabled {
 }
 
 .statusMessage.success {
-  border: 1px solid #9ae6b4;
-  background: #e6fffa;
-  color: #0f5132;
+  border: 1px solid #8dcc9e;
+  background: #edf9ef;
+  color: #184f34;
 }
 
 .statusMessage.error {
@@ -316,9 +348,9 @@ button:disabled {
 }
 
 .statusMessage.warning {
-  border: 1px solid #fed7aa;
-  background: #fff7ed;
-  color: #9a3412;
+  border: 1px solid #f2c94c;
+  background: #fff8d7;
+  color: #6b4b00;
 }
 
 .resultPanel {
@@ -363,6 +395,17 @@ pre {
 
   .sectionHeader {
     grid-template-columns: 1fr;
+  }
+
+  .intro {
+    min-height: 0;
+    padding: 22px;
+  }
+
+  .municipalityLogo {
+    position: static;
+    width: 84px;
+    margin-bottom: 14px;
   }
 
   .chatBubble {
