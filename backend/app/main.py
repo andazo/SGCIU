@@ -10,9 +10,11 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .ai_service import run_complaint_intake_chat
+from .api.dependencies import AdminRole
 from .api.routes.incidents import router as incidents_router
 from .api.routes.intake import router as intake_router
 from .api.routes.operational import router as operational_router
+from .api.routes.reviews import router as reviews_router
 from .config import get_settings
 from .crud import (
     create_complaint_submission,
@@ -40,6 +42,7 @@ app = FastAPI(title=settings.app_name, version="0.2.0")
 app.include_router(intake_router, prefix="/v1")
 app.include_router(incidents_router, prefix="/v1")
 app.include_router(operational_router, prefix="/v1")
+app.include_router(reviews_router, prefix="/v1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -95,7 +98,7 @@ def create_submission(payload: FormSubmissionCreate, db: DbSession):
 
 
 @app.get("/submissions", response_model=list[FormSubmissionResponse])
-def get_submissions(db: DbSession):
+def get_submissions(db: DbSession, _actor: AdminRole):
     return list_form_submissions(db)
 
 
@@ -110,5 +113,5 @@ def create_complaint(payload: ComplaintSubmissionCreate, db: DbSession):
 
 
 @app.get("/complaints", response_model=list[ComplaintSubmissionResponse])
-def get_complaints(db: DbSession):
+def get_complaints(db: DbSession, _actor: AdminRole):
     return list_complaint_submissions(db)

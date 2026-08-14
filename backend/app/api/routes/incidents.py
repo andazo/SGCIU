@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import AdminRole
 from app.db import get_db
 from app.schemas import (
     ClusterMemberResponse,
@@ -21,13 +22,14 @@ DbSession = Annotated[Session, Depends(get_db)]
 
 
 @router.post("", response_model=ComplaintSubmissionResponse, status_code=status.HTTP_201_CREATED)
-def create_incident(payload: ComplaintSubmissionCreate, db: DbSession):
+def create_incident(payload: ComplaintSubmissionCreate, db: DbSession, _actor: AdminRole):
     return IncidentService(db).create(payload)
 
 
 @router.get("", response_model=IncidentListResponse)
 def list_incidents(
     db: DbSession,
+    _actor: AdminRole,
     district: str | None = None,
     category: str | None = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
@@ -40,7 +42,7 @@ def list_incidents(
 
 
 @router.get("/{incident_id}", response_model=ComplaintSubmissionResponse)
-def get_incident(incident_id: int, db: DbSession):
+def get_incident(incident_id: int, db: DbSession, _actor: AdminRole):
     try:
         return IncidentService(db).get(incident_id)
     except IncidentNotFoundError as exc:
@@ -51,6 +53,7 @@ def get_incident(incident_id: int, db: DbSession):
 def get_related_incidents(
     incident_id: int,
     db: DbSession,
+    _actor: AdminRole,
     top_k: Annotated[int, Query(ge=1, le=20)] = 5,
 ):
     try:
@@ -76,7 +79,7 @@ def get_related_incidents(
 
 
 @router.post("/{incident_id}/semantic-index", status_code=status.HTTP_204_NO_CONTENT)
-def reindex_incident(incident_id: int, db: DbSession):
+def reindex_incident(incident_id: int, db: DbSession, _actor: AdminRole):
     try:
         incident = IncidentService(db).get(incident_id)
     except IncidentNotFoundError as exc:
@@ -85,7 +88,7 @@ def reindex_incident(incident_id: int, db: DbSession):
 
 
 @router.get("/clusters/candidates", response_model=list[IncidentClusterResponse])
-def list_candidate_clusters(db: DbSession):
+def list_candidate_clusters(db: DbSession, _actor: AdminRole):
     return [
         IncidentClusterResponse(
             id=cluster.id,

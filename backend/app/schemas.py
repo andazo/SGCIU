@@ -293,3 +293,24 @@ class OperationalQueryResponse(StrictModel):
     model_name: str
     prompt_version: str
     requires_human_review: bool = False
+
+
+class ResolveReviewRequest(StrictModel):
+    notes: str = Field(min_length=3, max_length=2_000)
+
+
+class AssistantFeedbackRequest(StrictModel):
+    trace_id: str
+    rating: int = Field(ge=1, le=5)
+    comment: str | None = Field(default=None, max_length=2_000)
+
+
+class AssistantFeedbackResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    trace_id: str
+    actor_role: str
+    rating: int
+    comment: str | None
+    created_at: datetime
