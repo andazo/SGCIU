@@ -269,3 +269,27 @@ class IncidentClusterResponse(StrictModel):
     status: str
     explanation: str | None
     members: list[ClusterMemberResponse]
+
+
+class OperationalQueryRequest(StrictModel):
+    query: str = Field(min_length=3, max_length=2_000)
+
+
+class ToolExecutionTrace(StrictModel):
+    step: int
+    tool_name: str
+    arguments: dict[str, object]
+    success: bool
+    result_count: int | None = None
+    latency_ms: float
+    error_type: str | None = None
+
+
+class OperationalQueryResponse(StrictModel):
+    answer: str
+    incident_citations: list[int]
+    trace_id: str
+    steps: list[ToolExecutionTrace]
+    model_name: str
+    prompt_version: str
+    requires_human_review: bool = False

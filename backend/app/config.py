@@ -36,6 +36,7 @@ class Settings:
     openai_embedding_model: str
     embedding_dimensions: int
     agent_max_steps: int
+    tool_transport: str
     similarity_threshold: float
     cluster_time_window_days: int
     admin_api_key: str | None
@@ -69,6 +70,7 @@ def get_settings() -> Settings:
         openai_embedding_model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
         embedding_dimensions=int(os.getenv("EMBEDDING_DIMENSIONS", "1536")),
         agent_max_steps=int(os.getenv("AGENT_MAX_STEPS", "4")),
+        tool_transport=os.getenv("TOOL_TRANSPORT", "local").lower(),
         similarity_threshold=float(os.getenv("SIMILARITY_THRESHOLD", "0.78")),
         cluster_time_window_days=int(os.getenv("CLUSTER_TIME_WINDOW_DAYS", "30")),
         admin_api_key=os.getenv("ADMIN_API_KEY"),
