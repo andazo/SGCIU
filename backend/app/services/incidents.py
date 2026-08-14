@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import ComplaintSubmission
 from app.schemas import ComplaintSubmissionCreate
+
+logger = logging.getLogger(__name__)
 
 
 class IncidentNotFoundError(LookupError):
@@ -31,6 +35,29 @@ class IncidentService:
             data_usage_consent=payload.data_usage_consent,
         )
         self.db.add(incident)
+        self.db.commit()
+        self.db.refresh(incident)
+        try:
+            from app.services.semantic import SemanticIncidentService
+
+            SemanticIncidentService(self.db).process_incident(incident)
+            incident.analysis_metadata = {
+                **(incident.analysis_metadata or {}),
+                "embedding_status": "indexed",
+            }
+        except Exception as exc:
+            logger.warning(
+                "Incident persisted without semantic index",
+                extra={
+                    "feature": "semantic_incidents",
+                    "incident_id": incident.id,
+                    "error_type": type(exc).__name__,
+                },
+            )
+            incident.analysis_metadata = {
+                **(incident.analysis_metadata or {}),
+                "embedding_status": "pending",
+            }
         self.db.commit()
         self.db.refresh(incident)
         return incident

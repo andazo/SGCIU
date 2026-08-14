@@ -36,9 +36,7 @@ def _add_missing_complaint_columns(bind) -> None:
         "analysis_metadata": sa.Column(
             "analysis_metadata", _json_type(bind), nullable=False, server_default="{}"
         ),
-        "status": sa.Column(
-            "status", sa.String(32), nullable=False, server_default="submitted"
-        ),
+        "status": sa.Column("status", sa.String(32), nullable=False, server_default="submitted"),
         "requires_human_review": sa.Column(
             "requires_human_review", sa.Boolean(), nullable=False, server_default=sa.false()
         ),
@@ -132,8 +130,14 @@ def upgrade() -> None:
     op.create_table(
         "incident_cluster_members",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("cluster_id", sa.Integer(), sa.ForeignKey("incident_clusters.id", ondelete="CASCADE")),
-        sa.Column("incident_id", sa.Integer(), sa.ForeignKey("complaint_submissions.id", ondelete="CASCADE")),
+        sa.Column(
+            "cluster_id", sa.Integer(), sa.ForeignKey("incident_clusters.id", ondelete="CASCADE")
+        ),
+        sa.Column(
+            "incident_id",
+            sa.Integer(),
+            sa.ForeignKey("complaint_submissions.id", ondelete="CASCADE"),
+        ),
         sa.Column("similarity_score", sa.Float(), nullable=False),
         sa.Column("match_reason", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
@@ -142,7 +146,11 @@ def upgrade() -> None:
     op.create_table(
         "human_reviews",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("incident_id", sa.Integer(), sa.ForeignKey("complaint_submissions.id", ondelete="CASCADE")),
+        sa.Column(
+            "incident_id",
+            sa.Integer(),
+            sa.ForeignKey("complaint_submissions.id", ondelete="CASCADE"),
+        ),
         sa.Column("reason", sa.Text(), nullable=False),
         sa.Column("status", sa.String(32), nullable=False, server_default="pending"),
         sa.Column("resolution_notes", sa.Text(), nullable=True),

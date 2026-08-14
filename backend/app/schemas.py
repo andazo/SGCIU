@@ -240,3 +240,32 @@ class HumanReviewResponse(BaseModel):
     resolution_notes: str | None
     created_at: datetime
     resolved_at: datetime | None
+
+
+class RelatedIncident(StrictModel):
+    incident_id: int
+    category: str | None
+    district: str | None
+    address: str | None
+    similarity_score: float
+    semantic_score: float
+    match_reasons: list[str]
+
+
+class RelatedIncidentList(StrictModel):
+    source_incident_id: int
+    items: list[RelatedIncident]
+
+
+class ClusterMemberResponse(StrictModel):
+    incident_id: int
+    similarity_score: float
+    match_reason: str
+
+
+class IncidentClusterResponse(StrictModel):
+    id: int
+    label: str
+    status: str
+    explanation: str | None
+    members: list[ClusterMemberResponse]
