@@ -34,6 +34,7 @@ def _vector_type():
         return JSON_TYPE
     return Vector(get_settings().embedding_dimensions).with_variant(JSON(), "sqlite")
 
+
 class FormSubmission(Base):
     __tablename__ = "form_submissions"
 
@@ -62,16 +63,10 @@ class ComplaintSubmission(Base):
     truth_confirmation = Column(Boolean, nullable=False)
     data_usage_consent = Column(Boolean, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    embedding_record = relationship(
-        "IncidentEmbedding", back_populates="incident", uselist=False
-    )
-    cluster_memberships = relationship(
-        "IncidentClusterMember", back_populates="incident"
-    )
+    embedding_record = relationship("IncidentEmbedding", back_populates="incident", uselist=False)
+    cluster_memberships = relationship("IncidentClusterMember", back_populates="incident")
 
 
 class IntakeSession(Base):
@@ -85,9 +80,7 @@ class IntakeSession(Base):
     model_name = Column(String(120), nullable=True)
     prompt_version = Column(String(40), nullable=False, default="intake-v1")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class IncidentEmbedding(Base):
@@ -113,9 +106,7 @@ class IncidentCluster(Base):
     status = Column(String(32), nullable=False, default="candidate")
     explanation = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     members = relationship(
         "IncidentClusterMember", back_populates="cluster", cascade="all, delete-orphan"
@@ -127,9 +118,7 @@ class IncidentClusterMember(Base):
     __table_args__ = (UniqueConstraint("cluster_id", "incident_id"),)
 
     id = Column(Integer, primary_key=True)
-    cluster_id = Column(
-        Integer, ForeignKey("incident_clusters.id", ondelete="CASCADE"), index=True
-    )
+    cluster_id = Column(Integer, ForeignKey("incident_clusters.id", ondelete="CASCADE"), index=True)
     incident_id = Column(
         Integer, ForeignKey("complaint_submissions.id", ondelete="CASCADE"), index=True
     )

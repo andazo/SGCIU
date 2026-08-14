@@ -66,9 +66,7 @@ def get_settings() -> Settings:
         llm_provider=os.getenv("LLM_PROVIDER", "openai").lower(),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         openai_model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
-        openai_embedding_model=os.getenv(
-            "OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"
-        ),
+        openai_embedding_model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
         embedding_dimensions=int(os.getenv("EMBEDDING_DIMENSIONS", "1536")),
         agent_max_steps=int(os.getenv("AGENT_MAX_STEPS", "4")),
         similarity_threshold=float(os.getenv("SIMILARITY_THRESHOLD", "0.78")),

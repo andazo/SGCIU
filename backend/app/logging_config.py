@@ -7,9 +7,7 @@ from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import ClassVar
 
-correlation_id_context: ContextVar[str] = ContextVar(
-    "correlation_id", default="unassigned"
-)
+correlation_id_context: ContextVar[str] = ContextVar("correlation_id", default="unassigned")
 
 
 class JsonFormatter(logging.Formatter):

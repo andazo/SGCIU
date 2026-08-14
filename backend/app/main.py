@@ -10,6 +10,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .ai_service import run_complaint_intake_chat
+from .api.routes.incidents import router as incidents_router
+from .api.routes.intake import router as intake_router
 from .config import get_settings
 from .crud import (
     create_complaint_submission,
@@ -34,6 +36,8 @@ logger = logging.getLogger(__name__)
 DbSession = Annotated[Session, Depends(get_db)]
 
 app = FastAPI(title=settings.app_name, version="0.2.0")
+app.include_router(intake_router, prefix="/v1")
+app.include_router(incidents_router, prefix="/v1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -82,9 +86,11 @@ def readiness(db: DbSession):
     db.execute(text("SELECT 1"))
     return {"status": "ready"}
 
+
 @app.post("/submissions", response_model=FormSubmissionResponse)
 def create_submission(payload: FormSubmissionCreate, db: DbSession):
     return create_form_submission(db, payload)
+
 
 @app.get("/submissions", response_model=list[FormSubmissionResponse])
 def get_submissions(db: DbSession):
