@@ -368,7 +368,457 @@ pre {
   line-height: 1.5;
 }
 
+.adminShell {
+  display: grid;
+  grid-template-columns: 274px minmax(0, 1fr);
+  min-height: 100vh;
+  transition: grid-template-columns 180ms ease;
+}
+
+.adminShell.isCollapsed {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
+.adminNav {
+  position: sticky;
+  top: 0;
+  display: flex;
+  height: 100vh;
+  flex-direction: column;
+  gap: 16px;
+  border-right: 1px solid rgba(34, 102, 65, 0.16);
+  background: #ffffff;
+  padding: 18px 14px;
+  box-shadow: 8px 0 30px rgba(31, 41, 51, 0.06);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+  z-index: 5;
+}
+
+.isCollapsed .adminNav {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-100%);
+}
+
+.adminBrand {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 68px;
+}
+
+.adminBrand img {
+  width: 58px;
+  height: auto;
+}
+
+.adminBrand strong {
+  color: #184f34;
+  line-height: 1.2;
+}
+
+.adminToggle,
+.adminNavList button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #184f34;
+  font-weight: 800;
+}
+
+.adminToggle {
+  position: fixed;
+  top: 18px;
+  left: 250px;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  place-items: center;
+  border: 1px solid rgba(34, 102, 65, 0.2);
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 10px 26px rgba(31, 41, 51, 0.12);
+  font-size: 1.2rem;
+  transition: left 180ms ease;
+  z-index: 8;
+}
+
+.isCollapsed .adminToggle {
+  pointer-events: auto;
+  left: 18px;
+}
+
+.adminToggle:hover,
+.adminNavList button:hover {
+  background: transparent;
+  color: #226641;
+}
+
+.adminNavList {
+  display: grid;
+  gap: 0;
+  border-top: 1px solid rgba(34, 102, 65, 0.14);
+}
+
+.adminNavList button {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid rgba(34, 102, 65, 0.14);
+  padding: 12px 6px;
+  text-align: left;
+}
+
+.adminNavList button span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff8d7;
+  color: #226641;
+  font-weight: 900;
+}
+
+.adminNavList button.active {
+  background: linear-gradient(90deg, rgba(34, 102, 65, 0.1), transparent 70%);
+  color: #184f34;
+}
+
+.adminNavList button.active span {
+  background: #226641;
+  color: #ffffff;
+}
+
+.adminContent {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: 28px;
+}
+
+.adminTop,
+.adminPanel,
+.adminStat {
+  border: 1px solid rgba(34, 102, 65, 0.16);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgba(31, 41, 51, 0.06);
+}
+
+.adminTop {
+  display: grid;
+  gap: 14px;
+  border-top: 4px solid #f2c94c;
+  padding: 20px;
+}
+
+.adminTop h1 {
+  text-align: center;
+  font-size: clamp(1.35rem, 3vw, 2rem);
+}
+
+.adminFilters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.adminFilters label {
+  display: grid;
+  gap: 7px;
+}
+
+.adminFilters span {
+  color: #184f34;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.adminFilters input,
+.adminFilters select {
+  width: 100%;
+  height: 44px;
+  border: 1px solid #b7c9bd;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1f2933;
+  outline: none;
+  padding: 0 12px;
+}
+
+.adminFilters input:focus,
+.adminFilters select:focus {
+  border-color: #226641;
+  box-shadow: 0 0 0 3px rgba(34, 102, 65, 0.16);
+}
+
+.adminNotice {
+  margin: 0;
+  border: 1px solid #f2c94c;
+  border-radius: 8px;
+  background: #fff8d7;
+  color: #6b4b00;
+  font-weight: 800;
+  padding: 12px 14px;
+}
+
+.adminStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.adminStat {
+  display: grid;
+  gap: 6px;
+  min-height: 86px;
+  border-left: 4px solid #f2c94c;
+  padding: 14px;
+}
+
+.adminStat span {
+  color: #52616f;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.adminStat strong {
+  color: #184f34;
+  font-size: clamp(1.18rem, 2.4vw, 1.65rem);
+  line-height: 1;
+}
+
+.adminCharts {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+  gap: 18px;
+}
+
+.adminPanel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.adminLineChart {
+  min-height: 230px;
+}
+
+.adminLineChart svg {
+  display: block;
+  width: 100%;
+  height: 230px;
+  overflow: visible;
+}
+
+.lineGrid {
+  fill: none;
+  stroke: #e1e8df;
+  stroke-width: 1;
+}
+
+.lineStroke {
+  fill: none;
+  stroke: #226641;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 5;
+}
+
+.lineDot {
+  fill: #f2c94c;
+  stroke: #184f34;
+  stroke-width: 3;
+}
+
+.lineValue {
+  fill: #184f34;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-anchor: middle;
+}
+
+.lineLabel {
+  fill: #52616f;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-anchor: middle;
+  text-transform: capitalize;
+}
+
+.adminCategoryChart {
+  display: grid;
+  gap: 14px;
+}
+
+.adminCategoryRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(110px, 1.1fr) 34px;
+  align-items: center;
+  gap: 10px;
+}
+
+.adminCategoryRow span {
+  color: #334e68;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.adminCategoryTrack {
+  height: 12px;
+  border-radius: 999px;
+  background: #edf4eb;
+  overflow: hidden;
+}
+
+.adminCategoryFill {
+  height: 100%;
+  border-radius: inherit;
+  background: #226641;
+}
+
+.adminCategoryRow strong {
+  color: #184f34;
+  text-align: right;
+}
+
+.adminEmpty {
+  margin: 0;
+  color: #52616f;
+}
+
+.adminPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.adminPanelHeader span {
+  border-radius: 999px;
+  background: #fff8d7;
+  color: #6b4b00;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+
+.adminTableWrap {
+  overflow-x: auto;
+  border: 1px solid #e1e8df;
+  border-radius: 8px;
+  background: #fbfdf8;
+}
+
+.adminTable {
+  width: 100%;
+  min-width: 840px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.adminTable th,
+.adminTable td {
+  border-bottom: 1px solid #e1e8df;
+  padding: 13px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.adminTable th {
+  position: sticky;
+  top: 0;
+  background: #f8fbf4;
+  color: #184f34;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.adminTable tbody tr {
+  background: #ffffff;
+}
+
+.adminTable tbody tr:nth-child(even) {
+  background: #fcfff8;
+}
+
+.adminTable tbody tr:hover {
+  background: #fff8d7;
+}
+
+.adminTable td {
+  color: #334e68;
+  line-height: 1.35;
+}
+
+.idBadge,
+.tableBadge {
+  display: inline-grid;
+  min-height: 28px;
+  align-items: center;
+  border-radius: 999px;
+  font-weight: 800;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
+.idBadge {
+  background: #184f34;
+  color: #ffffff;
+}
+
+.tableBadge.district {
+  background: #edf9ef;
+  color: #184f34;
+}
+
+.tableBadge.category {
+  background: #fff8d7;
+  color: #6b4b00;
+}
+
+.adminEmptyTable {
+  color: #52616f;
+  text-align: center;
+}
+
 @media (max-width: 820px) {
+  .adminShell,
+  .adminShell.isCollapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .adminNav {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(274px, calc(100vw - 42px));
+    height: 100vh;
+  }
+
+  .adminToggle {
+    left: min(250px, calc(100vw - 62px));
+  }
+
+  .isCollapsed .adminToggle {
+    left: 18px;
+  }
+
+  .adminNavList {
+    grid-template-columns: 1fr;
+  }
+
+  .adminFilters,
+  .adminStats,
+  .adminCharts {
+    grid-template-columns: 1fr;
+  }
+
   .fieldGrid {
     grid-template-columns: 1fr;
   }
@@ -383,6 +833,33 @@ pre {
 }
 
 @media (max-width: 640px) {
+  .adminContent {
+    padding: 18px;
+  }
+
+  .adminTop,
+  .adminPanel {
+    padding: 16px;
+  }
+
+  .adminBrand,
+  .isCollapsed .adminBrand {
+    grid-template-columns: 48px minmax(0, 1fr);
+    justify-items: start;
+  }
+
+  .adminBrand img {
+    width: 48px;
+  }
+
+  .adminCategoryRow {
+    grid-template-columns: 1fr;
+  }
+
+  .adminCategoryRow strong {
+    text-align: left;
+  }
+
   .appShell {
     width: min(100% - 24px, 1080px);
     padding: 28px 0;
