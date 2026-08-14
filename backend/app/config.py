@@ -23,6 +23,12 @@ def _as_csv(value: str | None, default: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
+def _normalize_database_url(value: str) -> str:
+    if value.startswith("postgresql://"):
+        return value.replace("postgresql://", "postgresql+psycopg://", 1)
+    return value
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     app_name: str
@@ -61,9 +67,11 @@ def get_settings() -> Settings:
     return Settings(
         app_name=os.getenv("APP_NAME", "SGCIU API"),
         app_env=os.getenv("APP_ENV", "development"),
-        database_url=os.getenv(
-            "DATABASE_URL",
-            "postgresql+psycopg://app_user:app_password@localhost:5432/app_db",
+        database_url=_normalize_database_url(
+            os.getenv(
+                "DATABASE_URL",
+                "postgresql+psycopg://app_user:app_password@localhost:5432/app_db",
+            )
         ),
         cors_origins=_as_csv(os.getenv("CORS_ORIGINS"), default_origins),
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),

@@ -5,7 +5,7 @@ import logging
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import ComplaintSubmission
+from app.models import ComplaintSubmission, HumanReview
 from app.schemas import ComplaintSubmissionCreate
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,34 @@ class IncidentService:
             }
         self.db.commit()
         self.db.refresh(incident)
+        if incident.requires_human_review:
+            self.request_human_review(
+                incident,
+                incident.review_reason or "Revisión solicitada durante el análisis.",
+            )
         return incident
+
+    def request_human_review(
+        self,
+        incident: ComplaintSubmission,
+        reason: str,
+    ) -> tuple[HumanReview, bool]:
+        existing = self.db.scalar(
+            select(HumanReview).where(
+                HumanReview.incident_id == incident.id,
+                HumanReview.status == "pending",
+            )
+        )
+        incident.requires_human_review = True
+        incident.review_reason = reason
+        if existing:
+            self.db.commit()
+            return existing, False
+        review = HumanReview(incident_id=incident.id, reason=reason)
+        self.db.add(review)
+        self.db.commit()
+        self.db.refresh(review)
+        return review, True
 
     def get(self, incident_id: int) -> ComplaintSubmission:
         incident = self.db.get(ComplaintSubmission, incident_id)

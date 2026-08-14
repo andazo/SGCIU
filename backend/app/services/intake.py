@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.ai.intake import REQUIRED_FIELDS, IntakeProvider, get_intake_provider
-from app.models import HumanReview, IntakeSession
+from app.models import IntakeSession
 from app.schemas import (
     ChatMessage,
     ComplaintExtractedData,
@@ -109,16 +109,7 @@ class IntakeService:
             truth_confirmation=payload.truth_confirmation,
             data_usage_consent=payload.data_usage_consent,
         )
-        incident = IncidentService(self.db).create(incident_payload)
-        if incident.requires_human_review:
-            self.db.add(
-                HumanReview(
-                    incident_id=incident.id,
-                    reason=incident.review_reason or "Revisión solicitada por el flujo de intake.",
-                )
-            )
-            self.db.commit()
-        return incident
+        return IncidentService(self.db).create(incident_payload)
 
     def to_response(self, session: IntakeSession) -> IntakeSessionResponse:
         extracted = dict(session.extracted_data or {})

@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import ComplaintSubmission, HumanReview, IncidentCluster
+from app.models import ComplaintSubmission, IncidentCluster
 from app.services.incidents import IncidentNotFoundError, IncidentService
 from app.services.semantic import SemanticIncidentService
 from app.tools.registry import ToolDefinition, ToolRegistry
@@ -157,13 +157,8 @@ def request_human_review(db: Session, arguments: RequestReviewInput) -> dict[str
         incident = IncidentService(db).get(arguments.incident_id)
     except IncidentNotFoundError:
         return {"created": False, "incident_id": arguments.incident_id}
-    incident.requires_human_review = True
-    incident.review_reason = arguments.reason
-    review = HumanReview(incident_id=incident.id, reason=arguments.reason)
-    db.add(review)
-    db.commit()
-    db.refresh(review)
-    return {"created": True, "review_id": review.id, "incident_id": incident.id}
+    review, created = IncidentService(db).request_human_review(incident, arguments.reason)
+    return {"created": created, "review_id": review.id, "incident_id": incident.id}
 
 
 def build_incident_tool_registry() -> ToolRegistry:

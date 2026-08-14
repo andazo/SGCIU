@@ -59,10 +59,13 @@ def test_review_resolution_updates_incident_state(db_session):
             data_usage_consent=True,
         )
     )
-    review = HumanReview(incident_id=incident.id, reason="Clasificación ambigua.")
-    db_session.add(review)
-    db_session.commit()
-    db_session.refresh(review)
+    review = db_session.scalar(
+        select(HumanReview).where(
+            HumanReview.incident_id == incident.id,
+            HumanReview.status == "pending",
+        )
+    )
+    assert review is not None
 
     resolved = ReviewService(db_session).resolve(review.id, "Validado por el oficial de turno.")
 

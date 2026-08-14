@@ -1,7 +1,7 @@
 from dataclasses import replace
 
 from app.ai.intake import DeterministicIntakeProvider
-from app.config import get_settings
+from app.config import _normalize_database_url, get_settings
 from app.costs import estimate_embedding_cost, estimate_llm_cost
 from app.evaluation.metrics import accuracy, macro_f1, recall_at_k, reciprocal_rank
 from app.evaluation.runner import evaluate_intake, load_dataset
@@ -34,3 +34,9 @@ def test_cost_estimates_use_configured_provider_rates():
 
     assert estimate_llm_cost(1_000_000, 500_000, settings) == 2.0
     assert estimate_embedding_cost(2_000_000, settings) == 1.0
+
+
+def test_legacy_postgres_url_uses_the_installed_psycopg_driver():
+    assert _normalize_database_url("postgresql://user:pass@db/app") == (
+        "postgresql+psycopg://user:pass@db/app"
+    )
