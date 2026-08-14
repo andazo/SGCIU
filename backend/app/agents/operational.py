@@ -10,7 +10,8 @@ from openai import AsyncOpenAI
 
 from app.agents.gateway import GatewayTool, ToolGateway
 from app.config import Settings, get_settings
-from app.schemas import OperationalQueryResponse, ToolExecutionTrace
+from app.costs import estimate_llm_cost
+from app.schemas import ModelUsage, OperationalQueryResponse, ToolExecutionTrace
 
 logger = logging.getLogger(__name__)
 AGENT_PROMPT_VERSION = "operational-react-v1"
@@ -100,6 +101,9 @@ class OperationalAgent:
                 "prompt_version": AGENT_PROMPT_VERSION,
                 "latency_ms": round((time.perf_counter() - started) * 1000, 2),
                 "tool_steps": len(response.steps),
+                "input_tokens": response.usage.input_tokens,
+                "output_tokens": response.usage.output_tokens,
+                "estimated_cost_usd": response.usage.estimated_cost_usd,
             },
         )
         return response
@@ -116,6 +120,7 @@ class OperationalAgent:
             input=query,
             tools=tools,
         )
+        input_tokens, output_tokens = self._response_usage(response)
         steps: list[ToolExecutionTrace] = []
         citations: set[int] = set()
         for step_number in range(1, self.settings.agent_max_steps + 1):
@@ -128,6 +133,7 @@ class OperationalAgent:
                     steps=steps,
                     model_name=self.settings.openai_model,
                     prompt_version=AGENT_PROMPT_VERSION,
+                    usage=self._model_usage(input_tokens, output_tokens),
                 )
             outputs: list[dict[str, object]] = []
             for call in calls:
@@ -166,6 +172,9 @@ class OperationalAgent:
                 input=outputs,
                 tools=tools,
             )
+            next_input, next_output = self._response_usage(response)
+            input_tokens += next_input
+            output_tokens += next_output
         return OperationalQueryResponse(
             answer=(
                 "No fue posible completar la consulta dentro del límite seguro de pasos. "
@@ -177,6 +186,7 @@ class OperationalAgent:
             model_name=self.settings.openai_model,
             prompt_version=AGENT_PROMPT_VERSION,
             requires_human_review=True,
+            usage=self._model_usage(input_tokens, output_tokens),
         )
 
     async def _run_deterministic(self, query: str, trace_id: str) -> OperationalQueryResponse:
@@ -246,6 +256,21 @@ class OperationalAgent:
             "parameters": _strict_tool_schema(tool.input_schema),
             "strict": True,
         }
+
+    @staticmethod
+    def _response_usage(response: object) -> tuple[int, int]:
+        usage = getattr(response, "usage", None)
+        return (
+            int(getattr(usage, "input_tokens", 0) or 0),
+            int(getattr(usage, "output_tokens", 0) or 0),
+        )
+
+    def _model_usage(self, input_tokens: int, output_tokens: int) -> ModelUsage:
+        return ModelUsage(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            estimated_cost_usd=estimate_llm_cost(input_tokens, output_tokens, self.settings),
+        )
 
     @staticmethod
     def _deterministic_answer(tool_name: str, result: dict[str, object]) -> str:

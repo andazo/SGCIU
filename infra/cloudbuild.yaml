@@ -1,0 +1,68 @@
+substitutions:
+  _REGION: us-central1
+  _REPOSITORY: sgciu
+  _IMAGE: backend
+  _SERVICE: sgciu-backend
+  _MIGRATION_JOB: sgciu-migrate
+  _CLOUD_SQL_INSTANCE: project:region:instance
+
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
+      - backend
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
+
+  - id: configure-migration-job
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - deploy
+      - ${_MIGRATION_JOB}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
+      - --region=${_REGION}
+      - --command=alembic
+      - --args=-c,alembic.ini,upgrade,head
+      - --set-cloudsql-instances=${_CLOUD_SQL_INSTANCE}
+      - --set-secrets=DATABASE_URL=sgciu-database-url:latest
+      - --quiet
+
+  - id: migrate
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - execute
+      - ${_MIGRATION_JOB}
+      - --region=${_REGION}
+      - --wait
+
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --set-cloudsql-instances=${_CLOUD_SQL_INSTANCE}
+      - --set-env-vars=APP_ENV=production,REQUIRE_ADMIN_AUTH=true,LLM_PROVIDER=openai
+      - --set-secrets=DATABASE_URL=sgciu-database-url:latest,OPENAI_API_KEY=sgciu-openai-key:latest,ADMIN_API_KEY=sgciu-admin-key:latest
+      - --no-allow-unauthenticated
+      - --quiet
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA

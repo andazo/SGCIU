@@ -12,10 +12,13 @@ from openai import OpenAI
 
 from app.ai.guardrails import evaluate_analysis, evaluate_user_message
 from app.config import Settings, get_settings
+from app.costs import estimate_llm_cost
 from app.schemas import (
     ChatMessage,
     ComplaintExtractedData,
     ComplaintIntakeChatResponse,
+    EntityEvidence,
+    IncidentEntities,
 )
 
 logger = logging.getLogger(__name__)
@@ -119,6 +122,7 @@ class OpenAIIntakeProvider(IntakeProvider):
         if not settings.openai_api_key:
             raise RuntimeError("OPENAI_API_KEY no está configurada.")
         self.client = OpenAI(api_key=settings.openai_api_key)
+        self.settings = settings
         self.model_name = settings.openai_model
 
     def analyze(
@@ -198,6 +202,8 @@ class OpenAIIntakeProvider(IntakeProvider):
             result.summary_text = None
             result.summary_bullets = []
         usage = getattr(response, "usage", None)
+        input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
+        output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
         logger.info(
             "Intake model call completed",
             extra={
@@ -205,8 +211,9 @@ class OpenAIIntakeProvider(IntakeProvider):
                 "model": self.model_name,
                 "prompt_version": PROMPT_VERSION,
                 "latency_ms": elapsed_ms,
-                "input_tokens": getattr(usage, "input_tokens", None),
-                "output_tokens": getattr(usage, "output_tokens", None),
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "estimated_cost_usd": estimate_llm_cost(input_tokens, output_tokens, self.settings),
             },
         )
         return result
@@ -277,6 +284,22 @@ class DeterministicIntakeProvider(IntakeProvider):
             )
             if address_match:
                 values["direccion_exacta"] = address_match.group(1).strip()
+
+        entities = IncidentEntities.model_validate(values.get("entities") or {})
+        plates = sorted(set(re.findall(r"\b[A-Z]{3}-?\d{3}\b", user_text.upper())))
+        if plates:
+            entities.vehicles = sorted(set([*entities.vehicles, *plates]))
+            known_evidence = {(item.entity_type, item.value) for item in entities.evidence}
+            for plate in plates:
+                if ("vehicle", plate) not in known_evidence:
+                    entities.evidence.append(
+                        EntityEvidence(
+                            entity_type="vehicle",
+                            value=plate,
+                            source_text=plate,
+                        )
+                    )
+        values["entities"] = entities.model_dump()
 
         guardrail = evaluate_user_message(user_text)
         values["urgency"] = "inmediata" if guardrail.emergency_guidance else values["urgency"]

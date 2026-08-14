@@ -35,6 +35,9 @@ class Settings:
     openai_model: str
     openai_embedding_model: str
     embedding_dimensions: int
+    llm_input_cost_per_million: float
+    llm_output_cost_per_million: float
+    embedding_cost_per_million: float
     agent_max_steps: int
     tool_transport: str
     similarity_threshold: float
@@ -69,6 +72,9 @@ def get_settings() -> Settings:
         openai_model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
         openai_embedding_model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
         embedding_dimensions=int(os.getenv("EMBEDDING_DIMENSIONS", "1536")),
+        llm_input_cost_per_million=float(os.getenv("LLM_INPUT_COST_PER_MILLION", "0")),
+        llm_output_cost_per_million=float(os.getenv("LLM_OUTPUT_COST_PER_MILLION", "0")),
+        embedding_cost_per_million=float(os.getenv("EMBEDDING_COST_PER_MILLION", "0")),
         agent_max_steps=int(os.getenv("AGENT_MAX_STEPS", "4")),
         tool_transport=os.getenv("TOOL_TRANSPORT", "local").lower(),
         similarity_threshold=float(os.getenv("SIMILARITY_THRESHOLD", "0.78")),

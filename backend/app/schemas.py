@@ -285,6 +285,12 @@ class ToolExecutionTrace(StrictModel):
     error_type: str | None = None
 
 
+class ModelUsage(StrictModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+
+
 class OperationalQueryResponse(StrictModel):
     answer: str
     incident_citations: list[int]
@@ -293,6 +299,7 @@ class OperationalQueryResponse(StrictModel):
     model_name: str
     prompt_version: str
     requires_human_review: bool = False
+    usage: ModelUsage = Field(default_factory=ModelUsage)
 
 
 class ResolveReviewRequest(StrictModel):

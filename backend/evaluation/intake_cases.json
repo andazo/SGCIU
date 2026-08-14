@@ -1,0 +1,59 @@
+{
+  "version": "1.0.0",
+  "description": "Casos sintéticos y sin datos personales para regresión del intake SGCIU.",
+  "cases": [
+    {
+      "id": "noise-witness-llorente",
+      "text": "Ayer vi una fiesta con mucho ruido en un parque del distrito Llorente. Ubicación: 100 metros norte de la escuela.",
+      "expected": {"relacion_incidente": "testigo", "categoria_preliminar": "ruido", "distrito": "Llorente", "tipo_lugar": "parque"}
+    },
+    {
+      "id": "robbery-victim-barrantes",
+      "text": "Anoche me robaron una bicicleta en una casa del distrito Barrantes. Ubicación: costado oeste de la iglesia.",
+      "expected": {"relacion_incidente": "victima", "categoria_preliminar": "robo", "distrito": "Barrantes", "tipo_lugar": "casa"}
+    },
+    {
+      "id": "vandalism-neighbor-san-joaquin",
+      "text": "Soy vecino y ayer observé vandalismo en la escuela del distrito San Joaquin. Ubicación: entrada principal de la escuela.",
+      "expected": {"relacion_incidente": "testigo", "categoria_preliminar": "vandalismo", "distrito": "San Joaquin", "tipo_lugar": "escuela"}
+    },
+    {
+      "id": "drugs-neighbor-llorente",
+      "text": "Soy vecino y hoy noté venta de drogas en un parque del distrito Llorente. Ubicación: parque central de Llorente.",
+      "expected": {"relacion_incidente": "vecino", "categoria_preliminar": "venta_drogas", "distrito": "Llorente", "tipo_lugar": "parque"}
+    },
+    {
+      "id": "violence-emergency-barrantes",
+      "text": "Hoy vi una pelea en un establecimiento del distrito Barrantes. Hay una persona inconsciente y está ocurriendo ahora. Ubicación: local frente a la plaza.",
+      "expected": {"relacion_incidente": "testigo", "categoria_preliminar": "violencia", "distrito": "Barrantes", "tipo_lugar": "establecimiento"},
+      "expected_human_review": true
+    },
+    {
+      "id": "traffic-merchant-san-joaquin",
+      "text": "En mi negocio observé un problema de tránsito hoy en el distrito San Joaquin. Ubicación: frente al establecimiento sobre la calle principal.",
+      "expected": {"relacion_incidente": "comerciante", "categoria_preliminar": "problema_transito", "distrito": "San Joaquin", "tipo_lugar": "establecimiento"}
+    },
+    {
+      "id": "vehicle-noise-llorente",
+      "text": "Anoche vi el vehículo ABC-123 con música y ruido en un parque de Llorente. Ubicación: parque Los Pinos.",
+      "expected": {"relacion_incidente": "testigo", "categoria_preliminar": "ruido", "distrito": "Llorente", "tipo_lugar": "parque"},
+      "expected_vehicles": ["ABC-123"]
+    },
+    {
+      "id": "vehicle-vandalism-barrantes",
+      "text": "Ayer observé vandalismo desde el vehículo XYZ987 cerca de una escuela en Barrantes. Ubicación: escuela de Barrantes.",
+      "expected": {"relacion_incidente": "testigo", "categoria_preliminar": "vandalismo", "distrito": "Barrantes", "tipo_lugar": "escuela"},
+      "expected_vehicles": ["XYZ987"]
+    },
+    {
+      "id": "robbery-merchant-llorente",
+      "text": "Anoche me robaron mercadería de mi negocio en un establecimiento de Llorente. Ubicación: avenida central junto al parque.",
+      "expected": {"relacion_incidente": "victima", "categoria_preliminar": "robo", "distrito": "Llorente", "tipo_lugar": "establecimiento"}
+    },
+    {
+      "id": "noise-neighbor-san-joaquin",
+      "text": "Soy vecino y hoy reporto ruido de una fiesta en una casa de San Joaquin. Ubicación: 50 metros sur del parque.",
+      "expected": {"relacion_incidente": "vecino", "categoria_preliminar": "ruido", "distrito": "San Joaquin", "tipo_lugar": "casa"}
+    }
+  ]
+}
