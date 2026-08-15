@@ -41,7 +41,8 @@ pruebas, pero no sustituye IAM o Identity-Aware Proxy en una versión institucio
 ## Operación y costes
 
 - Mantener Cloud Run con escalado mínimo en cero durante el TFM.
-- Usar el modelo pequeño configurado para clasificación e intake.
+- Reservar el modelo con razonamiento alto para el intake ciudadano y mantener un modelo
+  general independiente para el agente operativo.
 - Generar cada embedding una sola vez y persistirlo.
 - Configurar alertas por errores, latencia p95 y crecimiento de tokens.
 - Aplicar backups y retención reducida en los entornos de demostración.

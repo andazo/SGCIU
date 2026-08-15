@@ -7,16 +7,19 @@
 - Los tools devuelven únicamente información operativa sanitizada.
 - La indexación semántica no incluye nombre, identificación, correo ni teléfono del denunciante.
 - Cada llamada HTTP, tool y ejecución del agente puede relacionarse mediante un trace ID.
-- Los proveedores de LLM y embeddings se sustituyen mediante interfaces explícitas.
+- El runtime utiliza OpenAI para LLM y embeddings; las interfaces permiten inyectar dobles
+  exclusivamente durante pruebas automatizadas.
 
 ## Flujo de denuncia
 
 ```mermaid
 flowchart LR
     Citizen["Ciudadano por CLI o API"] --> Profile["Identidad y contacto opcionales"]
-    Profile --> Intake["Intake persistente"]
-    Intake --> Guardrails["Guardrails y confianza"]
-    Guardrails --> Analysis["Clasificación, entidades y resumen"]
+    Profile --> Intake["Intake OpenAI con razonamiento high"]
+    Intake --> Guardrails["Guardrails, evidencia y confianza"]
+    Guardrails --> FollowUp{"¿Falta contexto crucial?"}
+    FollowUp -->|Sí| Intake
+    FollowUp -->|No o ciudadano finaliza| Analysis["Clasificación, entidades y resumen"]
     Analysis --> Human["Revisión humana cuando aplica"]
     Analysis --> DB["PostgreSQL"]
     DB --> Embeddings["Embedding sin datos de contacto"]
@@ -28,6 +31,12 @@ Los datos personales viajan por una ruta determinista hasta PostgreSQL. El relat
 se procesa por separado y únicamente su versión sanitizada alimenta embeddings y tools. El
 administrador humano puede consultar los datos de contacto directamente, pero el agente no los
 recibe en su contexto.
+
+El intake conserva por campo un valor, un estado (`known`, `missing`, `ambiguous`, `unknown` o
+`declined`), confianza y evidencia textual. Solo los estados `missing` y `ambiguous` generan
+follow-ups. El ciudadano puede finalizar explícitamente y el sistema persiste la denuncia
+parcial con su razón de cierre y campos no resueltos. Las respuestas estructuradas se solicitan
+con esquema Pydantic, razonamiento aislado al intake y almacenamiento de respuesta desactivado.
 
 ## Flujo del agente operativo
 

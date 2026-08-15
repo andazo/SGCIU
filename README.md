@@ -10,9 +10,12 @@ conserva como prototipo, pero no es el foco de esta etapa.
 
 ## Funcionalidades implementadas
 
-- Sesiones persistentes de intake ciudadano con correcciones acumulativas.
+- Sesiones persistentes de intake ciudadano con correcciones acumulativas y razonamiento
+  de alta precisión mediante OpenAI.
 - Registro previo por CLI de nombre, identificación y contacto antes del relato.
-- Clasificación, resumen, entidades, urgencia y confianza por campo.
+- Clasificación, resumen, entidades, urgencia, evidencia y confianza por campo.
+- Follow-ups priorizados según valor operativo, con cierre parcial cuando la persona no
+  sabe o no desea aportar más información.
 - Revisión humana ante baja confianza, riesgo inmediato o prompt injection.
 - Embeddings de incidentes con PostgreSQL y `pgvector`.
 - Detección híbrida de incidentes relacionados y clusters candidatos.
@@ -39,12 +42,13 @@ python3 -m venv .venv
 .venv/bin/alembic -c alembic.ini upgrade head
 ```
 
-Para trabajar sin consumir una API externa, configure `LLM_PROVIDER=mock`. Para usar
-OpenAI, configure `LLM_PROVIDER=openai` y `OPENAI_API_KEY`.
+El runtime usa exclusivamente servicios de OpenAI. Configure `OPENAI_API_KEY`; el modelo
+general se define con `OPENAI_MODEL` y el intake ciudadano, de forma independiente, con
+`OPENAI_INTAKE_MODEL`. `INTAKE_REASONING_EFFORT=high` activa razonamiento reforzado solo en
+la recepción ciudadana y `INTAKE_MAX_FOLLOW_UPS` limita la extensión de la conversación.
 
-El proveedor `mock` incluye un extractor offline para demostraciones reproducibles. Normaliza
-tildes y variantes frecuentes del español de Costa Rica, pero no sustituye la comprensión
-semántica del proveedor LLM en producción.
+La suite automatizada reemplaza las conexiones externas mediante dobles ubicados únicamente
+en `backend/tests/`; no existe un modo offline seleccionable en la aplicación.
 
 ### Interfaz terminal
 
@@ -63,7 +67,9 @@ También se puede seleccionar el rol directamente:
 
 El flujo ciudadano solicita primero el nombre completo. La identificación, el correo y el
 teléfono son opcionales; estos datos se persisten con la denuncia, pero se excluyen de
-embeddings, tools del agente y trazas.
+embeddings, tools del agente y trazas. El agente entiende referencias locales de Costa Rica,
+registra evidencia por campo y permite terminar con frases como `eso es todo` o
+`no tengo más información`; en ese caso guarda el reporte con los datos disponibles.
 
 ### API
 
@@ -102,17 +108,17 @@ Tools disponibles:
 cd backend
 .venv/bin/ruff check app tests migrations
 .venv/bin/pytest --cov=app --cov-fail-under=70
-LLM_PROVIDER=mock PYTHONPATH=. .venv/bin/python -m app.evaluation.runner --provider mock
 ```
 
-Para evaluar el proveedor configurado:
+Para evaluar el intake real de OpenAI contra el dataset sintético:
 
 ```bash
-PYTHONPATH=. .venv/bin/python -m app.evaluation.runner --provider configured
+PYTHONPATH=. .venv/bin/python -m app.evaluation.runner
 ```
 
 El dataset se encuentra en `backend/evaluation/intake_cases.json` y contiene únicamente
-casos sintéticos.
+casos sintéticos. El comando de evaluación sí consume la API de OpenAI; las pruebas de
+`pytest` no realizan llamadas externas.
 
 ## Documentación técnica
 
