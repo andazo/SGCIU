@@ -87,6 +87,7 @@ def test_deterministic_intake_understands_accented_natural_report():
     assert response.extracted_data.tipo_lugar == "otro"
     assert "lunes 7 de enero" in response.extracted_data.fecha_hora_aproximada
     assert "parada de bus" in response.extracted_data.direccion_exacta
+    assert "El el" not in response.summary_text
 
 
 def test_deterministic_intake_applies_follow_up_answers_without_repeating_questions():

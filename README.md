@@ -11,6 +11,7 @@ conserva como prototipo, pero no es el foco de esta etapa.
 ## Funcionalidades implementadas
 
 - Sesiones persistentes de intake ciudadano con correcciones acumulativas.
+- Registro previo por CLI de nombre, identificación y contacto antes del relato.
 - Clasificación, resumen, entidades, urgencia y confianza por campo.
 - Revisión humana ante baja confianza, riesgo inmediato o prompt injection.
 - Embeddings de incidentes con PostgreSQL y `pgvector`.
@@ -41,6 +42,10 @@ python3 -m venv .venv
 Para trabajar sin consumir una API externa, configure `LLM_PROVIDER=mock`. Para usar
 OpenAI, configure `LLM_PROVIDER=openai` y `OPENAI_API_KEY`.
 
+El proveedor `mock` incluye un extractor offline para demostraciones reproducibles. Normaliza
+tildes y variantes frecuentes del español de Costa Rica, pero no sustituye la comprensión
+semántica del proveedor LLM en producción.
+
 ### Interfaz terminal
 
 ```bash
@@ -55,6 +60,10 @@ También se puede seleccionar el rol directamente:
 .venv/bin/python -m app.cli --role admin --transport local
 .venv/bin/python -m app.cli --role admin --transport mcp
 ```
+
+El flujo ciudadano solicita primero el nombre completo. La identificación, el correo y el
+teléfono son opcionales; estos datos se persisten con la denuncia, pero se excluyen de
+embeddings, tools del agente y trazas.
 
 ### API
 

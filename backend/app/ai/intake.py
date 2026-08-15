@@ -260,10 +260,11 @@ def _summary(data: ComplaintExtractedData) -> str:
         "otro": "persona denunciante",
     }.get(data.relacion_incidente, "persona denunciante")
     return (
-        f"El {data.fecha_hora_aproximada}, la {relation} reportó un incidente "
+        f"La persona denunciante, en calidad de {relation}, reportó un incidente "
         f"clasificado preliminarmente como {data.categoria_preliminar}. "
-        f"El hecho ocurrió en {data.direccion_exacta}, distrito de {data.distrito}, "
-        f"en un lugar identificado como {data.tipo_lugar}. "
+        f"El hecho habría ocurrido {data.fecha_hora_aproximada} en "
+        f"{data.direccion_exacta}, distrito de {data.distrito}. "
+        f"El lugar fue identificado como {data.tipo_lugar}. "
         f"Según la información aportada, {data.descripcion_detallada}"
     )
 

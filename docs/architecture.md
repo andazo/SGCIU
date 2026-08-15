@@ -5,7 +5,7 @@
 - La IA propone clasificaciones y relaciones; una persona mantiene la decisión final.
 - El agente no accede a SQL ni a credenciales de base de datos.
 - Los tools devuelven únicamente información operativa sanitizada.
-- La indexación semántica no incluye nombre, correo ni teléfono del denunciante.
+- La indexación semántica no incluye nombre, identificación, correo ni teléfono del denunciante.
 - Cada llamada HTTP, tool y ejecución del agente puede relacionarse mediante un trace ID.
 - Los proveedores de LLM y embeddings se sustituyen mediante interfaces explícitas.
 
@@ -13,7 +13,8 @@
 
 ```mermaid
 flowchart LR
-    Citizen["Ciudadano por CLI o API"] --> Intake["Intake persistente"]
+    Citizen["Ciudadano por CLI o API"] --> Profile["Identidad y contacto opcionales"]
+    Profile --> Intake["Intake persistente"]
     Intake --> Guardrails["Guardrails y confianza"]
     Guardrails --> Analysis["Clasificación, entidades y resumen"]
     Analysis --> Human["Revisión humana cuando aplica"]
@@ -22,6 +23,11 @@ flowchart LR
     Embeddings --> Vector["pgvector"]
     Vector --> Cluster["Similitud híbrida y cluster candidato"]
 ```
+
+Los datos personales viajan por una ruta determinista hasta PostgreSQL. El relato estructurado
+se procesa por separado y únicamente su versión sanitizada alimenta embeddings y tools. El
+administrador humano puede consultar los datos de contacto directamente, pero el agente no los
+recibe en su contexto.
 
 ## Flujo del agente operativo
 

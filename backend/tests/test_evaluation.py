@@ -17,8 +17,8 @@ def test_quality_metrics_cover_classification_and_retrieval():
 def test_versioned_intake_dataset_runs_reproducibly():
     report = evaluate_intake(DeterministicIntakeProvider(), load_dataset())
 
-    assert report.dataset_version == "1.0.0"
-    assert report.cases == 10
+    assert report.dataset_version == "1.1.0"
+    assert report.cases == 11
     assert report.classification_accuracy >= 0.9
     assert report.vehicle_entity_f1 == 1.0
     assert report.human_review_recall == 1.0
