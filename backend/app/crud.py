@@ -23,6 +23,7 @@ def list_form_submissions(db: Session):
 def create_complaint_submission(db: Session, payload: ComplaintSubmissionCreate):
     row = ComplaintSubmission(
         name=payload.name,
+        identification=payload.identification,
         email=str(payload.email) if payload.email else None,
         phone=payload.phone,
         ai_extracted_data=payload.ai_extracted_data.model_dump(),

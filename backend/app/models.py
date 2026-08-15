@@ -50,6 +50,7 @@ class ComplaintSubmission(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(120), nullable=True)
+    identification = Column(String(64), nullable=True)
     email = Column(String(120), nullable=True, index=True)
     phone = Column(String(40), nullable=True)
     ai_extracted_data = Column(JSON_TYPE, nullable=False)

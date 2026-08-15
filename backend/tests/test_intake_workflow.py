@@ -32,6 +32,10 @@ def test_persistent_intake_collects_and_submits_an_incident(db_session):
     incident = service.submit(
         session.id,
         IntakeSubmissionRequest(
+            name="Ana Prueba",
+            identification="1-2345-6789",
+            email="ana@example.com",
+            phone="8888-9999",
             truth_confirmation=True,
             data_usage_consent=True,
         ),
@@ -42,6 +46,10 @@ def test_persistent_intake_collects_and_submits_an_incident(db_session):
     )
     assert saved.analysis_metadata["source"] == "persistent_intake"
     assert saved.prompt_version == "intake-v2"
+    assert saved.name == "Ana Prueba"
+    assert saved.identification == "1-2345-6789"
+    assert saved.email == "ana@example.com"
+    assert saved.phone == "8888-9999"
 
 
 def test_emergency_signal_creates_human_review(db_session):

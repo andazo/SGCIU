@@ -22,6 +22,7 @@ class IncidentService:
     def create(self, payload: ComplaintSubmissionCreate) -> ComplaintSubmission:
         incident = ComplaintSubmission(
             name=payload.name,
+            identification=payload.identification,
             email=str(payload.email) if payload.email else None,
             phone=payload.phone,
             ai_extracted_data=payload.ai_extracted_data.model_dump(),

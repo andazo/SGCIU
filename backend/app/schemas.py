@@ -34,6 +34,37 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class CitizenProfile(StrictModel):
+    name: str = Field(min_length=2, max_length=120)
+    identification: str | None = Field(default=None, max_length=64)
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=40)
+
+    @field_validator("name")
+    @classmethod
+    def strip_required_name(cls, value: str):
+        value = value.strip()
+        if len(value) < 2:
+            raise ValueError("El nombre completo es obligatorio.")
+        return value
+
+    @field_validator("identification", "phone", mode="before")
+    @classmethod
+    def empty_optional_values_to_none(cls, value):
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def empty_optional_email_to_none(cls, value):
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
+
+
 class FormSubmissionCreate(BaseModel):
     name: str
     email: EmailStr
@@ -157,6 +188,7 @@ class IntakeSessionResponse(StrictModel):
 
 class ComplaintSubmissionCreate(BaseModel):
     name: str | None = None
+    identification: str | None = Field(default=None, max_length=64)
     email: EmailStr | None = None
     phone: str | None = None
     ai_extracted_data: ComplaintExtractedData
@@ -169,7 +201,9 @@ class ComplaintSubmissionCreate(BaseModel):
     truth_confirmation: bool
     data_usage_consent: bool
 
-    @field_validator("name", "phone", "ai_summary_text", "review_reason", mode="before")
+    @field_validator(
+        "name", "identification", "phone", "ai_summary_text", "review_reason", mode="before"
+    )
     @classmethod
     def empty_strings_to_none(cls, value):
         if isinstance(value, str) and not value.strip():
@@ -196,6 +230,7 @@ class ComplaintSubmissionCreate(BaseModel):
 
 class IntakeSubmissionRequest(StrictModel):
     name: str | None = None
+    identification: str | None = Field(default=None, max_length=64)
     email: EmailStr | None = None
     phone: str | None = None
     truth_confirmation: bool
@@ -207,6 +242,7 @@ class ComplaintSubmissionResponse(BaseModel):
 
     id: int
     name: str | None
+    identification: str | None
     email: str | None
     phone: str | None
     ai_extracted_data: ComplaintExtractedData

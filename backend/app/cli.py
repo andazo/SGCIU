@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from app.agents.gateway import LocalToolGateway, connect_mcp_gateway
 from app.agents.operational import OperationalAgent
 from app.db import SessionLocal
-from app.schemas import IntakeSubmissionRequest
+from app.schemas import CitizenProfile, IntakeSubmissionRequest
 from app.services.incidents import IncidentNotFoundError, IncidentService
 from app.services.intake import IntakeService
 from app.services.reviews import ReviewNotFoundError, ReviewService
@@ -25,7 +25,33 @@ def _optional(prompt: str) -> str | None:
     return value or None
 
 
+def _collect_citizen_profile() -> CitizenProfile | None:
+    print("\nInformación general del ciudadano")
+    print("La identificación y los datos de contacto son opcionales.")
+    while True:
+        name = input("Nombre completo: ").strip()
+        if name.casefold() in {"salir", "cancelar"}:
+            return None
+        identification = _optional("Identificación opcional: ")
+        email = _optional("Correo opcional: ")
+        phone = _optional("Teléfono opcional: ")
+        try:
+            return CitizenProfile(
+                name=name,
+                identification=identification,
+                email=email,
+                phone=phone,
+            )
+        except ValidationError as exc:
+            messages = "; ".join(error["msg"] for error in exc.errors())
+            print(f"Revise la información general: {messages}")
+
+
 def run_citizen() -> None:
+    profile = _collect_citizen_profile()
+    if profile is None:
+        print("Registro cancelado; no se creó ninguna denuncia.")
+        return
     with SessionLocal() as db:
         try:
             service = IntakeService(db)
@@ -58,9 +84,10 @@ def run_citizen() -> None:
                 continue
             try:
                 payload = IntakeSubmissionRequest(
-                    name=_optional("Nombre opcional: "),
-                    email=_optional("Correo opcional: "),
-                    phone=_optional("Teléfono opcional: "),
+                    name=profile.name,
+                    identification=profile.identification,
+                    email=profile.email,
+                    phone=profile.phone,
                     truth_confirmation=True,
                     data_usage_consent=_yes(
                         "¿Acepta el uso institucional de los datos de la denuncia? [s/N]: "
@@ -94,6 +121,10 @@ def _print_incident(db) -> None:
         return
     data = incident.ai_extracted_data or {}
     print(f"\nIncidente #{incident.id}")
+    print("Nombre:", incident.name or "No proporcionado")
+    print("Identificación:", incident.identification or "No proporcionada")
+    print("Correo:", incident.email or "No proporcionado")
+    print("Teléfono:", incident.phone or "No proporcionado")
     print("Resumen:", incident.ai_summary_text or "Sin resumen")
     for field in (
         "categoria_preliminar",

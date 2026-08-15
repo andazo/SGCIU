@@ -14,6 +14,7 @@ def create_incident(db_session, category: str = "ruido"):
     return IncidentService(db_session).create(
         ComplaintSubmissionCreate(
             name="Dato que no debe salir",
+            identification="1-2345-6789",
             email="private@example.com",
             phone="8888-9999",
             ai_extracted_data=ComplaintExtractedData(
@@ -45,6 +46,7 @@ def test_registry_does_not_expose_contact_data_or_unknown_tools(db_session):
     serialized = str(result)
     assert "private@example.com" not in serialized
     assert "8888-9999" not in serialized
+    assert "1-2345-6789" not in serialized
     assert "Dato que no debe salir" not in serialized
     with pytest.raises(ToolAuthorizationError):
         registry.call(

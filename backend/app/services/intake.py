@@ -91,6 +91,7 @@ class IntakeService:
         extracted.pop("_workflow", None)
         incident_payload = ComplaintSubmissionCreate(
             name=payload.name,
+            identification=payload.identification,
             email=payload.email,
             phone=payload.phone,
             ai_extracted_data=ComplaintExtractedData.model_validate(extracted),
