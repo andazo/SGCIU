@@ -5,8 +5,8 @@ import json
 import logging
 import re
 import time
+import unicodedata
 from abc import ABC, abstractmethod
-from typing import ClassVar
 
 from openai import OpenAI
 
@@ -31,6 +31,83 @@ REQUIRED_FIELDS = (
     "direccion_exacta",
     "tipo_lugar",
     "fecha_hora_aproximada",
+)
+
+FIELD_LABELS = {
+    "descripcion_detallada": "una descripción detallada",
+    "relacion_incidente": "su relación con el incidente",
+    "categoria_preliminar": "qué tipo de incidente ocurrió",
+    "distrito": "el distrito",
+    "direccion_exacta": "la dirección o un punto de referencia",
+    "tipo_lugar": "el tipo de lugar",
+    "fecha_hora_aproximada": "la fecha y hora aproximadas",
+}
+
+RELATION_PATTERNS = {
+    "victima": (
+        r"\bme (?:robaron|asaltaron|agredieron|golpearon|amenazaron)\b",
+        r"\b(?:fui|soy) (?:la |el )?victima\b",
+    ),
+    "testigo": (
+        r"\b(?:fui|soy) (?:un |una )?testigo\b",
+        r"\b(?:vi|observe|presencie)\b",
+        r"\bcomo testigo\b",
+        r"\btestigo\b",
+    ),
+    "comerciante": (
+        r"\b(?:soy|como) comerciante\b",
+        r"\bmi (?:negocio|local|comercio|establecimiento)\b",
+    ),
+    "vecino": (
+        r"\b(?:soy|como) (?:un |una )?vecin[oa]\b",
+        r"\bmi barrio\b",
+        r"\bvecin[oa]\b",
+    ),
+}
+
+CATEGORY_PATTERNS = {
+    "ruido": (r"\bruido\b", r"\bmusica (?:alta|fuerte)\b", r"\bfiesta\b"),
+    "vehiculo_sospechoso": (r"\bvehiculo sospechoso\b",),
+    "venta_drogas": (r"\bventa de drogas?\b", r"\bvend(?:en|ian) drogas?\b"),
+    "violencia": (r"\bviolencia\b", r"\bagresion\b", r"\bpelea\b", r"\bgolpes?\b"),
+    "robo": (r"\brobo\b", r"\brobaron\b", r"\basalto\b", r"\basaltaron\b"),
+    "vandalismo": (r"\bvandalismo\b", r"\bgrafiti\b", r"\bdanaron\b"),
+    "persona_sospechosa": (r"\bpersona sospechosa\b",),
+    "emergencia": (r"\bemergencia\b", r"\bincendio\b", r"\bbalacera\b"),
+    "disturbio_publico": (r"\bdisturbio publico\b", r"\bdesorden publico\b"),
+    "basura_o_contaminacion": (r"\bbasura\b", r"\bcontaminacion\b"),
+    "alumbrado_publico": (r"\balumbrado publico\b", r"\bluminaria\b"),
+    "obstruccion_via_publica": (r"\bobstruccion\b", r"\bvia bloqueada\b"),
+    "animal_peligroso": (r"\banimal peligroso\b", r"\bperro agresivo\b"),
+    "consumo_alcohol_drogas": (r"\bconsum(?:o|iendo) (?:alcohol|drogas?)\b",),
+    "acoso_o_amenaza": (r"\bacoso\b", r"\bamenaza\b"),
+    "problema_transito": (
+        r"\bproblema de transito\b",
+        r"\bchoque\b",
+        r"\bvehiculo bloqueando\b",
+    ),
+}
+
+DISTRICT_PATTERNS = {
+    "San Joaquin": (r"\bsan joaquin(?: de flores)?\b",),
+    "Barrantes": (r"\bbarrantes\b",),
+    "Llorente": (r"\bllorente\b",),
+}
+
+PLACE_CONTEXT_PATTERNS = {
+    "otro": r"parada (?:de )?(?:bus|autobus)",
+    "casa": r"(?:casa|vivienda|residencia)",
+    "parque": r"parque",
+    "escuela": r"(?:escuela|colegio|centro educativo)",
+    "establecimiento": r"(?:establecimiento|negocio|local|tienda|comercio)",
+}
+
+DATE_WORDS = (
+    "lunes|martes|miercoles|jueves|viernes|sabado|domingo"
+)
+MONTH_WORDS = (
+    "enero|febrero|marzo|abril|mayo|junio|julio|agosto|"
+    "septiembre|setiembre|octubre|noviembre|diciembre"
 )
 
 SYSTEM_PROMPT = """
@@ -74,6 +151,104 @@ def _strict_schema(model_schema: dict[str, object]) -> dict[str, object]:
 def _missing_fields(data: ComplaintExtractedData) -> list[str]:
     values = data.model_dump()
     return [field for field in REQUIRED_FIELDS if not values.get(field)]
+
+
+def _normalize_for_matching(value: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", value)
+    without_accents = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return without_accents.casefold()
+
+
+def _first_pattern_value(
+    text: str,
+    patterns_by_value: dict[str, tuple[str, ...]],
+) -> str | None:
+    normalized = _normalize_for_matching(text)
+    for value, patterns in patterns_by_value.items():
+        if any(re.search(pattern, normalized) for pattern in patterns):
+            return value
+    return None
+
+
+def _last_pattern_value(
+    text: str,
+    patterns_by_value: dict[str, tuple[str, ...]],
+) -> str | None:
+    """Prefer the last explicit concept so phrases such as corrections can replace prior data."""
+    normalized = _normalize_for_matching(text)
+    candidates: list[tuple[int, str]] = []
+    for value, patterns in patterns_by_value.items():
+        for pattern in patterns:
+            candidates.extend((match.start(), value) for match in re.finditer(pattern, normalized))
+    return max(candidates, default=(0, None), key=lambda item: item[0])[1]
+
+
+def _extract_place(text: str) -> str | None:
+    normalized = _normalize_for_matching(text)
+    candidates: list[tuple[int, str]] = []
+    for value, place_pattern in PLACE_CONTEXT_PATTERNS.items():
+        contextual = re.compile(
+            rf"\b(?:en|dentro de|cerca de)\s+(?:un|una|el|la)?\s*({place_pattern})\b"
+        )
+        candidates.extend((match.start(), value) for match in contextual.finditer(normalized))
+    if candidates:
+        return min(candidates, key=lambda item: item[0])[1]
+    for value, place_pattern in PLACE_CONTEXT_PATTERNS.items():
+        if re.search(rf"\b{place_pattern}\b", normalized):
+            return value
+    if re.search(r"\b(?:calle|acera|via publica|lote baldio)\b", normalized):
+        return "otro"
+    return None
+
+
+def _extract_datetime(text: str) -> str | None:
+    patterns = (
+        (
+            rf"\b(?:el\s+)?(?:dia\s+)?(?:{DATE_WORDS})\s+\d{{1,2}}\s+de\s+"
+            rf"(?:{MONTH_WORDS})(?:\s+de\s+\d{{4}})?"
+            r"(?:\s+a\s+las?\s+\d{1,2}(?::\d{2})?\s*(?:a\.?\s*m\.?|p\.?\s*m\.?))?"
+            r"(?:\s+de\s+la\s+(?:manana|tarde|noche))?"
+        ),
+        (
+            r"\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?"
+            r"(?:\s+a\s+las?\s+\d{1,2}(?::\d{2})?\s*(?:a\.?\s*m\.?|p\.?\s*m\.?))?"
+        ),
+        (
+            r"\b(?:hoy|ayer|anoche|esta manana|esta tarde|esta noche)"
+            r"(?:\s+a\s+las?\s+\d{1,2}(?::\d{2})?\s*(?:a\.?\s*m\.?|p\.?\s*m\.?))?"
+        ),
+        r"\b\d{1,2}(?::\d{2})?\s*(?:a\.?\s*m\.?|p\.?\s*m\.?)\b",
+    )
+    normalized = _normalize_for_matching(text)
+    for pattern in patterns:
+        match = re.search(pattern, normalized, re.I)
+        if match:
+            return text[match.start() : match.end()].strip(" .,;")
+    return None
+
+
+def _extract_address(text: str) -> str | None:
+    labelled = re.search(r"(?:direcci[oó]n|ubicaci[oó]n)\s*[:\-]?\s*([^.;]+)", text, re.I)
+    if labelled:
+        return labelled.group(1).strip()
+    location = re.search(r"\b(?:en|sobre)\s+((?:la|el|un|una)\s+[^.;]+)", text, re.I)
+    if location:
+        candidate = location.group(1).strip()
+        normalized = _normalize_for_matching(candidate)
+        if not normalized.startswith(("el distrito", "la provincia", "el canton")):
+            return candidate
+    landmark = re.search(
+        r"(?:frente a|cerca de|costado (?:norte|sur|este|oeste) de)\s+([^.;]+)",
+        text,
+        re.I,
+    )
+    return landmark.group(1).strip() if landmark else None
+
+
+def _human_join(values: list[str]) -> str:
+    if len(values) < 2:
+        return values[0]
+    return ", ".join(values[:-1]) + " y " + values[-1]
 
 
 def _summary(data: ComplaintExtractedData) -> str:
@@ -224,66 +399,29 @@ class DeterministicIntakeProvider(IntakeProvider):
 
     model_name = "deterministic-demo"
 
-    CATEGORY_KEYWORDS: ClassVar[dict[str, tuple[str, ...]]] = {
-        "ruido": ("ruido", "música", "fiesta"),
-        "robo": ("robo", "robaron", "asalto"),
-        "violencia": ("agresión", "golpe", "pelea"),
-        "vandalismo": ("vandalismo", "grafiti", "dañaron"),
-        "venta_drogas": ("venta de drogas", "venden droga"),
-        "problema_transito": ("tránsito", "choque", "vehículo bloqueando"),
-    }
-
     def analyze(
         self,
         messages: list[ChatMessage],
         current_data: ComplaintExtractedData,
     ) -> ComplaintIntakeChatResponse:
         user_text = " ".join(message.content for message in messages if message.role == "user")
-        normalized = user_text.casefold()
+        latest_user = next(
+            (message.content for message in reversed(messages) if message.role == "user"), ""
+        )
         values = current_data.model_dump()
         values["descripcion_detallada"] = values["descripcion_detallada"] or user_text or None
 
-        if not values["relacion_incidente"]:
-            if any(word in normalized for word in ("me robaron", "me asaltaron", "me agredieron")):
-                values["relacion_incidente"] = "victima"
-            elif any(word in normalized for word in ("vi ", "observé", "presencié")):
-                values["relacion_incidente"] = "testigo"
-            elif "mi negocio" in normalized or "mi local" in normalized:
-                values["relacion_incidente"] = "comerciante"
-            elif "vecino" in normalized or "mi barrio" in normalized:
-                values["relacion_incidente"] = "vecino"
-
-        if not values["categoria_preliminar"]:
-            for category, keywords in self.CATEGORY_KEYWORDS.items():
-                if any(keyword in normalized for keyword in keywords):
-                    values["categoria_preliminar"] = category
-                    break
-
-        if not values["distrito"]:
-            for district in ("San Joaquin", "Barrantes", "Llorente"):
-                if district.casefold() in normalized:
-                    values["distrito"] = district
-                    break
-
-        if not values["tipo_lugar"]:
-            for place in ("casa", "parque", "escuela", "establecimiento"):
-                if place in normalized:
-                    values["tipo_lugar"] = place
-                    break
-
-        if not values["fecha_hora_aproximada"]:
-            time_match = re.search(
-                r"\b(hoy|ayer|anoche|esta mañana|\d{1,2}[:.]\d{2})\b", normalized
-            )
-            if time_match:
-                values["fecha_hora_aproximada"] = time_match.group(1)
-
-        if not values["direccion_exacta"]:
-            address_match = re.search(
-                r"(?:dirección|ubicación|frente a|cerca de)[: ]+([^.;]+)", user_text, re.I
-            )
-            if address_match:
-                values["direccion_exacta"] = address_match.group(1).strip()
+        latest_candidates = {
+            "relacion_incidente": _first_pattern_value(latest_user, RELATION_PATTERNS),
+            "categoria_preliminar": _last_pattern_value(latest_user, CATEGORY_PATTERNS),
+            "distrito": _first_pattern_value(latest_user, DISTRICT_PATTERNS),
+            "tipo_lugar": _extract_place(latest_user),
+            "fecha_hora_aproximada": _extract_datetime(latest_user),
+            "direccion_exacta": _extract_address(latest_user),
+        }
+        for field, candidate in latest_candidates.items():
+            if candidate:
+                values[field] = candidate
 
         entities = IncidentEntities.model_validate(values.get("entities") or {})
         plates = sorted(set(re.findall(r"\b[A-Z]{3}-?\d{3}\b", user_text.upper())))
@@ -314,7 +452,9 @@ class DeterministicIntakeProvider(IntakeProvider):
         question = (
             "La información está completa. Revise el resumen antes de enviarla."
             if complete
-            else "Para continuar, indique: " + ", ".join(missing[:2]).replace("_", " ") + "."
+            else "Para continuar, indique "
+            + _human_join([FIELD_LABELS[field] for field in missing[:2]])
+            + "."
         )
         if guardrail.emergency_guidance:
             question = (
