@@ -1,3 +1,6 @@
+import json
+from types import SimpleNamespace
+
 import pytest
 from sqlalchemy import select
 
@@ -8,6 +11,45 @@ from app.schemas import ComplaintExtractedData, ComplaintSubmissionCreate
 from app.services.incidents import IncidentService
 from app.tools.incidents import build_incident_tool_registry
 from app.tools.registry import ToolAuthorizationError, ToolNotFoundError
+
+
+class ScriptedResponses:
+    def __init__(self):
+        self.call_count = 0
+
+    async def create(self, **kwargs):
+        self.call_count += 1
+        usage = SimpleNamespace(input_tokens=20, output_tokens=10)
+        if self.call_count == 1:
+            tool_call = SimpleNamespace(
+                type="function_call",
+                name="aggregate_incidents",
+                arguments=json.dumps(
+                    {
+                        "group_by": "categoria_preliminar",
+                        "district": "Llorente",
+                        "category": None,
+                    }
+                ),
+                call_id="call-1",
+            )
+            return SimpleNamespace(
+                id="response-1",
+                output=[tool_call],
+                output_text="",
+                usage=usage,
+            )
+        return SimpleNamespace(
+            id="response-2",
+            output=[],
+            output_text="La categoría más común en Llorente es ruido, con 2 incidentes.",
+            usage=usage,
+        )
+
+
+class ScriptedAsyncOpenAI:
+    def __init__(self):
+        self.responses = ScriptedResponses()
 
 
 def create_incident(db_session, category: str = "ruido"):
@@ -63,7 +105,7 @@ def test_registry_does_not_expose_contact_data_or_unknown_tools(db_session):
 async def test_react_agent_uses_typed_tool_and_records_audit(db_session):
     create_incident(db_session, "ruido")
     create_incident(db_session, "ruido")
-    agent = OperationalAgent(LocalToolGateway(db_session))
+    agent = OperationalAgent(LocalToolGateway(db_session), client=ScriptedAsyncOpenAI())
 
     response = await agent.run("¿Cuál es la categoría más común en Llorente?")
 

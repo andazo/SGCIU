@@ -1,24 +1,40 @@
 from sqlalchemy import select
 
-from app.ai.intake import DeterministicIntakeProvider
 from app.models import ComplaintSubmission, HumanReview
-from app.schemas import ChatMessage, ComplaintExtractedData, IntakeSubmissionRequest
+from app.schemas import IntakeFieldObservation, IntakeSubmissionRequest
 from app.services.intake import IntakeService
+from tests.fakes import QueueIntakeProvider, extracted_data, intake_response
 
 COMPLETE_REPORT = (
     "Ayer vi una fiesta con mucho ruido en un parque del distrito Llorente. "
     "Ubicación: 100 metros norte de la escuela de Llorente."
 )
 
-REPORTED_ACCENTED_REPORT = (
-    "Fui testigo de un asalto en la parada de bus en la calle principal de "
-    "San Joaquín frente a la Tienda Gollo. Esto ocurrió el día lunes 7 de enero "
-    "a las 4 pm de la tarde."
-)
+
+def complete_data():
+    return extracted_data(
+        descripcion_detallada=COMPLETE_REPORT,
+        relacion_incidente="testigo",
+        categoria_preliminar="ruido",
+        distrito="Llorente",
+        direccion_exacta="100 metros norte de la escuela de Llorente",
+        tipo_lugar="parque",
+        fecha_hora_aproximada="ayer",
+    )
+
+
+def submission_request(**overrides):
+    values = {
+        "truth_confirmation": True,
+        "data_usage_consent": True,
+    }
+    values.update(overrides)
+    return IntakeSubmissionRequest(**values)
 
 
 def test_persistent_intake_collects_and_submits_an_incident(db_session):
-    service = IntakeService(db_session, provider=DeterministicIntakeProvider())
+    provider = QueueIntakeProvider(intake_response(complete_data()))
+    service = IntakeService(db_session, provider=provider)
     session = service.start()
 
     response = service.add_user_message(session.id, COMPLETE_REPORT)
@@ -31,13 +47,11 @@ def test_persistent_intake_collects_and_submits_an_incident(db_session):
 
     incident = service.submit(
         session.id,
-        IntakeSubmissionRequest(
+        submission_request(
             name="Ana Prueba",
             identification="1-2345-6789",
             email="ana@example.com",
             phone="8888-9999",
-            truth_confirmation=True,
-            data_usage_consent=True,
         ),
     )
 
@@ -45,7 +59,8 @@ def test_persistent_intake_collects_and_submits_an_incident(db_session):
         select(ComplaintSubmission).where(ComplaintSubmission.id == incident.id)
     )
     assert saved.analysis_metadata["source"] == "persistent_intake"
-    assert saved.prompt_version == "intake-v2"
+    assert saved.analysis_metadata["completion_reason"] == "all_fields_resolved"
+    assert saved.prompt_version == "intake-v3"
     assert saved.name == "Ana Prueba"
     assert saved.identification == "1-2345-6789"
     assert saved.email == "ana@example.com"
@@ -53,78 +68,83 @@ def test_persistent_intake_collects_and_submits_an_incident(db_session):
 
 
 def test_emergency_signal_creates_human_review(db_session):
-    service = IntakeService(db_session, provider=DeterministicIntakeProvider())
-    session = service.start()
-    report = COMPLETE_REPORT + " Hay una persona inconsciente y está ocurriendo ahora."
-
-    response = service.add_user_message(session.id, report)
-    assert response.requires_human_review is True
-
-    incident = service.submit(
-        session.id,
-        IntakeSubmissionRequest(
-            truth_confirmation=True,
-            data_usage_consent=True,
-        ),
+    response = intake_response(
+        complete_data(),
+        requires_human_review=True,
+        review_reason="El relato contiene señales de posible riesgo inmediato.",
     )
+    service = IntakeService(db_session, provider=QueueIntakeProvider(response))
+    session = service.start()
+
+    analyzed = service.add_user_message(
+        session.id,
+        COMPLETE_REPORT + " Hay una persona inconsciente y está ocurriendo ahora.",
+    )
+    assert analyzed.requires_human_review is True
+
+    incident = service.submit(session.id, submission_request())
     review = db_session.scalar(select(HumanReview).where(HumanReview.incident_id == incident.id))
     assert review is not None
     assert review.status == "pending"
 
 
-def test_deterministic_intake_understands_accented_natural_report():
-    provider = DeterministicIntakeProvider()
+def test_follow_up_state_is_persisted_without_reasking_known_fields(db_session):
+    partial = extracted_data(
+        descripcion_detallada="Vi un asalto frente a una tienda.",
+        categoria_preliminar="robo",
+        direccion_exacta="frente a la Tienda Gollo",
+        tipo_lugar="otro",
+        fecha_hora_aproximada="ayer a las 4 pm",
+    )
+    first = intake_response(
+        partial,
+        assistant_message="¿Fue testigo o víctima y en cuál distrito ocurrió?",
+        is_complete=False,
+    )
+    provider = QueueIntakeProvider(first, intake_response(complete_data()))
+    service = IntakeService(db_session, provider=provider)
+    session = service.start()
 
-    response = provider.analyze(
-        messages=[ChatMessage(role="user", content=REPORTED_ACCENTED_REPORT)],
-        current_data=ComplaintExtractedData(),
+    first_result = service.add_user_message(session.id, "Vi un asalto frente a una tienda.")
+    second_result = service.add_user_message(
+        session.id,
+        "Fui testigo y ocurrió en San Joaquín.",
     )
 
-    assert response.is_complete is True
-    assert response.extracted_data.relacion_incidente == "testigo"
-    assert response.extracted_data.categoria_preliminar == "robo"
-    assert response.extracted_data.distrito == "San Joaquin"
-    assert response.extracted_data.tipo_lugar == "otro"
-    assert "lunes 7 de enero" in response.extracted_data.fecha_hora_aproximada
-    assert "parada de bus" in response.extracted_data.direccion_exacta
-    assert "El el" not in response.summary_text
+    assert first_result.follow_up_count == 1
+    assert second_result.is_complete is True
+    assert provider.follow_up_counts == [0, 1]
 
 
-def test_deterministic_intake_applies_follow_up_answers_without_repeating_questions():
-    provider = DeterministicIntakeProvider()
-    first = provider.analyze(
-        messages=[
-            ChatMessage(
-                role="user",
-                content=(
-                    "Ocurrió un asalto en una parada de bus. "
-                    "Ubicación: frente a la Tienda Gollo. Fue ayer a las 4 pm."
-                ),
-            )
-        ],
-        current_data=ComplaintExtractedData(),
+def test_explicit_finish_allows_partial_report_to_be_saved(db_session):
+    partial = extracted_data(
+        descripcion_detallada="Un vecino hizo mucho ruido después de las diez de la noche.",
+        categoria_preliminar="ruido",
+        distrito="Llorente",
+        direccion_exacta="150 metros norte del salón comunal de Llorente",
+        fecha_hora_aproximada="8 de marzo de 2026 después de las 10 pm",
     )
-    assert first.missing_fields == ["relacion_incidente", "distrito"]
-
-    second = provider.analyze(
-        messages=[
-            ChatMessage(
-                role="user",
-                content=(
-                    "Ocurrió un asalto en una parada de bus. "
-                    "Ubicación: frente a la Tienda Gollo. Fue ayer a las 4 pm."
-                ),
-            ),
-            ChatMessage(role="assistant", content=first.assistant_message),
-            ChatMessage(
-                role="user",
-                content="Mi relación es que fui testigo y fue en el distrito de San Joaquín.",
-            ),
-        ],
-        current_data=first.extracted_data,
+    partial.field_states.relacion_incidente = IntakeFieldObservation(status="unknown")
+    partial.field_states.tipo_lugar = IntakeFieldObservation(status="declined")
+    response = intake_response(
+        partial,
+        assistant_message="Entendido, prepararé el reporte con lo disponible.",
+        is_complete=True,
+        user_wants_to_finish=True,
+        completion_reason="user_finished",
     )
+    service = IntakeService(db_session, provider=QueueIntakeProvider(response))
+    session = service.start()
 
-    assert second.is_complete is True
-    assert second.missing_fields == []
-    assert second.extracted_data.relacion_incidente == "testigo"
-    assert second.extracted_data.distrito == "San Joaquin"
+    analyzed = service.add_user_message(session.id, "Eso es todo, no sé nada más.")
+    incident = service.submit(session.id, submission_request())
+
+    assert analyzed.is_complete is True
+    assert analyzed.user_wants_to_finish is True
+    assert "relacion_incidente" not in analyzed.missing_fields
+    assert "tipo_lugar" not in analyzed.missing_fields
+    assert incident.analysis_metadata["completion_reason"] == "user_finished"
+    assert set(incident.analysis_metadata["missing_operational_fields"]) == {
+        "relacion_incidente",
+        "tipo_lugar",
+    }

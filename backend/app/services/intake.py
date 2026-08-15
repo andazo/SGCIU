@@ -4,7 +4,14 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from app.ai.intake import REQUIRED_FIELDS, IntakeProvider, get_intake_provider
+from app.ai.intake import (
+    PROMPT_VERSION,
+    IntakeProvider,
+    actionable_missing_fields,
+    get_intake_provider,
+    reconcile_field_states,
+    unresolved_fields,
+)
 from app.models import IntakeSession
 from app.schemas import (
     ChatMessage,
@@ -17,7 +24,8 @@ from app.services.incidents import IncidentService
 
 INITIAL_MESSAGE = (
     "Describa la denuncia con el mayor detalle posible, incluyendo qué ocurrió, "
-    "dónde y cuándo. Puede corregir cualquier dato que el asistente interprete incorrectamente."
+    "dónde y cuándo. Puede corregir cualquier dato que el asistente interprete incorrectamente "
+    "y, si no conoce más detalles, puede indicarlo en cualquier momento."
 )
 
 
@@ -39,7 +47,7 @@ class IntakeService:
             id=str(uuid.uuid4()),
             messages=[{"role": "assistant", "content": INITIAL_MESSAGE}],
             extracted_data=ComplaintExtractedData().model_dump(),
-            prompt_version="intake-v2",
+            prompt_version=PROMPT_VERSION,
             model_name=self.provider.model_name,
         )
         self.db.add(session)
@@ -59,8 +67,13 @@ class IntakeService:
         messages.append(ChatMessage(role="user", content=content))
         stored_data = dict(session.extracted_data)
         previous_workflow = stored_data.pop("_workflow", {})
-        current_data = ComplaintExtractedData.model_validate(stored_data)
-        result = self.provider.analyze(messages, current_data)
+        current_data = reconcile_field_states(ComplaintExtractedData.model_validate(stored_data))
+        previous_follow_ups = int(previous_workflow.get("follow_up_count", 0))
+        result = self.provider.analyze(
+            messages,
+            current_data,
+            follow_up_count=previous_follow_ups,
+        )
         messages.append(ChatMessage(role="assistant", content=result.assistant_message))
 
         session.messages = [message.model_dump() for message in messages]
@@ -69,12 +82,18 @@ class IntakeService:
         session.is_complete = result.is_complete
         session.model_name = result.model_name
         session.prompt_version = result.prompt_version
+        follow_up_count = previous_follow_ups + (0 if result.is_complete else 1)
         metadata = dict(session.extracted_data)
         metadata["_workflow"] = {
             "requires_human_review": (
                 bool(previous_workflow.get("requires_human_review")) or result.requires_human_review
             ),
             "review_reason": result.review_reason or previous_workflow.get("review_reason"),
+            "follow_up_count": follow_up_count,
+            "user_wants_to_finish": result.user_wants_to_finish,
+            "completion_reason": result.completion_reason,
+            "missing_fields": result.missing_fields,
+            "unresolved_fields": unresolved_fields(result.extracted_data),
         }
         session.extracted_data = metadata
         self.db.commit()
@@ -85,7 +104,10 @@ class IntakeService:
         session = self.get(session_id)
         response = self.to_response(session)
         if not session.is_complete:
-            raise IncompleteIntakeError("La conversación todavía tiene campos pendientes.")
+            raise IncompleteIntakeError(
+                "La denuncia aún no está lista. Continúe la conversación o indique "
+                "explícitamente que desea enviarla con la información disponible."
+            )
         workflow = session.extracted_data.get("_workflow", {})
         extracted = dict(session.extracted_data)
         extracted.pop("_workflow", None)
@@ -102,6 +124,10 @@ class IntakeService:
                 "confidence_by_field": (
                     response.extracted_data.confidence_by_field.model_dump(exclude_none=True)
                 ),
+                "field_states": response.extracted_data.field_states.model_dump(),
+                "missing_operational_fields": workflow.get("unresolved_fields", []),
+                "completion_reason": workflow.get("completion_reason"),
+                "follow_up_count": workflow.get("follow_up_count", 0),
             },
             requires_human_review=bool(workflow.get("requires_human_review")),
             review_reason=workflow.get("review_reason"),
@@ -115,9 +141,8 @@ class IntakeService:
     def to_response(self, session: IntakeSession) -> IntakeSessionResponse:
         extracted = dict(session.extracted_data or {})
         workflow = extracted.pop("_workflow", {})
-        data = ComplaintExtractedData.model_validate(extracted)
-        values = data.model_dump()
-        missing = [field for field in REQUIRED_FIELDS if not values.get(field)]
+        data = reconcile_field_states(ComplaintExtractedData.model_validate(extracted))
+        missing = actionable_missing_fields(data)
         return IntakeSessionResponse(
             session_id=session.id,
             messages=[ChatMessage.model_validate(message) for message in session.messages],
@@ -127,6 +152,9 @@ class IntakeService:
             summary_text=session.summary_text,
             requires_human_review=bool(workflow.get("requires_human_review")),
             review_reason=workflow.get("review_reason"),
+            user_wants_to_finish=bool(workflow.get("user_wants_to_finish")),
+            completion_reason=workflow.get("completion_reason", "needs_follow_up"),
+            follow_up_count=int(workflow.get("follow_up_count", 0)),
             model_name=session.model_name,
             prompt_version=session.prompt_version,
         )

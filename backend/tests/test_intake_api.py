@@ -27,7 +27,7 @@ def test_versioned_intake_api_flow():
         json={"truth_confirmation": True, "data_usage_consent": True},
     )
     assert submitted.status_code == 201
-    assert submitted.json()["prompt_version"] == "intake-v2"
+    assert submitted.json()["prompt_version"] == "intake-v3"
 
     incidents = client.get("/v1/incidents")
     assert incidents.status_code == 200

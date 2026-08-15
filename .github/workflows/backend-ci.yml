@@ -22,7 +22,6 @@ jobs:
         working-directory: backend
     env:
       DATABASE_URL: sqlite:///ci.db
-      LLM_PROVIDER: mock
       REQUIRE_ADMIN_AUTH: "false"
     steps:
       - uses: actions/checkout@v4

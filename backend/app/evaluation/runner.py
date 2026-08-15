@@ -7,7 +7,7 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from app.ai.intake import DeterministicIntakeProvider, IntakeProvider, get_intake_provider
+from app.ai.intake import IntakeProvider, get_intake_provider
 from app.evaluation.metrics import accuracy, entity_scores, label_distribution, macro_f1
 from app.schemas import ChatMessage, ComplaintExtractedData
 
@@ -103,9 +103,8 @@ def evaluate_intake(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evalúa el workflow de intake de SGCIU")
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
-    parser.add_argument("--provider", choices=("configured", "mock"), default="configured")
     args = parser.parse_args()
-    provider = DeterministicIntakeProvider() if args.provider == "mock" else get_intake_provider()
+    provider = get_intake_provider()
     report = evaluate_intake(provider, load_dataset(args.dataset))
     print(json.dumps(asdict(report), ensure_ascii=False, indent=2))
 

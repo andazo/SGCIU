@@ -1,7 +1,7 @@
-from app.ai.embeddings import DeterministicEmbeddingProvider
 from app.schemas import ComplaintExtractedData, ComplaintSubmissionCreate, IncidentEntities
 from app.services.incidents import IncidentService
 from app.services.semantic import SemanticIncidentService, canonical_incident_text
+from tests.fakes import LocalEmbeddingDouble
 
 
 def incident_payload(description: str, address: str) -> ComplaintSubmissionCreate:
@@ -36,7 +36,7 @@ def test_similar_incidents_are_indexed_and_grouped(db_session):
 
     service = SemanticIncidentService(
         db_session,
-        provider=DeterministicEmbeddingProvider(),
+        provider=LocalEmbeddingDouble(),
     )
     related = service.find_related(second, top_k=3)
     clusters = service.list_clusters()

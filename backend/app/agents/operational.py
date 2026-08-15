@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import time
 import uuid
 
@@ -82,17 +81,16 @@ class OperationalAgent:
         self,
         gateway: ToolGateway,
         settings: Settings | None = None,
+        client: AsyncOpenAI | None = None,
     ):
         self.gateway = gateway
         self.settings = settings or get_settings()
+        self.client = client
 
     async def run(self, query: str) -> OperationalQueryResponse:
         trace_id = str(uuid.uuid4())
         started = time.perf_counter()
-        if self.settings.llm_provider == "mock":
-            response = await self._run_deterministic(query, trace_id)
-        else:
-            response = await self._run_openai(query, trace_id)
+        response = await self._run_openai(query, trace_id)
         logger.info(
             "Operational agent completed",
             extra={
@@ -109,9 +107,13 @@ class OperationalAgent:
         return response
 
     async def _run_openai(self, query: str, trace_id: str) -> OperationalQueryResponse:
-        if not self.settings.openai_api_key:
+        if not self.settings.openai_api_key and self.client is None:
             raise RuntimeError("OPENAI_API_KEY no está configurada para el agente operativo.")
-        client = AsyncOpenAI(api_key=self.settings.openai_api_key)
+        client = self.client or AsyncOpenAI(
+            api_key=self.settings.openai_api_key,
+            timeout=self.settings.openai_timeout_seconds,
+            max_retries=2,
+        )
         gateway_tools = await self.gateway.list_tools()
         tools = [self._openai_tool(tool) for tool in gateway_tools]
         response = await client.responses.create(
@@ -189,64 +191,6 @@ class OperationalAgent:
             usage=self._model_usage(input_tokens, output_tokens),
         )
 
-    async def _run_deterministic(self, query: str, trace_id: str) -> OperationalQueryResponse:
-        normalized = query.casefold()
-        incident_match = re.search(r"(?:incidente|id)\s*#?\s*(\d+)", normalized)
-        district = next(
-            (
-                name
-                for name in ("San Joaquin", "Barrantes", "Llorente")
-                if name.casefold() in normalized
-            ),
-            None,
-        )
-        category_map = {
-            "ruido": "ruido",
-            "robo": "robo",
-            "violencia": "violencia",
-            "vandalismo": "vandalismo",
-            "drogas": "venta_drogas",
-            "tránsito": "problema_transito",
-        }
-        category = next((value for key, value in category_map.items() if key in normalized), None)
-        if incident_match and any(word in normalized for word in ("similar", "relacionado")):
-            tool_name = "find_related_incidents"
-            arguments: dict[str, object] = {
-                "incident_id": int(incident_match.group(1)),
-                "top_k": 5,
-            }
-        elif incident_match:
-            tool_name = "get_incident"
-            arguments = {"incident_id": int(incident_match.group(1))}
-        elif any(word in normalized for word in ("más frecuente", "más común", "cuánt")):
-            tool_name = "aggregate_incidents"
-            arguments = {
-                "group_by": "categoria_preliminar",
-                "district": district,
-                "category": category,
-            }
-        else:
-            tool_name = "search_incidents"
-            arguments = {"district": district, "category": category, "limit": 20}
-        tool_started = time.perf_counter()
-        result = await self.gateway.call_tool(tool_name, arguments, trace_id=trace_id)
-        step = ToolExecutionTrace(
-            step=1,
-            tool_name=tool_name,
-            arguments=_trace_arguments(arguments),
-            success=True,
-            result_count=_result_count(result),
-            latency_ms=round((time.perf_counter() - tool_started) * 1000, 2),
-        )
-        return OperationalQueryResponse(
-            answer=self._deterministic_answer(tool_name, result),
-            incident_citations=sorted(_incident_ids(result)),
-            trace_id=trace_id,
-            steps=[step],
-            model_name="deterministic-react-demo",
-            prompt_version=AGENT_PROMPT_VERSION,
-        )
-
     @staticmethod
     def _openai_tool(tool: GatewayTool) -> dict[str, object]:
         return {
@@ -271,30 +215,3 @@ class OperationalAgent:
             output_tokens=output_tokens,
             estimated_cost_usd=estimate_llm_cost(input_tokens, output_tokens, self.settings),
         )
-
-    @staticmethod
-    def _deterministic_answer(tool_name: str, result: dict[str, object]) -> str:
-        if tool_name == "aggregate_incidents":
-            groups = result.get("groups") or []
-            if not groups:
-                return "No se encontraron incidentes para los filtros indicados."
-            leading = groups[0]
-            return (
-                f"Se encontraron {result.get('total', 0)} incidentes. "
-                f"El grupo principal es {leading['value']} con {leading['count']} reportes."
-            )
-        if tool_name == "find_related_incidents":
-            related = result.get("related") or []
-            return (
-                f"Se encontraron {len(related)} posibles incidentes relacionados. "
-                "Las coincidencias son candidatas y deben ser revisadas por un oficial."
-            )
-        if tool_name == "get_incident":
-            if not result.get("found"):
-                return "No se encontró el incidente solicitado."
-            incident = result["incident"]
-            return (
-                f"El incidente {incident['incident_id']} está clasificado como "
-                f"{incident['category']} en {incident['district']}."
-            )
-        return f"Se encontraron {result.get('total', 0)} incidentes para la consulta."

@@ -28,6 +28,13 @@ CategoriaPreliminar = Literal[
 Distrito = Literal["San Joaquin", "Barrantes", "Llorente"]
 TipoLugar = Literal["establecimiento", "casa", "parque", "escuela", "otro"]
 Urgencia = Literal["baja", "media", "alta", "inmediata"]
+IntakeFieldStatus = Literal["known", "missing", "ambiguous", "unknown", "declined"]
+IntakeCompletionReason = Literal[
+    "needs_follow_up",
+    "all_fields_resolved",
+    "user_finished",
+    "follow_up_limit_reached",
+]
 
 
 class StrictModel(BaseModel):
@@ -114,6 +121,32 @@ class FieldConfidence(StrictModel):
         return self
 
 
+class IntakeFieldObservation(StrictModel):
+    status: IntakeFieldStatus = "missing"
+    confidence: float | None = None
+    evidence: str | None = None
+
+    @model_validator(mode="after")
+    def confidence_must_be_normalized(self):
+        if self.confidence is not None and not 0 <= self.confidence <= 1:
+            raise ValueError("La confianza del campo debe estar entre 0 y 1.")
+        return self
+
+
+class IntakeFieldStates(StrictModel):
+    descripcion_detallada: IntakeFieldObservation = Field(
+        default_factory=IntakeFieldObservation
+    )
+    relacion_incidente: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
+    categoria_preliminar: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
+    distrito: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
+    direccion_exacta: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
+    tipo_lugar: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
+    fecha_hora_aproximada: IntakeFieldObservation = Field(
+        default_factory=IntakeFieldObservation
+    )
+
+
 class ComplaintExtractedData(StrictModel):
     descripcion_detallada: str | None = None
     relacion_incidente: RelacionIncidente | None = None
@@ -125,6 +158,7 @@ class ComplaintExtractedData(StrictModel):
     entities: IncidentEntities = Field(default_factory=IncidentEntities)
     urgency: Urgencia = "media"
     confidence_by_field: FieldConfidence = Field(default_factory=FieldConfidence)
+    field_states: IntakeFieldStates = Field(default_factory=IntakeFieldStates)
 
 
 class ChatMessage(StrictModel):
@@ -154,8 +188,10 @@ class ComplaintIntakeChatResponse(StrictModel):
     requires_human_review: bool = False
     review_reason: str | None = None
     emergency_guidance: bool = False
+    user_wants_to_finish: bool = False
+    completion_reason: IntakeCompletionReason = "needs_follow_up"
     model_name: str | None = None
-    prompt_version: str = "intake-v2"
+    prompt_version: str = "intake-v3"
 
 
 class IntakeSessionCreateResponse(StrictModel):
@@ -182,6 +218,9 @@ class IntakeSessionResponse(StrictModel):
     summary_text: str | None
     requires_human_review: bool
     review_reason: str | None
+    user_wants_to_finish: bool
+    completion_reason: IntakeCompletionReason
+    follow_up_count: int
     model_name: str | None
     prompt_version: str
 
