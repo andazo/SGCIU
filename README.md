@@ -71,6 +71,40 @@ embeddings, tools del agente y trazas. El agente entiende referencias locales de
 registra evidencia por campo y permite terminar con frases como `eso es todo` o
 `no tengo más información`; en ese caso guarda el reporte con los datos disponibles.
 
+### Datos sintéticos para el panel administrativo
+
+El repositorio incluye 50 incidentes completamente ficticios y sin datos personales para
+probar listados, búsquedas, embeddings, clusters, revisiones humanas y el agente ReAct. Antes
+de cargarlos, asegúrese de que PostgreSQL esté activo y que `OPENAI_API_KEY` esté configurada:
+
+```bash
+cd backend
+.venv/bin/alembic -c alembic.ini upgrade head
+.venv/bin/python -m app.evaluation.seed_incidents
+```
+
+El comando es idempotente: cada caso tiene un identificador `FLO-*` y las ejecuciones
+posteriores omiten registros existentes. También intenta completar embeddings pendientes. El
+resultado indica cuántos casos fueron creados, omitidos, indexados y agrupados.
+
+Después puede iniciar el administrador:
+
+```bash
+.venv/bin/python -m app.cli --role admin --transport mcp
+```
+
+Consultas sugeridas para la opción `5. Preguntar al agente operativo`:
+
+- `¿Cuántos incidentes hay por distrito?`
+- `¿Cuál es la categoría más frecuente en San Joaquín?`
+- `Busca incidentes de ruido en Barrantes.`
+- `¿Qué incidentes podrían estar relacionados con el incidente <ID>?`
+- `Muéstrame los casos que requieren revisión humana.`
+
+El dataset está en `backend/evaluation/flores_synthetic_incidents.json`. Las ubicaciones sirven
+como contexto de prueba; todos los hechos descritos son inventados y no deben interpretarse
+como denuncias reales.
+
 ### API
 
 ```bash
