@@ -39,12 +39,18 @@ def get_incident(incident_id: int) -> str:
 def search_incidents(
     district: str | None = None,
     category: str | None = None,
+    synthetic_only: bool | None = None,
     limit: int = 20,
 ) -> str:
     """Busca incidentes por distrito o categoría sin devolver datos de contacto."""
     return _execute(
         "search_incidents",
-        {"district": district, "category": category, "limit": limit},
+        {
+            "district": district,
+            "category": category,
+            "synthetic_only": synthetic_only,
+            "limit": limit,
+        },
     )
 
 
@@ -53,11 +59,17 @@ def aggregate_incidents(
     group_by: str,
     district: str | None = None,
     category: str | None = None,
+    synthetic_only: bool | None = None,
 ) -> str:
     """Agrupa y cuenta incidentes por categoria_preliminar o distrito."""
     return _execute(
         "aggregate_incidents",
-        {"group_by": group_by, "district": district, "category": category},
+        {
+            "group_by": group_by,
+            "district": district,
+            "category": category,
+            "synthetic_only": synthetic_only,
+        },
     )
 
 

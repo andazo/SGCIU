@@ -101,6 +101,7 @@ class IncidentService:
         *,
         district: str | None = None,
         category: str | None = None,
+        synthetic_only: bool | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[ComplaintSubmission], int]:
@@ -114,6 +115,13 @@ class IncidentService:
             condition = (
                 ComplaintSubmission.ai_extracted_data["categoria_preliminar"].as_string()
                 == category
+            )
+            query = query.where(condition)
+            count_query = count_query.where(condition)
+        if synthetic_only is not None:
+            condition = (
+                ComplaintSubmission.analysis_metadata["synthetic"].as_boolean()
+                == synthetic_only
             )
             query = query.where(condition)
             count_query = count_query.where(condition)

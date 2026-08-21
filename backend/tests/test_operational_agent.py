@@ -29,6 +29,7 @@ class ScriptedResponses:
                         "group_by": "categoria_preliminar",
                         "district": "Llorente",
                         "category": None,
+                        "synthetic_only": None,
                     }
                 ),
                 call_id="call-1",
@@ -114,7 +115,12 @@ async def test_react_agent_uses_typed_tool_and_records_audit(db_session):
     assert "ruido" in response.answer
     audit = db_session.scalar(select(AuditEvent).where(AuditEvent.trace_id == response.trace_id))
     assert audit is not None
-    assert audit.details["argument_keys"] == ["category", "district", "group_by"]
+    assert audit.details["argument_keys"] == [
+        "category",
+        "district",
+        "group_by",
+        "synthetic_only",
+    ]
 
 
 @pytest.mark.asyncio

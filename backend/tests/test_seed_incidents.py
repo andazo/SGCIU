@@ -4,6 +4,7 @@ from sqlalchemy import func, select
 
 from app.evaluation.seed_incidents import load_seed_dataset, seed_incidents
 from app.models import ComplaintSubmission, HumanReview, IncidentEmbedding
+from app.tools.incidents import build_incident_tool_registry
 
 
 def test_flores_dataset_contains_50_diverse_synthetic_cases():
@@ -42,3 +43,21 @@ def test_seed_is_idempotent_and_indexes_every_incident(db_session):
     assert all(incident.name is None for incident in incidents)
     assert all(incident.email is None for incident in incidents)
     assert all(incident.analysis_metadata["synthetic"] is True for incident in incidents)
+
+    aggregate = build_incident_tool_registry().call(
+        db_session,
+        "aggregate_incidents",
+        {
+            "group_by": "distrito",
+            "district": None,
+            "category": None,
+            "synthetic_only": True,
+        },
+        actor_role="admin",
+    )
+    assert aggregate["total"] == 50
+    assert {group["value"]: group["count"] for group in aggregate["groups"]} == {
+        "San Joaquin": 20,
+        "Barrantes": 15,
+        "Llorente": 15,
+    }
