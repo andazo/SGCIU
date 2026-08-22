@@ -13,6 +13,7 @@ from app.schemas import (
     IncidentListResponse,
     RelatedIncident,
     RelatedIncidentList,
+    SemanticRecalculationResponse,
 )
 from app.services.incidents import IncidentNotFoundError, IncidentService
 from app.services.semantic import SemanticIncidentService
@@ -106,3 +107,15 @@ def list_candidate_clusters(db: DbSession, _actor: AdminRole):
         )
         for cluster in SemanticIncidentService(db).list_clusters()
     ]
+
+
+@router.post("/clusters/recalculate", response_model=SemanticRecalculationResponse)
+def recalculate_semantic_index(db: DbSession, _actor: AdminRole):
+    result = SemanticIncidentService(db).recalculate_all()
+    return SemanticRecalculationResponse(
+        incidents_found=result.incidents_found,
+        embeddings_updated=result.embeddings_updated,
+        embeddings_failed=result.embeddings_failed,
+        clusters_rebuilt=result.clusters_rebuilt,
+        cluster_members=result.cluster_members,
+    )

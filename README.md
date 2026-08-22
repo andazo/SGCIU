@@ -105,6 +105,30 @@ El dataset está en `backend/evaluation/flores_synthetic_incidents.json`. Las ub
 como contexto de prueba; todos los hechos descritos son inventados y no deben interpretarse
 como denuncias reales.
 
+### Clusters, resaltados y revisiones de calidad
+
+La opción administrativa `4. Clusters y recálculo de embeddings` permite consultar los
+clusters candidatos existentes o regenerar manualmente todos los embeddings con OpenAI y
+reconstruir las agrupaciones. El recálculo solicita confirmación porque consume tokens y puede
+tardar según la cantidad de incidentes.
+
+La opción `6. Gestionar resaltados y revisiones de calidad` separa dos decisiones independientes:
+
+- Los **resaltados operativos** identifican hechos pasados o sin peligro de vida actual que
+  merecen atención más pronta o precauciones especiales. Incluyen un resumen de IA, razones,
+  evidencia y precauciones sugeridas.
+- Las **revisiones de calidad** identifican datos incompletos, contradictorios o ambiguos.
+  Incluyen un diagnóstico de IA, disponibilidad de contacto y acciones recomendadas. Al usar
+  `dismissed`, solo se descarta la revisión; la denuncia se conserva con estado
+  `insufficient_information`.
+
+Un incidente puede aparecer en ambos apartados. Para analizar datos anteriores a esta función,
+utilice `3. Analizar con IA incidentes pendientes` dentro de la opción 6.
+
+El inicio ciudadano muestra siempre que SGCIU no sustituye al 9-1-1. Si durante la conversación
+se detecta peligro inmediato, el agente repite esa orientación, pero no la confunde con una
+revisión de calidad administrativa.
+
 ### API
 
 ```bash

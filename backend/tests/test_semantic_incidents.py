@@ -61,3 +61,23 @@ def test_canonical_text_redacts_people_and_contact_data(db_session):
     assert "8888-9999" not in text
     assert "juan@example.com" not in text
     assert "[PERSONA]" in text
+
+
+def test_manual_recalculation_rebuilds_embeddings_and_clusters(db_session):
+    IncidentService(db_session).create(
+        incident_payload("Ruido recurrente frente a la escuela.", "Frente a la escuela")
+    )
+    IncidentService(db_session).create(
+        incident_payload("Ruido recurrente frente a la escuela.", "Frente a la escuela")
+    )
+
+    result = SemanticIncidentService(
+        db_session,
+        provider=LocalEmbeddingDouble(),
+    ).recalculate_all()
+
+    assert result.incidents_found == 2
+    assert result.embeddings_updated == 2
+    assert result.embeddings_failed == 0
+    assert result.clusters_rebuilt == 1
+    assert result.cluster_members == 2

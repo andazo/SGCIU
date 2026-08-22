@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.ai.embeddings import EmbeddingProvider, get_embedding_provider
@@ -27,6 +27,15 @@ class SimilarIncident:
     similarity_score: float
     semantic_score: float
     match_reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticRecalculationResult:
+    incidents_found: int
+    embeddings_updated: int
+    embeddings_failed: int
+    clusters_rebuilt: int
+    cluster_members: int
 
 
 def _redact_sensitive_text(text: str, people: list[str]) -> str:
@@ -106,18 +115,24 @@ class SemanticIncidentService:
         *,
         top_k: int = 5,
         minimum_score: float | None = None,
+        candidate_incident_ids: set[int] | None = None,
     ) -> list[SimilarIncident]:
         source_embedding = incident.embedding_record or self.index_incident(incident)
         cutoff = (incident.created_at or datetime.now(UTC)) - timedelta(
             days=self.settings.cluster_time_window_days
         )
-        candidates = self.db.scalars(
+        candidate_query = (
             select(IncidentEmbedding)
             .options(selectinload(IncidentEmbedding.incident))
             .join(IncidentEmbedding.incident)
             .where(IncidentEmbedding.incident_id != incident.id)
             .where(ComplaintSubmission.created_at >= cutoff)
         )
+        if candidate_incident_ids is not None:
+            candidate_query = candidate_query.where(
+                IncidentEmbedding.incident_id.in_(candidate_incident_ids)
+            )
+        candidates = self.db.scalars(candidate_query)
         source_data = incident.ai_extracted_data or {}
         related: list[SimilarIncident] = []
         threshold = minimum_score if minimum_score is not None else 0.0
@@ -152,11 +167,17 @@ class SemanticIncidentService:
                 )
         return sorted(related, key=lambda item: item.similarity_score, reverse=True)[:top_k]
 
-    def update_candidate_cluster(self, incident: ComplaintSubmission) -> IncidentCluster | None:
+    def update_candidate_cluster(
+        self,
+        incident: ComplaintSubmission,
+        *,
+        candidate_incident_ids: set[int] | None = None,
+    ) -> IncidentCluster | None:
         related = self.find_related(
             incident,
             top_k=1,
             minimum_score=self.settings.similarity_threshold,
+            candidate_incident_ids=candidate_incident_ids,
         )
         if not related:
             return None
@@ -226,4 +247,61 @@ class SemanticIncidentService:
                 .options(selectinload(IncidentCluster.members))
                 .order_by(IncidentCluster.updated_at.desc())
             )
+        )
+
+    def recalculate_all(self) -> SemanticRecalculationResult:
+        incidents = list(
+            self.db.scalars(
+                select(ComplaintSubmission).order_by(
+                    ComplaintSubmission.created_at,
+                    ComplaintSubmission.id,
+                )
+            )
+        )
+        indexed: list[ComplaintSubmission] = []
+        failed = 0
+        for incident in incidents:
+            try:
+                self.index_incident(incident)
+                incident.analysis_metadata = {
+                    **(incident.analysis_metadata or {}),
+                    "embedding_status": "indexed",
+                }
+                self.db.commit()
+                indexed.append(incident)
+            except Exception as exc:
+                failed += 1
+                incident.analysis_metadata = {
+                    **(incident.analysis_metadata or {}),
+                    "embedding_status": "pending",
+                }
+                self.db.commit()
+                logger.warning(
+                    "Embedding recalculation failed",
+                    extra={
+                        "feature": "semantic_recalculation",
+                        "incident_id": incident.id,
+                        "error_type": type(exc).__name__,
+                    },
+                )
+
+        if indexed:
+            self.db.execute(delete(IncidentClusterMember))
+            self.db.execute(delete(IncidentCluster))
+            self.db.commit()
+            indexed_ids = {incident.id for incident in indexed}
+            for incident in indexed:
+                self.update_candidate_cluster(
+                    incident,
+                    candidate_incident_ids=indexed_ids,
+                )
+
+        cluster_count = int(self.db.scalar(select(func.count(IncidentCluster.id))) or 0)
+        member_count = int(self.db.scalar(select(func.count(IncidentClusterMember.id))) or 0)
+        return SemanticRecalculationResult(
+            incidents_found=len(incidents),
+            embeddings_updated=len(indexed),
+            embeddings_failed=failed,
+            clusters_rebuilt=cluster_count,
+            cluster_members=member_count,
         )
