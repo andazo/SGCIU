@@ -60,18 +60,17 @@ def test_persistent_intake_collects_and_submits_an_incident(db_session):
     )
     assert saved.analysis_metadata["source"] == "persistent_intake"
     assert saved.analysis_metadata["completion_reason"] == "all_fields_resolved"
-    assert saved.prompt_version == "intake-v3"
+    assert saved.prompt_version == "intake-v4"
     assert saved.name == "Ana Prueba"
     assert saved.identification == "1-2345-6789"
     assert saved.email == "ana@example.com"
     assert saved.phone == "8888-9999"
 
 
-def test_emergency_signal_creates_human_review(db_session):
+def test_emergency_signal_is_recorded_without_creating_quality_review(db_session):
     response = intake_response(
         complete_data(),
-        requires_human_review=True,
-        review_reason="El relato contiene señales de posible riesgo inmediato.",
+        emergency_guidance=True,
     )
     service = IntakeService(db_session, provider=QueueIntakeProvider(response))
     session = service.start()
@@ -80,12 +79,13 @@ def test_emergency_signal_creates_human_review(db_session):
         session.id,
         COMPLETE_REPORT + " Hay una persona inconsciente y está ocurriendo ahora.",
     )
-    assert analyzed.requires_human_review is True
+    assert analyzed.requires_human_review is False
+    assert analyzed.emergency_guidance_shown is True
 
     incident = service.submit(session.id, submission_request())
     review = db_session.scalar(select(HumanReview).where(HumanReview.incident_id == incident.id))
-    assert review is not None
-    assert review.status == "pending"
+    assert review is None
+    assert incident.analysis_metadata["emergency_guidance_shown"] is True
 
 
 def test_follow_up_state_is_persisted_without_reasking_known_fields(db_session):

@@ -12,6 +12,7 @@ from app.schemas import (
     IntakeSubmissionRequest,
 )
 from app.services.intake import (
+    EMERGENCY_NOTICE,
     INITIAL_MESSAGE,
     IncompleteIntakeError,
     IntakeService,
@@ -27,6 +28,7 @@ def start_intake(db: DbSession):
     session = IntakeService(db).start()
     return IntakeSessionCreateResponse(
         session_id=session.id,
+        emergency_notice=EMERGENCY_NOTICE,
         assistant_message=INITIAL_MESSAGE,
         prompt_version=session.prompt_version,
     )

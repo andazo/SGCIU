@@ -215,7 +215,10 @@ def build_incident_tool_registry() -> ToolRegistry:
             ),
             ToolDefinition(
                 name="request_human_review",
-                description="Crea una solicitud explícita de revisión humana para un incidente.",
+                description=(
+                    "Crea una revisión de calidad cuando un incidente sea ambiguo, "
+                    "incompleto o requiera validación; no representa despacho de emergencias."
+                ),
                 input_model=RequestReviewInput,
                 handler=request_human_review,
                 mutating=True,

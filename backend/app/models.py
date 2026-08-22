@@ -68,6 +68,12 @@ class ComplaintSubmission(Base):
 
     embedding_record = relationship("IncidentEmbedding", back_populates="incident", uselist=False)
     cluster_memberships = relationship("IncidentClusterMember", back_populates="incident")
+    highlights = relationship(
+        "IncidentHighlight", back_populates="incident", cascade="all, delete-orphan"
+    )
+    human_reviews = relationship(
+        "HumanReview", back_populates="incident", cascade="all, delete-orphan"
+    )
 
 
 class IntakeSession(Base):
@@ -139,10 +145,43 @@ class HumanReview(Base):
         Integer, ForeignKey("complaint_submissions.id", ondelete="CASCADE"), index=True
     )
     reason = Column(Text, nullable=False)
+    review_type = Column(String(64), nullable=False, default="data_quality")
+    ai_summary = Column(Text, nullable=True)
+    quality_issues = Column(JSON_TYPE, nullable=False, default=list)
+    recommended_actions = Column(JSON_TYPE, nullable=False, default=list)
+    contact_available = Column(Boolean, nullable=False, default=False)
     status = Column(String(32), nullable=False, default="pending", index=True)
     resolution_notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+    incident = relationship("ComplaintSubmission", back_populates="human_reviews")
+
+
+class IncidentHighlight(Base):
+    __tablename__ = "incident_highlights"
+
+    id = Column(Integer, primary_key=True)
+    incident_id = Column(
+        Integer,
+        ForeignKey("complaint_submissions.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    attention_level = Column(String(32), nullable=False)
+    reasons = Column(JSON_TYPE, nullable=False, default=list)
+    ai_summary = Column(Text, nullable=False)
+    recommended_precautions = Column(JSON_TYPE, nullable=False, default=list)
+    evidence = Column(JSON_TYPE, nullable=False, default=list)
+    status = Column(String(32), nullable=False, default="pending", index=True)
+    resolution_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+    incident = relationship("ComplaintSubmission", back_populates="highlights")
 
 
 class AssistantFeedback(Base):

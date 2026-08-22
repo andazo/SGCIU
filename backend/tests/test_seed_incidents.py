@@ -10,7 +10,7 @@ from app.tools.incidents import build_incident_tool_registry
 def test_flores_dataset_contains_50_diverse_synthetic_cases():
     dataset = load_seed_dataset()
 
-    assert dataset.version == "1.0.0"
+    assert dataset.version == "1.1.0"
     assert len(dataset.incidents) == 50
     assert len({incident.case_id for incident in dataset.incidents}) == 50
     assert Counter(incident.distrito for incident in dataset.incidents) == {

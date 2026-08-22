@@ -35,6 +35,26 @@ IntakeCompletionReason = Literal[
     "user_finished",
     "follow_up_limit_reached",
 ]
+ReviewType = Literal[
+    "data_quality",
+    "classification",
+    "location_validation",
+    "possible_duplicate",
+    "sensitive_content",
+    "agent_request",
+]
+ReviewStatus = Literal["pending", "in_review", "resolved", "dismissed", "escalated"]
+HighlightStatus = Literal["pending", "in_review", "resolved", "escalated"]
+AttentionLevel = Literal["prompt", "priority"]
+ReviewActionCode = Literal[
+    "inspect_incident",
+    "search_related",
+    "validate_location",
+    "reclassify",
+    "contact_citizen",
+    "dismiss_if_unrecoverable",
+    "escalate_authorized",
+]
 
 
 class StrictModel(BaseModel):
@@ -134,17 +154,13 @@ class IntakeFieldObservation(StrictModel):
 
 
 class IntakeFieldStates(StrictModel):
-    descripcion_detallada: IntakeFieldObservation = Field(
-        default_factory=IntakeFieldObservation
-    )
+    descripcion_detallada: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
     relacion_incidente: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
     categoria_preliminar: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
     distrito: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
     direccion_exacta: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
     tipo_lugar: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
-    fecha_hora_aproximada: IntakeFieldObservation = Field(
-        default_factory=IntakeFieldObservation
-    )
+    fecha_hora_aproximada: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
 
 
 class ComplaintExtractedData(StrictModel):
@@ -191,11 +207,12 @@ class ComplaintIntakeChatResponse(StrictModel):
     user_wants_to_finish: bool = False
     completion_reason: IntakeCompletionReason = "needs_follow_up"
     model_name: str | None = None
-    prompt_version: str = "intake-v3"
+    prompt_version: str = "intake-v4"
 
 
 class IntakeSessionCreateResponse(StrictModel):
     session_id: str
+    emergency_notice: str
     assistant_message: str
     prompt_version: str
 
@@ -218,6 +235,7 @@ class IntakeSessionResponse(StrictModel):
     summary_text: str | None
     requires_human_review: bool
     review_reason: str | None
+    emergency_guidance_shown: bool = False
     user_wants_to_finish: bool
     completion_reason: IntakeCompletionReason
     follow_up_count: int
@@ -311,9 +329,32 @@ class HumanReviewResponse(BaseModel):
     id: int
     incident_id: int
     reason: str
+    review_type: str
+    ai_summary: str | None
+    quality_issues: list[str]
+    recommended_actions: list[dict[str, str]]
+    contact_available: bool
     status: str
     resolution_notes: str | None
     created_at: datetime
+    updated_at: datetime | None
+    resolved_at: datetime | None
+
+
+class IncidentHighlightResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    incident_id: int
+    attention_level: str
+    reasons: list[str]
+    ai_summary: str
+    recommended_precautions: list[str]
+    evidence: list[str]
+    status: str
+    resolution_notes: str | None
+    created_at: datetime
+    updated_at: datetime | None
     resolved_at: datetime | None
 
 
@@ -344,6 +385,14 @@ class IncidentClusterResponse(StrictModel):
     status: str
     explanation: str | None
     members: list[ClusterMemberResponse]
+
+
+class SemanticRecalculationResponse(StrictModel):
+    incidents_found: int
+    embeddings_updated: int
+    embeddings_failed: int
+    clusters_rebuilt: int
+    cluster_members: int
 
 
 class OperationalQueryRequest(StrictModel):
@@ -378,6 +427,11 @@ class OperationalQueryResponse(StrictModel):
 
 
 class ResolveReviewRequest(StrictModel):
+    notes: str = Field(min_length=3, max_length=2_000)
+
+
+class WorkflowTransitionRequest(StrictModel):
+    action: Literal["start", "resolve", "dismiss", "escalate"]
     notes: str = Field(min_length=3, max_length=2_000)
 
 

@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Dataset completamente sintético para probar el panel administrativo de SGCIU. No representa hechos reales ni contiene datos personales.",
   "sources": [
     "https://flores.go.cr/",
@@ -80,7 +80,9 @@
       "tipo_lugar": "otro",
       "fecha_hora_aproximada": "martes 11 de agosto de 2026 a las 06:30",
       "urgency": "baja",
-      "landmarks": ["iglesia parroquial de San Joaquín"]
+      "landmarks": ["iglesia parroquial de San Joaquín"],
+      "requires_human_review": true,
+      "review_reason": "No se identifica cuál pared fue afectada ni una referencia suficientemente precisa para verificar el daño."
     },
     {
       "case_id": "FLO-SJ-007",
@@ -232,9 +234,7 @@
       "tipo_lugar": "establecimiento",
       "fecha_hora_aproximada": "viernes 21 de agosto de 2026 a las 08:05",
       "urgency": "inmediata",
-      "landmarks": ["edificio municipal"],
-      "requires_human_review": true,
-      "review_reason": "Caso sintético con señal de posible emergencia inmediata."
+      "landmarks": ["edificio municipal"]
     },
     {
       "case_id": "FLO-SJ-019",
@@ -295,7 +295,9 @@
       "tipo_lugar": "otro",
       "fecha_hora_aproximada": "martes 18 de agosto de 2026 a las 05:40",
       "urgency": "media",
-      "vehicles": ["camioneta blanca sin identificación confirmada"]
+      "vehicles": ["camioneta blanca sin identificación confirmada"],
+      "requires_human_review": true,
+      "review_reason": "No se aportan placas, rasgos distintivos ni un punto exacto de la ruta donde se observó el vehículo."
     },
     {
       "case_id": "FLO-BA-004",
@@ -407,7 +409,7 @@
       "fecha_hora_aproximada": "domingo 16 de agosto de 2026 a las 09:15",
       "urgency": "alta",
       "requires_human_review": true,
-      "review_reason": "Caso sintético de violencia con posible persona lesionada."
+      "review_reason": "La ubicación solo indica una zona recreativa y no identifica el sector exacto donde ocurrió la pelea."
     },
     {
       "case_id": "FLO-BA-013",
@@ -468,7 +470,9 @@
       "tipo_lugar": "establecimiento",
       "fecha_hora_aproximada": "martes 18 de agosto de 2026 a las 15:25",
       "urgency": "media",
-      "vehicles": ["vehículo de carga"]
+      "vehicles": ["vehículo de carga"],
+      "requires_human_review": true,
+      "review_reason": "La referencia a la zona productiva es demasiado amplia y no permite ubicar el punto exacto del bloqueo."
     },
     {
       "case_id": "FLO-LL-003",
@@ -521,7 +525,7 @@
       "urgency": "alta",
       "landmarks": ["Quebrada Seca"],
       "requires_human_review": true,
-      "review_reason": "Caso sintético de posible contaminación que requiere verificación humana."
+      "review_reason": "No se identifica el punto exacto de descarga ni el establecimiento del que podría provenir el líquido."
     },
     {
       "case_id": "FLO-LL-007",
@@ -545,9 +549,7 @@
       "tipo_lugar": "establecimiento",
       "fecha_hora_aproximada": "viernes 21 de agosto de 2026 a las 09:20",
       "urgency": "inmediata",
-      "objects": ["alarma de bodega"],
-      "requires_human_review": true,
-      "review_reason": "Caso sintético con señal de incendio o emergencia activa."
+      "objects": ["alarma de bodega"]
     },
     {
       "case_id": "FLO-LL-009",
@@ -625,9 +627,7 @@
       "fecha_hora_aproximada": "viernes 21 de agosto de 2026 a las 07:45",
       "urgency": "inmediata",
       "vehicles": ["automóvil", "motocicleta"],
-      "landmarks": ["Escuela Llorente de Flores"],
-      "requires_human_review": true,
-      "review_reason": "Caso sintético de tránsito con posible persona lesionada."
+      "landmarks": ["Escuela Llorente de Flores"]
     },
     {
       "case_id": "FLO-LL-015",

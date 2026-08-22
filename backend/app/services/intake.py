@@ -22,6 +22,12 @@ from app.schemas import (
 )
 from app.services.incidents import IncidentService
 
+EMERGENCY_NOTICE = (
+    "SGCIU no es un servicio de atención de emergencias ni garantiza respuesta inmediata. "
+    "Si el incidente está ocurriendo ahora, existe peligro o hay personas heridas, "
+    "comuníquese inmediatamente con el 9-1-1. Puede continuar registrando la información "
+    "como antecedente municipal, pero este registro no sustituye una llamada de emergencia."
+)
 INITIAL_MESSAGE = (
     "Describa la denuncia con el mayor detalle posible, incluyendo qué ocurrió, "
     "dónde y cuándo. Puede corregir cualquier dato que el asistente interprete incorrectamente "
@@ -89,6 +95,9 @@ class IntakeService:
                 bool(previous_workflow.get("requires_human_review")) or result.requires_human_review
             ),
             "review_reason": result.review_reason or previous_workflow.get("review_reason"),
+            "emergency_guidance_shown": (
+                bool(previous_workflow.get("emergency_guidance_shown")) or result.emergency_guidance
+            ),
             "follow_up_count": follow_up_count,
             "user_wants_to_finish": result.user_wants_to_finish,
             "completion_reason": result.completion_reason,
@@ -128,6 +137,7 @@ class IntakeService:
                 "missing_operational_fields": workflow.get("unresolved_fields", []),
                 "completion_reason": workflow.get("completion_reason"),
                 "follow_up_count": workflow.get("follow_up_count", 0),
+                "emergency_guidance_shown": workflow.get("emergency_guidance_shown", False),
             },
             requires_human_review=bool(workflow.get("requires_human_review")),
             review_reason=workflow.get("review_reason"),
@@ -152,6 +162,7 @@ class IntakeService:
             summary_text=session.summary_text,
             requires_human_review=bool(workflow.get("requires_human_review")),
             review_reason=workflow.get("review_reason"),
+            emergency_guidance_shown=bool(workflow.get("emergency_guidance_shown")),
             user_wants_to_finish=bool(workflow.get("user_wants_to_finish")),
             completion_reason=workflow.get("completion_reason", "needs_follow_up"),
             follow_up_count=int(workflow.get("follow_up_count", 0)),

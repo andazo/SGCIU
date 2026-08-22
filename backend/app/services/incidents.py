@@ -61,11 +61,34 @@ class IncidentService:
             }
         self.db.commit()
         self.db.refresh(incident)
-        if incident.requires_human_review:
-            self.request_human_review(
+        initial_review_reason = (
+            incident.review_reason or "Revisión solicitada durante el análisis."
+            if incident.requires_human_review
+            else None
+        )
+        try:
+            from app.services.reviews import ReviewService
+
+            ReviewService(self.db).assess_incident_if_needed(
                 incident,
-                incident.review_reason or "Revisión solicitada durante el análisis.",
+                initial_quality_reason=initial_review_reason,
             )
+        except Exception as exc:
+            logger.warning(
+                "Incident persisted without administrative assessment",
+                extra={
+                    "feature": "incident_assessment",
+                    "incident_id": incident.id,
+                    "error_type": type(exc).__name__,
+                },
+            )
+            incident.analysis_metadata = {
+                **(incident.analysis_metadata or {}),
+                "administrative_assessment_status": "pending",
+            }
+            self.db.commit()
+            if initial_review_reason:
+                self.request_human_review(incident, initial_review_reason)
         return incident
 
     def request_human_review(
@@ -73,22 +96,13 @@ class IncidentService:
         incident: ComplaintSubmission,
         reason: str,
     ) -> tuple[HumanReview, bool]:
-        existing = self.db.scalar(
-            select(HumanReview).where(
-                HumanReview.incident_id == incident.id,
-                HumanReview.status == "pending",
-            )
+        from app.services.reviews import ReviewService
+
+        return ReviewService(self.db).request_quality_review(
+            incident,
+            reason,
+            review_type="agent_request",
         )
-        incident.requires_human_review = True
-        incident.review_reason = reason
-        if existing:
-            self.db.commit()
-            return existing, False
-        review = HumanReview(incident_id=incident.id, reason=reason)
-        self.db.add(review)
-        self.db.commit()
-        self.db.refresh(review)
-        return review, True
 
     def get(self, incident_id: int) -> ComplaintSubmission:
         incident = self.db.get(ComplaintSubmission, incident_id)
@@ -120,8 +134,7 @@ class IncidentService:
             count_query = count_query.where(condition)
         if synthetic_only is not None:
             condition = (
-                ComplaintSubmission.analysis_metadata["synthetic"].as_boolean()
-                == synthetic_only
+                ComplaintSubmission.analysis_metadata["synthetic"].as_boolean() == synthetic_only
             )
             query = query.where(condition)
             count_query = count_query.where(condition)

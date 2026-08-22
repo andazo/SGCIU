@@ -8,6 +8,7 @@ client = TestClient(app)
 def test_versioned_intake_api_flow():
     start = client.post("/v1/intake/sessions")
     assert start.status_code == 201
+    assert "no es un servicio de atención de emergencias" in start.json()["emergency_notice"]
     session_id = start.json()["session_id"]
 
     analyzed = client.post(
@@ -27,7 +28,7 @@ def test_versioned_intake_api_flow():
         json={"truth_confirmation": True, "data_usage_consent": True},
     )
     assert submitted.status_code == 201
-    assert submitted.json()["prompt_version"] == "intake-v3"
+    assert submitted.json()["prompt_version"] == "intake-v4"
 
     incidents = client.get("/v1/incidents")
     assert incidents.status_code == 200

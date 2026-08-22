@@ -10,7 +10,11 @@ os.environ["REQUIRE_ADMIN_AUTH"] = "false"
 
 from app import models  # noqa: F401
 from app.db import Base, SessionLocal, engine
-from tests.fakes import CompleteIntakeProvider, LocalEmbeddingDouble
+from tests.fakes import (
+    CompleteIntakeProvider,
+    LocalEmbeddingDouble,
+    LocalIncidentAssessmentDouble,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -22,6 +26,10 @@ def isolated_runtime(database_schema, monkeypatch):
     monkeypatch.setattr(
         "app.services.semantic.get_embedding_provider",
         lambda settings=None: LocalEmbeddingDouble(),
+    )
+    monkeypatch.setattr(
+        "app.services.reviews.get_incident_assessment_provider",
+        lambda settings=None: LocalIncidentAssessmentDouble(),
     )
 
 
