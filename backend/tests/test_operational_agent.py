@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import select
 
-from app.agents.gateway import LocalToolGateway, connect_mcp_gateway
+from app.agents.gateway import LocalToolGateway, MCPToolGateway, connect_mcp_gateway
 from app.agents.operational import OperationalAgent
 from app.models import AuditEvent
 from app.schemas import ComplaintExtractedData, ComplaintSubmissionCreate
@@ -51,6 +51,22 @@ class ScriptedResponses:
 class ScriptedAsyncOpenAI:
     def __init__(self):
         self.responses = ScriptedResponses()
+
+
+class WrappedStructuredMCPResponse:
+    def __init__(self):
+        self.isError = False
+        self.content = []
+        self.structuredContent = {
+            "result": json.dumps(
+                {"sources": [{"source_id": "F1", "document_key": "reglamento-flores"}]}
+            )
+        }
+
+
+class WrappedStructuredMCPSession:
+    async def call_tool(self, name, arguments):
+        return WrappedStructuredMCPResponse()
 
 
 def create_incident(db_session, category: str = "ruido"):
@@ -134,3 +150,13 @@ async def test_mcp_server_exposes_domain_tools_without_sql():
     assert "search_legal_sources" in names
     assert "get_legal_corpus_status" in names
     assert "execute_sql" not in names
+
+
+@pytest.mark.asyncio
+async def test_mcp_gateway_unwraps_fastmcp_structured_json_results():
+    result = await MCPToolGateway(WrappedStructuredMCPSession()).call_tool(
+        "search_legal_sources",
+        {"query": "normativa"},
+    )
+
+    assert result["sources"][0]["source_id"] == "F1"
