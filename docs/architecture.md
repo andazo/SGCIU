@@ -67,11 +67,41 @@ razonamiento interno del modelo.
 | `find_related_incidents` | Lectura | Aplicar recuperación semántica híbrida |
 | `get_incident_cluster` | Lectura | Inspeccionar un cluster candidato |
 | `request_human_review` | Escritura acotada | Crear una revisión humana |
+| `search_legal_sources` | Lectura | Recuperar normativa con página y artículo |
+| `get_legal_corpus_status` | Lectura | Inspeccionar versión, cobertura y embeddings |
 
 No existe un tool para ejecutar SQL libre, modificar clasificaciones o eliminar datos.
 
-## RAG normativo pendiente
+## RAG normativo
 
-El asistente de políticas municipales se incorporará cuando exista un corpus autorizado y
-versionado. Tendrá un índice separado, citas obligatorias y abstención cuando no exista
-evidencia. No debe mezclarse con los embeddings de denuncias.
+```mermaid
+flowchart LR
+    PDF["PDF oficial versionado"] --> Verify["Checksum SHA-256"]
+    Verify --> Pages["Extracción por página"]
+    Pages --> Chunks["Chunks de ~512 tokens y 15% overlap"]
+    Chunks --> LegalEmb["text-embedding-3-large, 1536 dimensiones"]
+    LegalEmb --> LegalVector["Índice HNSW legal en pgvector"]
+    Question["Consulta autorizada"] --> Hybrid["Recuperación híbrida"]
+    LegalVector --> Hybrid
+    Hybrid --> Context["Top-k con documento, página y artículo"]
+    Context --> LLM["Generación grounded con salida estructurada"]
+    LLM --> Validate{"¿Citas válidas?"}
+    Validate -->|Sí| Answer["Respuesta + fuentes + trace ID"]
+    Validate -->|No| Abstain["Abstención segura"]
+```
+
+El índice legal se mantiene separado del índice de incidentes. Los chunks nunca cruzan una
+página física de PDF, por lo que `pdf_page` es reproducible contra el archivo cuyo SHA-256
+está en el manifiesto. El texto para embedding incorpora título, sección y artículo; el texto
+mostrado como evidencia conserva el contenido extraído.
+
+La recuperación combina similitud coseno y BM25 mediante reciprocal-rank fusion. HNSW reduce
+los candidatos densos en PostgreSQL, mientras que el componente léxico protege términos
+exactos como números de ley, artículos y nombres de protocolos. Los scores son señales de
+ordenamiento, no probabilidades ni confianza jurídica.
+
+La generación solo recibe los fragmentos recuperados, usa identificadores `[F#]` y devuelve
+una estructura Pydantic. Una validación posterior descarta identificadores inexistentes y
+falla de forma cerrada si una respuesta afirmativa no tiene atribución verificable. Las
+consultas se auditan mediante hash, IDs de chunk, versión de prompt/modelo, latencia y uso,
+sin persistir el texto original de la pregunta.

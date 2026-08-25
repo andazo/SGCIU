@@ -21,13 +21,12 @@ conserva como prototipo, pero no es el foco de esta etapa.
 - Detección híbrida de incidentes relacionados y clusters candidatos.
 - Agente operativo ReAct con límite de pasos, tools y trazas sanitizadas.
 - Servidor MCP `sgciu-incident-intelligence` sin acceso a SQL arbitrario.
+- RAG normativo con corpus versionado, extracción por página, recuperación híbrida,
+  abstención y citas verificables de documento, página PDF y artículo detectado.
 - Control opcional de endpoints administrativos mediante `X-Admin-Key`.
 - CLI para ciudadanos y administradores.
 - Dataset sintético y métricas reproducibles para regresión del workflow.
 - Logs JSON con correlation IDs, latencia, tokens y auditoría de tools.
-
-El RAG de políticas municipales está deliberadamente fuera de esta versión porque aún
-no se dispone del corpus documental autorizado.
 
 ## Ejecución local
 
@@ -49,6 +48,11 @@ la recepción ciudadana y `INTAKE_MAX_FOLLOW_UPS` limita la extensión de la con
 
 La suite automatizada reemplaza las conexiones externas mediante dobles ubicados únicamente
 en `backend/tests/`; no existe un modo offline seleccionable en la aplicación.
+
+El RAG utiliza de forma independiente `LEGAL_RAG_MODEL` y
+`LEGAL_RAG_EMBEDDING_MODEL`. El valor recomendado y configurado por defecto para el corpus
+en español es `text-embedding-3-large` reducido a 1536 dimensiones. Los embeddings legales
+no se mezclan con los embeddings de denuncias.
 
 ### Interfaz terminal
 
@@ -129,6 +133,35 @@ El inicio ciudadano muestra siempre que SGCIU no sustituye al 9-1-1. Si durante 
 se detecta peligro inmediato, el agente repite esa orientación, pero no la confunde con una
 revisión de calidad administrativa.
 
+### Consulta normativa RAG
+
+Después de aplicar las migraciones, abra el administrador y seleccione
+`7. Consultar normativa (RAG)`:
+
+```bash
+cd backend
+.venv/bin/alembic -c alembic.ini upgrade head
+.venv/bin/python -m app.cli --role admin --transport mcp
+```
+
+La primera vez use `2. Indexar o actualizar documentos`. La operación valida checksums,
+extrae el texto sin cruzar páginas, crea aproximadamente 3.505 fragmentos y solicita un
+embedding por fragmento. Es idempotente: en ejecuciones posteriores omite documentos cuyo
+PDF, versión de corpus, modelo e indexador no hayan cambiado.
+
+Luego use `3. Consultar normativa`. Cada respuesta informa:
+
+- embeddings recuperados y total de embeddings indexados;
+- documento y archivo PDF versionado;
+- página física exacta del PDF, empezando en 1;
+- artículo detectado, chunk y señales de ranking semántico, léxico e híbrido;
+- trace ID, advertencias y abstención cuando la evidencia no es suficiente.
+
+El corpus inicial contiene 16 documentos. El manifiesto registra como vacíos conocidos la
+Constitución Política, el Código Procesal Penal y un protocolo oficial de cadena de custodia;
+el asistente no debe inferir su contenido. Consulte la [guía del RAG](docs/legal-rag.md) para
+la cobertura y operación detalladas.
+
 ### API
 
 ```bash
@@ -159,6 +192,8 @@ Tools disponibles:
 - `find_related_incidents`
 - `get_incident_cluster`
 - `request_human_review`
+- `search_legal_sources`
+- `get_legal_corpus_status`
 
 ## Calidad y evaluación
 
@@ -177,6 +212,12 @@ PYTHONPATH=. .venv/bin/python -m app.evaluation.runner
 El dataset se encuentra en `backend/evaluation/intake_cases.json` y contiene únicamente
 casos sintéticos. El comando de evaluación sí consume la API de OpenAI; las pruebas de
 `pytest` no realizan llamadas externas.
+
+Para medir Hit@k y MRR de la recuperación legal con 12 consultas sintéticas:
+
+```bash
+PYTHONPATH=. .venv/bin/python -m app.evaluation.legal_rag_runner
+```
 
 ## Documentación técnica
 
