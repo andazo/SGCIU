@@ -1,0 +1,176 @@
+{
+  "corpus_id": "sgciu-legal-corpus-cr",
+  "version": "2026.08.1",
+  "jurisdiction": "Costa Rica",
+  "language": "es",
+  "description": "Corpus normativo inicial para consultas de la Policía Municipal de Flores.",
+  "citation_policy": "La página citada siempre corresponde a la página física, numerada desde 1, del PDF versionado en este repositorio.",
+  "known_gaps": [
+    "Constitución Política de Costa Rica",
+    "Código Procesal Penal",
+    "Protocolo oficial de cadena de custodia"
+  ],
+  "documents": [
+    {
+      "key": "reglamento-policia-municipal-flores",
+      "title": "Reglamento de la Policía Municipal de Flores",
+      "short_title": "Reglamento Policía Municipal de Flores",
+      "filename": "01_reglamento_policia_municipal_flores.pdf",
+      "sha256": "ee5bc67fd18ce758d2387d51afd8058363a2240e2b103878c27c004ec1a38748",
+      "authority": "Municipalidad de Flores",
+      "document_type": "reglamento municipal",
+      "priority": 1
+    },
+    {
+      "key": "ley-9542-policia-municipal",
+      "title": "Ley N.º 9542, Ley de Fortalecimiento de la Policía Municipal",
+      "short_title": "Ley 9542",
+      "filename": "02_ley_9542_fortalecimiento_policia_municipal.pdf",
+      "sha256": "1f1c51b70a0ff3bd24a4d34a38d1381f06d31a2e9c1854995ce79bf4ead1a118",
+      "authority": "Asamblea Legislativa de Costa Rica",
+      "document_type": "ley",
+      "priority": 1
+    },
+    {
+      "key": "ley-7794-codigo-municipal",
+      "title": "Ley N.º 7794, Código Municipal",
+      "short_title": "Código Municipal",
+      "filename": "03_ley_7794_codigo_municipal.pdf",
+      "sha256": "d637418dfd21e74fb00c72159125721a777b36dd125206db69f2e7c911d667ae",
+      "authority": "Asamblea Legislativa de Costa Rica",
+      "document_type": "ley",
+      "priority": 2
+    },
+    {
+      "key": "ley-7410-general-policia",
+      "title": "Ley N.º 7410, Ley General de Policía",
+      "short_title": "Ley General de Policía",
+      "filename": "04_ley_7410_general_policia.pdf",
+      "sha256": "70e75142a7210ecfc5fe113f06fd7de5b5ba0004dcbae167fad86c801acc23a7",
+      "authority": "Asamblea Legislativa de Costa Rica",
+      "document_type": "ley",
+      "priority": 1
+    },
+    {
+      "key": "ley-4573-codigo-penal",
+      "title": "Ley N.º 4573, Código Penal",
+      "short_title": "Código Penal",
+      "filename": "05_codigo_penal.pdf",
+      "sha256": "777d58cf41c75e1e9cc246f2ee3d186d7d80afc93737080b909612ee88a4b1ce",
+      "authority": "Asamblea Legislativa de Costa Rica",
+      "document_type": "código",
+      "priority": 2
+    },
+    {
+      "key": "ley-6227-administracion-publica",
+      "title": "Ley N.º 6227, Ley General de la Administración Pública",
+      "short_title": "Ley General de la Administración Pública",
+      "filename": "06_ley_6227_general_administracion_publica.pdf",
+      "sha256": "24fe4c4e3e6a3444a27c7bde690c7e94cd2100a7c972c05873b27f4737e47d71",
+      "authority": "Asamblea Legislativa de Costa Rica",
+      "document_type": "ley",
+      "priority": 3
+    },
+    {
+      "key": "ley-7530-armas-explosivos",
+      "title": "Ley N.º 7530, Ley de Armas y Explosivos",
+      "short_title": "Ley de Armas y Explosivos",
+      "filename": "07_ley_7530_armas_explosivos.pdf",
+      "sha256": "b9c1efdcff380ba52009fb1800e8c40feccc71d74a65e3ae50d339a56e589ab0",
+      "authority": "Asamblea Legislativa de Costa Rica",
+      "document_type": "ley",
+      "priority": 2
+    },
+    {
+      "key": "ley-5395-general-salud",
+      "title": "Ley N.º 5395, Ley General de Salud",
+      "short_title": "Ley General de Salud",
+      "filename": "08_ley_5395_general_salud.pdf",
+      "sha256": "4bc50afcff83e470fb024fab9c811971240db4a3637640ed39e656854da4753f",
+      "authority": "Asamblea Legislativa de Costa Rica",
+      "document_type": "ley",
+      "priority": 2
+    },
+    {
+      "key": "decreto-44486-s-control-ruido",
+      "title": "Decreto Ejecutivo N.º 44486-S, Reglamento para el control del ruido ambiental",
+      "short_title": "Reglamento de ruido 44486-S",
+      "filename": "09_decreto_44486_s_control_ruido.pdf",
+      "sha256": "19afc2c65e97957359c37f107cd8623e1209f03451010d0c99072bd5e17d7c91",
+      "authority": "Poder Ejecutivo de Costa Rica",
+      "document_type": "decreto ejecutivo",
+      "priority": 1,
+      "notes": "El archivo oficial está maquetado como una única página PDF de gran longitud; sus citas indican página PDF 1 y, cuando se detecta, el artículo correspondiente."
+    },
+    {
+      "key": "ley-9047-bebidas-alcoholicas",
+      "title": "Ley N.º 9047, Ley de Regulación y Comercialización de Bebidas con Contenido Alcohólico",
+      "short_title": "Ley 9047",
+      "filename": "10_ley_9047_bebidas_alcoholicas.pdf",
+      "sha256": "8b152d187b69aeeb4ea889860c966f14a13c6f1b24a7a92fd93e7db077a7609f",
+      "authority": "Asamblea Legislativa de Costa Rica",
+      "document_type": "ley",
+      "priority": 2
+    },
+    {
+      "key": "reglamento-alcohol-flores",
+      "title": "Reglamento sobre Licencias de Expendio de Bebidas con Contenido Alcohólico de la Municipalidad de Flores",
+      "short_title": "Reglamento de alcohol de Flores",
+      "filename": "11_reglamento_licencias_alcohol_flores.pdf",
+      "sha256": "3f55d7007903dc6116ced41776a5c355df95625c3ab842977f979cf1d0d874fc",
+      "authority": "Municipalidad de Flores",
+      "document_type": "reglamento municipal",
+      "priority": 1
+    },
+    {
+      "key": "reglamento-ambiental-flores",
+      "title": "Reglamento del Plan de Gestión Ambiental Institucional de la Municipalidad de Flores",
+      "short_title": "Reglamento Ambiental de Flores",
+      "filename": "12_reglamento_plan_gestion_ambiental_flores.pdf",
+      "sha256": "08f1a4c8f55312b09dad928ba4bcbf4bcda9f8a586f9ee0360774d7c2ff3e3c8",
+      "authority": "Municipalidad de Flores",
+      "document_type": "reglamento municipal",
+      "priority": 3
+    },
+    {
+      "key": "ley-9078-transito",
+      "title": "Ley N.º 9078, Ley de Tránsito por Vías Públicas Terrestres y Seguridad Vial",
+      "short_title": "Ley de Tránsito",
+      "filename": "13_ley_9078_transito.pdf",
+      "sha256": "3809a80619670c02c2a251e09e00f226a2a9933038abb5d886a968672c41a4cd",
+      "authority": "Asamblea Legislativa de Costa Rica",
+      "document_type": "ley",
+      "priority": 2
+    },
+    {
+      "key": "ley-7586-violencia-domestica",
+      "title": "Ley N.º 7586, Ley contra la Violencia Doméstica",
+      "short_title": "Ley contra la Violencia Doméstica",
+      "filename": "14_ley_7586_violencia_domestica.pdf",
+      "sha256": "e3623aa2c43eb1a74b371ba7c51f2223fecaf314ecfab25fe9e36abc2813252e",
+      "authority": "Asamblea Legislativa de Costa Rica",
+      "document_type": "ley",
+      "priority": 1
+    },
+    {
+      "key": "protocolo-violencia-intrafamiliar",
+      "title": "Protocolo policial para la atención de casos de violencia intrafamiliar y relaciones de pareja",
+      "short_title": "Protocolo de violencia intrafamiliar",
+      "filename": "15_protocolo_violencia_intrafamiliar.pdf",
+      "sha256": "e016d9c171d3769ce54958eb9288fdee1c3664a6a4004c30001d07e5d00d88a5",
+      "authority": "Ministerio de Seguridad Pública de Costa Rica",
+      "document_type": "protocolo policial",
+      "priority": 1
+    },
+    {
+      "key": "protocolo-acoso-sexual-espacios-publicos",
+      "title": "Protocolo de intervención policial en la atención de casos de acoso sexual en espacios públicos o de acceso público",
+      "short_title": "Protocolo de acoso sexual callejero",
+      "filename": "16_protocolo_acoso_sexual_espacios_publicos.pdf",
+      "sha256": "81f2e8cc67cdc95d5318792e22196d9be69b7567672c1b181dc19171384e3df9",
+      "authority": "Ministerio de Seguridad Pública de Costa Rica",
+      "document_type": "protocolo policial",
+      "priority": 1
+    }
+  ]
+}
