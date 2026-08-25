@@ -4,6 +4,7 @@ import hashlib
 import json
 from dataclasses import replace
 
+import pytest
 from sqlalchemy import select
 
 from app.config import get_settings
@@ -58,6 +59,28 @@ class InvalidCitationDouble(LegalAnswerProvider):
         )
 
 
+class ClassifiedAnswerDouble(LegalAnswerProvider):
+    model_name = "test-classified-answer"
+
+    def __init__(self, classification):
+        self.classification = classification
+
+    def generate(self, query, sources):
+        return (
+            GroundedLegalAnswer(
+                summary="La fuente respalda el hallazgo clasificado.",
+                findings=[
+                    GroundedLegalFinding(
+                        classification=self.classification,
+                        statement="Actuación respaldada por la fuente.",
+                        source_ids=["F1"],
+                    )
+                ],
+            ),
+            ModelUsage(),
+        )
+
+
 def _add_legal_chunk(
     db_session,
     provider,
@@ -86,8 +109,16 @@ def _add_legal_chunk(
         status="active",
         document_metadata={
             "source_category": source_category,
-            "legal_force": "binding",
-            "authority_scope": "general_national",
+            "legal_force": (
+                "operational_guidance"
+                if source_category == "operational_protocol"
+                else "binding"
+            ),
+            "authority_scope": (
+                "issuing_institution_only"
+                if source_category == "operational_protocol"
+                else "general_national"
+            ),
             "allowed_classifications": allowed_classifications,
         },
     )
@@ -299,6 +330,43 @@ def test_answer_fails_closed_when_model_cites_an_unretrieved_source(db_session):
     assert response.insufficient_evidence is True
     assert response.citations == []
     assert "atribución verificable" in response.answer
+
+
+@pytest.mark.parametrize(
+    ("classification", "source_category", "label"),
+    [
+        ("municipal_authority", "municipal_regulation", "Facultad municipal"),
+        ("recommended_procedure", "operational_protocol", "Procedimiento recomendado"),
+    ],
+)
+def test_answer_accepts_classification_authorized_by_source_profile(
+    db_session,
+    classification,
+    source_category,
+    label,
+):
+    provider = LocalEmbeddingDouble()
+    _add_legal_chunk(
+        db_session,
+        provider,
+        key=f"source-{classification}",
+        title="Fuente clasificada",
+        page=3,
+        content="La fuente respalda expresamente la actuación consultada.",
+        source_category=source_category,
+        allowed_classifications=[classification],
+    )
+    service = LegalRAGService(
+        db_session,
+        retriever=HybridLegalRetriever(db_session, embedding_provider=provider),
+        answer_provider=ClassifiedAnswerDouble(classification),
+    )
+
+    response = service.answer("¿Qué actuación está respaldada?")
+
+    assert response.insufficient_evidence is False
+    assert response.findings[0].classification == classification
+    assert label in response.answer
 
 
 class IncompatibleMunicipalAuthorityDouble(LegalAnswerProvider):
