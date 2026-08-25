@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import select
 
 from app.agents.gateway import LocalToolGateway, MCPToolGateway, connect_mcp_gateway
-from app.agents.operational import OperationalAgent
+from app.agents.operational import OperationalAgent, _append_legal_source_details
 from app.models import AuditEvent
 from app.schemas import ComplaintExtractedData, ComplaintSubmissionCreate
 from app.services.incidents import IncidentService
@@ -160,3 +160,25 @@ async def test_mcp_gateway_unwraps_fastmcp_structured_json_results():
     )
 
     assert result["sources"][0]["source_id"] == "F1"
+
+
+def test_operational_answer_appends_exact_legal_source_details():
+    answer = _append_legal_source_details(
+        "La municipalidad tiene una competencia expresa.",
+        {
+            "F1": {
+                "source_id": "F1",
+                "document_title": "Ley de prueba",
+                "pdf_page": 12,
+                "article_references": ["Artículo 8"],
+                "allowed_classifications": [
+                    "legal_obligation",
+                    "municipal_authority",
+                ],
+            }
+        },
+    )
+
+    assert "[F1] Ley de prueba" in answer
+    assert "página PDF 12, Artículo 8" in answer
+    assert "obligación legal, facultad municipal" in answer

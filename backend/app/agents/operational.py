@@ -97,6 +97,56 @@ def _legal_source_ids(value: object) -> set[str]:
     return found
 
 
+def _legal_source_records(value: object) -> dict[str, dict[str, object]]:
+    found: dict[str, dict[str, object]] = {}
+    if isinstance(value, dict):
+        source_id = value.get("source_id")
+        if isinstance(source_id, str):
+            found[source_id] = value
+        for child in value.values():
+            found.update(_legal_source_records(child))
+    elif isinstance(value, list):
+        for child in value:
+            found.update(_legal_source_records(child))
+    return found
+
+
+def _append_legal_source_details(
+    answer: str,
+    sources: dict[str, dict[str, object]],
+) -> str:
+    if not sources:
+        return answer
+    labels = {
+        "legal_obligation": "obligación legal",
+        "municipal_authority": "facultad municipal",
+        "recommended_procedure": "procedimiento recomendado",
+    }
+    lines = ["Fuentes normativas recuperadas:"]
+    for source_id in sorted(
+        sources,
+        key=lambda value: (
+            (0, int(value[1:]))
+            if value.startswith("F") and value[1:].isdigit()
+            else (1, value)
+        ),
+    ):
+        source = sources[source_id]
+        allowed = ", ".join(
+            labels.get(value, str(value))
+            for value in source.get("allowed_classifications", [])
+        )
+        articles = ", ".join(source.get("article_references", []))
+        locator = f"página PDF {source.get('pdf_page')}"
+        if articles:
+            locator += f", {articles}"
+        line = f"- [{source_id}] {source.get('document_title')} — {locator}"
+        if allowed:
+            line += f"; puede respaldar: {allowed}"
+        lines.append(line)
+    return f"{answer.rstrip()}\n\n" + "\n".join(lines)
+
+
 def _trace_arguments(arguments: dict[str, object]) -> dict[str, object]:
     sensitive_keys = {"reason", "description", "query", "text"}
     return {
@@ -154,11 +204,12 @@ class OperationalAgent:
         steps: list[ToolExecutionTrace] = []
         citations: set[int] = set()
         legal_citations: set[str] = set()
+        legal_sources: dict[str, dict[str, object]] = {}
         for step_number in range(1, self.settings.agent_max_steps + 1):
             calls = [item for item in response.output if item.type == "function_call"]
             if not calls:
                 return OperationalQueryResponse(
-                    answer=response.output_text,
+                    answer=_append_legal_source_details(response.output_text, legal_sources),
                     incident_citations=sorted(citations),
                     legal_citations=sorted(legal_citations),
                     trace_id=trace_id,
@@ -177,6 +228,7 @@ class OperationalAgent:
                     error_type = None
                     citations.update(_incident_ids(result))
                     legal_citations.update(_legal_source_ids(result))
+                    legal_sources.update(_legal_source_records(result))
                 except Exception as exc:
                     result = {"error": "La herramienta no pudo completar la operación."}
                     success = False
