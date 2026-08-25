@@ -1,0 +1,75 @@
+{
+  "version": "2026.08.1",
+  "description": "Consultas sintéticas para medir recuperación normativa del SGCIU.",
+  "cases": [
+    {
+      "case_id": "RAG-001",
+      "query": "¿Cuáles son las funciones preventivas y los límites de la Policía Municipal de Flores?",
+      "expected_document_keys": [
+        "reglamento-policia-municipal-flores",
+        "ley-9542-policia-municipal"
+      ]
+    },
+    {
+      "case_id": "RAG-002",
+      "query": "¿Qué requisitos establece la ley para crear y fortalecer una policía municipal?",
+      "expected_document_keys": ["ley-9542-policia-municipal"]
+    },
+    {
+      "case_id": "RAG-003",
+      "query": "¿Cómo se presenta y atiende una denuncia por ruido ambiental durante la noche?",
+      "expected_document_keys": ["decreto-44486-s-control-ruido"]
+    },
+    {
+      "case_id": "RAG-004",
+      "query": "¿Qué reglas debe considerar Flores para una licencia de venta de bebidas alcohólicas?",
+      "expected_document_keys": [
+        "reglamento-alcohol-flores",
+        "ley-9047-bebidas-alcoholicas"
+      ]
+    },
+    {
+      "case_id": "RAG-005",
+      "query": "¿Qué restricciones existen para portar o manipular armas de fuego?",
+      "expected_document_keys": ["ley-7530-armas-explosivos"]
+    },
+    {
+      "case_id": "RAG-006",
+      "query": "¿Qué medidas de protección existen ante una situación de violencia doméstica?",
+      "expected_document_keys": [
+        "ley-7586-violencia-domestica",
+        "protocolo-violencia-intrafamiliar"
+      ]
+    },
+    {
+      "case_id": "RAG-007",
+      "query": "¿Cómo debe intervenir la policía ante acoso sexual en un espacio público?",
+      "expected_document_keys": ["protocolo-acoso-sexual-espacios-publicos"]
+    },
+    {
+      "case_id": "RAG-008",
+      "query": "¿Qué normativa aplica a un vehículo mal estacionado que obstruye la vía pública?",
+      "expected_document_keys": ["ley-9078-transito"]
+    },
+    {
+      "case_id": "RAG-009",
+      "query": "¿Cuáles son los principios y deberes generales de los cuerpos policiales en Costa Rica?",
+      "expected_document_keys": ["ley-7410-general-policia"]
+    },
+    {
+      "case_id": "RAG-010",
+      "query": "¿Qué competencias tiene el Ministerio de Salud frente a contaminación que afecta a la comunidad?",
+      "expected_document_keys": ["ley-5395-general-salud"]
+    },
+    {
+      "case_id": "RAG-011",
+      "query": "¿Qué competencias y responsabilidades generales corresponden a una municipalidad?",
+      "expected_document_keys": ["ley-7794-codigo-municipal"]
+    },
+    {
+      "case_id": "RAG-012",
+      "query": "¿Qué principios debe respetar una actuación de la administración pública?",
+      "expected_document_keys": ["ley-6227-administracion-publica"]
+    }
+  ]
+}
