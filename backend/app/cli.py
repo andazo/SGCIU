@@ -9,9 +9,11 @@ from pydantic import ValidationError
 from app.agents.gateway import LocalToolGateway, connect_mcp_gateway
 from app.agents.operational import OperationalAgent
 from app.db import SessionLocal
+from app.rag.corpus import LegalCorpusIndexer
 from app.schemas import CitizenProfile, IntakeSubmissionRequest
 from app.services.incidents import IncidentNotFoundError, IncidentService
 from app.services.intake import EMERGENCY_NOTICE, IntakeService
+from app.services.legal_rag import LegalRAGService
 from app.services.reviews import HighlightNotFoundError, ReviewNotFoundError, ReviewService
 from app.services.semantic import SemanticIncidentService
 
@@ -324,12 +326,106 @@ async def _ask_agent(db, transport: str) -> None:
         response = await OperationalAgent(LocalToolGateway(db)).run(query)
     print("\nAgente:", response.answer)
     print("Incidentes citados:", response.incident_citations or "ninguno")
+    print("Fuentes normativas citadas:", response.legal_citations or "ninguna")
     print("Trace ID:", response.trace_id)
     for step in response.steps:
         print(
             f"  paso {step.step}: {step.tool_name} | "
             f"éxito={step.success} | resultados={step.result_count}"
         )
+
+
+def _print_legal_corpus_status(db) -> None:
+    status = LegalCorpusIndexer(db).status()
+    print(f"\nCorpus normativo SGCIU {status.corpus_version}")
+    print(
+        f"Documentos: {status.indexed_documents}/{status.documents_in_manifest} | "
+        f"embeddings indexados: {status.indexed_embeddings}"
+    )
+    for document in status.documents:
+        print(
+            f"- {document.title} | páginas={document.page_count} | "
+            f"embeddings={document.embeddings}"
+        )
+    if status.known_gaps:
+        print("Vacíos documentales conocidos:")
+        for gap in status.known_gaps:
+            print("  -", gap)
+
+
+def _ask_legal_rag(db) -> None:
+    query = input("Consulta normativa: ").strip()
+    if not query:
+        return
+    try:
+        response = LegalRAGService(db).answer(query)
+    except RuntimeError as exc:
+        print(f"No se pudo completar la consulta normativa: {exc}")
+        return
+    print("\nAsistente normativo SGCIU:\n", response.answer, sep="")
+    print(
+        f"\nEmbeddings recuperados: {response.retrieved_embeddings} | "
+        f"embeddings indexados: {response.indexed_embeddings}"
+    )
+    print("Fuentes verificables:")
+    if not response.citations:
+        print("  Ninguna; la respuesta se marcó con evidencia insuficiente.")
+    for citation in response.citations:
+        articles = ", ".join(citation.article_references) or "sin artículo detectado"
+        printed = (
+            f" (numeración impresa {citation.printed_page_label})"
+            if citation.printed_page_label
+            else ""
+        )
+        print(
+            f"  [{citation.source_id}] {citation.document_title} | página PDF "
+            f"{citation.pdf_page}{printed} | {articles} | chunk #{citation.chunk_id}"
+        )
+        print(
+            f"      ranking: semántico={citation.semantic_score:.3f}, "
+            f"léxico={citation.lexical_score:.3f}, híbrido={citation.fusion_score:.3f}"
+        )
+    for caveat in response.caveats:
+        print("Aviso:", caveat)
+    print("Trace ID:", response.trace_id)
+    print("Esta orientación no sustituye criterio jurídico institucional.")
+
+
+def _manage_legal_rag(db) -> None:
+    while True:
+        print("\nConsulta normativa RAG")
+        print("1. Ver estado del corpus")
+        print("2. Indexar o actualizar documentos")
+        print("3. Consultar normativa")
+        print("0. Volver")
+        selection = input("Seleccione una opción: ").strip()
+        if selection == "0":
+            return
+        if selection == "1":
+            _print_legal_corpus_status(db)
+        elif selection == "2":
+            print(
+                "Se validarán los PDF y se crearán embeddings solo para documentos "
+                "nuevos o modificados. Esta acción utiliza OpenAI."
+            )
+            if not _yes("¿Desea continuar? [s/N]: "):
+                continue
+            result = LegalCorpusIndexer(db).index_all(
+                progress=lambda position, total, key, status: print(
+                    f"  [{position}/{total}] {key}: {status}"
+                )
+            )
+            print(
+                f"Indexación finalizada: documentos actualizados={result.documents_indexed}, "
+                f"sin cambios={result.documents_skipped}, fallidos={result.documents_failed}, "
+                f"embeddings creados={result.embeddings_created}."
+            )
+            for failure in result.failures:
+                print("  Error:", failure)
+        elif selection == "3":
+            _ask_legal_rag(db)
+        else:
+            print("Opción inválida.")
 
 
 def run_admin(transport: str) -> None:
@@ -340,6 +436,7 @@ def run_admin(transport: str) -> None:
         "4": "Clusters y recálculo de embeddings",
         "5": "Preguntar al agente operativo",
         "6": "Gestionar resaltados y revisiones de calidad",
+        "7": "Consultar normativa (RAG)",
         "0": "Salir",
     }
     with SessionLocal() as db:
@@ -362,6 +459,8 @@ def run_admin(transport: str) -> None:
                 asyncio.run(_ask_agent(db, transport))
             elif selection == "6":
                 _manage_reviews(db)
+            elif selection == "7":
+                _manage_legal_rag(db)
             else:
                 print("Opción inválida.")
 

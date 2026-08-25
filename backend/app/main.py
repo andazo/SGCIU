@@ -13,6 +13,7 @@ from .ai_service import run_complaint_intake_chat
 from .api.dependencies import AdminRole
 from .api.routes.incidents import router as incidents_router
 from .api.routes.intake import router as intake_router
+from .api.routes.legal_rag import router as legal_rag_router
 from .api.routes.operational import router as operational_router
 from .api.routes.reviews import router as reviews_router
 from .config import get_settings
@@ -43,6 +44,7 @@ app.include_router(intake_router, prefix="/v1")
 app.include_router(incidents_router, prefix="/v1")
 app.include_router(operational_router, prefix="/v1")
 app.include_router(reviews_router, prefix="/v1")
+app.include_router(legal_rag_router, prefix="/v1")
 
 app.add_middleware(
     CORSMiddleware,
