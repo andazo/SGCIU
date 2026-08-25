@@ -24,15 +24,13 @@ from app.schemas import (
     LegalIndexingResult,
 )
 
-ARTICLE_PATTERN = re.compile(
-    r"(?i)\b(?:art[ií]culo|art\.)\s*(?:n[.º°o]\s*)?(\d+(?:\s*(?:bis|ter))?)"
-)
 ARTICLE_HEADING_PATTERN = re.compile(
     r"(?im)^(?:art[ií]culo|art\.)\s*(?:n[.º°o]\s*)?(\d+(?:\s*(?:bis|ter))?)"
 )
 SECTION_PATTERN = re.compile(
     r"(?im)^(?P<section>(?:T[IÍ]TULO|CAP[IÍ]TULO|SECCI[OÓ]N)\s+[^\n]{1,160})$"
 )
+LEGAL_INDEX_VERSION = "legal-index-v1"
 
 
 class ManifestDocument(BaseModel):
@@ -187,7 +185,9 @@ def _split_long_text(text: str, target_tokens: int, overlap_tokens: int) -> list
 
 
 def _article_references(text: str, inherited: str | None) -> tuple[str, ...]:
-    references = [f"Artículo {match.group(1).strip()}" for match in ARTICLE_PATTERN.finditer(text)]
+    references = [
+        f"Artículo {match.group(1).strip()}" for match in ARTICLE_HEADING_PATTERN.finditer(text)
+    ]
     if inherited and not references:
         references.append(inherited)
     return tuple(dict.fromkeys(references))
@@ -336,6 +336,8 @@ class LegalCorpusIndexer:
             and document is not None
             and document.source_sha256 == actual_sha
             and document.corpus_version == manifest.version
+            and (document.document_metadata or {}).get("indexer_version")
+            == LEGAL_INDEX_VERSION
             and existing_chunks > 0
             and self.db.scalar(
                 select(func.count(LegalChunk.id)).where(
@@ -379,6 +381,7 @@ class LegalCorpusIndexer:
             "notes": item.notes,
             "source_url": item.source_url,
             "citation_policy": manifest.citation_policy,
+            "indexer_version": LEGAL_INDEX_VERSION,
         }
         self.db.flush()
         vectors: list[list[float]] = []
@@ -421,7 +424,10 @@ class LegalCorpusIndexer:
                     embedding=vector,
                     embedding_model=provider.model_name,
                     corpus_version=manifest.version,
-                    chunk_metadata={"physical_pdf_page": draft.page_number},
+                    chunk_metadata={
+                        "physical_pdf_page": draft.page_number,
+                        "indexer_version": LEGAL_INDEX_VERSION,
+                    },
                 )
             )
         self.db.commit()
