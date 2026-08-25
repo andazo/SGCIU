@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import json
+from dataclasses import replace
 
 from sqlalchemy import select
 
+from app.config import get_settings
 from app.models import LegalChunk, LegalDocument, LegalQueryTrace
-from app.rag.corpus import ExtractedPage, chunk_pages
+from app.rag.corpus import ExtractedPage, LegalCorpusIndexer, chunk_pages
 from app.rag.generation import GroundedLegalAnswer, LegalAnswerProvider
 from app.rag.retrieval import HybridLegalRetriever
 from app.schemas import ModelUsage
@@ -100,6 +103,74 @@ def test_chunking_never_crosses_pdf_pages_and_carries_article_reference():
     assert page_eight
     assert page_eight[0].article_references == ("Artículo 23",)
     assert page_eight[0].printed_page_label == "6"
+
+
+def test_indexer_persists_complete_document_before_embeddings(
+    db_session,
+    tmp_path,
+    monkeypatch,
+):
+    pdfs = tmp_path / "pdfs"
+    pdfs.mkdir()
+    pdf_path = pdfs / "reglamento.pdf"
+    pdf_path.write_bytes(b"synthetic-pdf-for-unit-test")
+    checksum = hashlib.sha256(pdf_path.read_bytes()).hexdigest()
+    manifest = {
+        "corpus_id": "test-corpus",
+        "version": "test-v1",
+        "jurisdiction": "Costa Rica",
+        "language": "es",
+        "description": "Corpus sintético de prueba.",
+        "citation_policy": "Página física del PDF.",
+        "known_gaps": [],
+        "documents": [
+            {
+                "key": "reglamento-prueba",
+                "title": "Reglamento de prueba",
+                "short_title": "Reglamento",
+                "filename": pdf_path.name,
+                "sha256": checksum,
+                "authority": "Autoridad de prueba",
+                "document_type": "reglamento",
+                "priority": 1,
+            }
+        ],
+    }
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setattr(
+        "app.rag.corpus.extract_pdf_pages",
+        lambda _path: [
+            ExtractedPage(
+                page_number=1,
+                printed_page_label=None,
+                text="Artículo 1. La autoridad documentará la actuación preventiva municipal.",
+            )
+        ],
+    )
+    settings = replace(
+        get_settings(),
+        legal_rag_corpus_path=tmp_path,
+        legal_rag_chunk_tokens=128,
+        legal_rag_chunk_overlap_tokens=20,
+    )
+    indexer = LegalCorpusIndexer(
+        db_session,
+        settings,
+        embedding_provider=LocalEmbeddingDouble(),
+    )
+
+    first = indexer.index_all()
+    second = indexer.index_all()
+
+    document = db_session.scalar(
+        select(LegalDocument).where(LegalDocument.document_key == "reglamento-prueba")
+    )
+    assert first.documents_indexed == 1
+    assert first.embeddings_created == 1
+    assert second.documents_skipped == 1
+    assert document is not None
+    assert document.title == "Reglamento de prueba"
+    assert len(document.chunks) == 1
 
 
 def test_hybrid_retrieval_prioritizes_lexical_and_semantic_legal_evidence(db_session):

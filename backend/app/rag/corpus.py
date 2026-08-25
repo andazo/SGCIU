@@ -270,6 +270,7 @@ class LegalCorpusIndexer:
         progress: Callable[[int, int, str, str], None] | None = None,
     ) -> LegalIndexingResult:
         manifest = load_manifest(self.corpus_path)
+        self.db.scalar(select(func.count(LegalDocument.id)))
         indexed = skipped = failed = embeddings_created = 0
         failures: list[str] = []
         total = len(manifest.documents)
@@ -356,6 +357,30 @@ class LegalCorpusIndexer:
         )
         if not drafts:
             raise RuntimeError("El PDF no produjo texto suficiente para indexar.")
+        if document is None:
+            document = LegalDocument(document_key=item.key)
+            self.db.add(document)
+        else:
+            self.db.execute(delete(LegalChunk).where(LegalChunk.document_id == document.id))
+        document.title = item.title
+        document.short_title = item.short_title
+        document.source_filename = item.filename
+        document.source_sha256 = actual_sha
+        document.authority = item.authority
+        document.jurisdiction = manifest.jurisdiction
+        document.document_type = item.document_type
+        document.corpus_version = manifest.version
+        document.page_count = len(pages)
+        document.priority = item.priority
+        document.status = "active"
+        document.document_metadata = {
+            "corpus_id": manifest.corpus_id,
+            "language": manifest.language,
+            "notes": item.notes,
+            "source_url": item.source_url,
+            "citation_policy": manifest.citation_policy,
+        }
+        self.db.flush()
         vectors: list[list[float]] = []
         provider = self._provider()
         batch_size = 64
@@ -381,30 +406,6 @@ class LegalCorpusIndexer:
             vectors.extend(provider.embed_many(embedding_inputs))
         if len(vectors) != len(drafts):
             raise RuntimeError("OpenAI devolvió una cantidad inesperada de embeddings.")
-        if document is None:
-            document = LegalDocument(document_key=item.key)
-            self.db.add(document)
-            self.db.flush()
-        else:
-            self.db.execute(delete(LegalChunk).where(LegalChunk.document_id == document.id))
-        document.title = item.title
-        document.short_title = item.short_title
-        document.source_filename = item.filename
-        document.source_sha256 = actual_sha
-        document.authority = item.authority
-        document.jurisdiction = manifest.jurisdiction
-        document.document_type = item.document_type
-        document.corpus_version = manifest.version
-        document.page_count = len(pages)
-        document.priority = item.priority
-        document.status = "active"
-        document.document_metadata = {
-            "corpus_id": manifest.corpus_id,
-            "language": manifest.language,
-            "notes": item.notes,
-            "source_url": item.source_url,
-            "citation_policy": manifest.citation_policy,
-        }
         for draft, vector in zip(drafts, vectors, strict=True):
             self.db.add(
                 LegalChunk(
