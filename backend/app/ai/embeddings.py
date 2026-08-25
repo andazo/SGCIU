@@ -18,9 +18,19 @@ class EmbeddingProvider(ABC):
     @abstractmethod
     def embed(self, text: str) -> list[float]: ...
 
+    def embed_many(self, texts: list[str]) -> list[list[float]]:
+        return [self.embed(text) for text in texts]
+
 
 class OpenAIEmbeddingProvider(EmbeddingProvider):
-    def __init__(self, settings: Settings):
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        model_name: str | None = None,
+        dimensions: int | None = None,
+        feature: str = "incident_embedding",
+    ):
         if not settings.openai_api_key:
             raise RuntimeError("OPENAI_API_KEY no está configurada para generar embeddings.")
         self.client = OpenAI(
@@ -29,30 +39,47 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
             max_retries=2,
         )
         self.settings = settings
-        self.model_name = settings.openai_embedding_model
-        self.dimensions = settings.embedding_dimensions
+        self.model_name = model_name or settings.openai_embedding_model
+        self.dimensions = dimensions or settings.embedding_dimensions
+        self.feature = feature
 
     def embed(self, text: str) -> list[float]:
+        return self.embed_many([text])[0]
+
+    def embed_many(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
         started = time.perf_counter()
         response = self.client.embeddings.create(
             model=self.model_name,
-            input=text,
+            input=texts,
             dimensions=self.dimensions,
         )
         input_tokens = int(getattr(response.usage, "prompt_tokens", 0) or 0)
         logger.info(
             "Embedding model call completed",
             extra={
-                "feature": "incident_embedding",
+                "feature": self.feature,
                 "model": self.model_name,
+                "embeddings": len(texts),
                 "latency_ms": round((time.perf_counter() - started) * 1000, 2),
                 "input_tokens": input_tokens,
                 "estimated_cost_usd": estimate_embedding_cost(input_tokens, self.settings),
             },
         )
-        return response.data[0].embedding
+        return [item.embedding for item in sorted(response.data, key=lambda item: item.index)]
 
 
 def get_embedding_provider(settings: Settings | None = None) -> EmbeddingProvider:
     settings = settings or get_settings()
     return OpenAIEmbeddingProvider(settings)
+
+
+def get_legal_embedding_provider(settings: Settings | None = None) -> EmbeddingProvider:
+    settings = settings or get_settings()
+    return OpenAIEmbeddingProvider(
+        settings,
+        model_name=settings.legal_rag_embedding_model,
+        dimensions=settings.legal_rag_embedding_dimensions,
+        feature="legal_rag_embedding",
+    )

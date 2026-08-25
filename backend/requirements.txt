@@ -8,3 +8,4 @@ pydantic[email]==2.13.4
 python-dotenv==1.2.2
 openai==2.54.0
 mcp==1.29.0
+pypdf==6.10.0

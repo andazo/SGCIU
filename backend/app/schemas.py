@@ -418,12 +418,80 @@ class ModelUsage(StrictModel):
 class OperationalQueryResponse(StrictModel):
     answer: str
     incident_citations: list[int]
+    legal_citations: list[str] = Field(default_factory=list)
     trace_id: str
     steps: list[ToolExecutionTrace]
     model_name: str
     prompt_version: str
     requires_human_review: bool = False
     usage: ModelUsage = Field(default_factory=ModelUsage)
+
+
+class LegalQueryRequest(StrictModel):
+    query: str = Field(min_length=3, max_length=4_000)
+    document_keys: list[str] | None = Field(default=None, max_length=20)
+
+
+class LegalCitation(StrictModel):
+    source_id: str
+    chunk_id: int
+    document_key: str
+    document_title: str
+    source_filename: str
+    pdf_page: int
+    printed_page_label: str | None = None
+    article_references: list[str] = Field(default_factory=list)
+    excerpt: str
+    semantic_score: float
+    lexical_score: float
+    fusion_score: float
+
+
+class LegalQueryResponse(StrictModel):
+    answer: str
+    citations: list[LegalCitation]
+    retrieved_embeddings: int
+    indexed_embeddings: int
+    trace_id: str
+    model_name: str
+    embedding_model: str
+    prompt_version: str
+    corpus_version: str
+    insufficient_evidence: bool = False
+    caveats: list[str] = Field(default_factory=list)
+    usage: ModelUsage = Field(default_factory=ModelUsage)
+
+
+class LegalCorpusDocumentStatus(StrictModel):
+    document_key: str
+    title: str
+    page_count: int
+    embeddings: int
+    status: str
+    source_sha256: str
+
+
+class LegalCorpusStatus(StrictModel):
+    corpus_version: str
+    documents_in_manifest: int
+    indexed_documents: int
+    indexed_embeddings: int
+    known_gaps: list[str] = Field(default_factory=list)
+    documents: list[LegalCorpusDocumentStatus] = Field(default_factory=list)
+
+
+class LegalIndexingResult(StrictModel):
+    corpus_version: str
+    documents_found: int
+    documents_indexed: int
+    documents_skipped: int
+    documents_failed: int
+    embeddings_created: int
+    failures: list[str] = Field(default_factory=list)
+
+
+class LegalIndexingRequest(StrictModel):
+    force: bool = False
 
 
 class ResolveReviewRequest(StrictModel):
