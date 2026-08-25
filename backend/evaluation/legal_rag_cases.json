@@ -1,6 +1,6 @@
 {
-  "version": "2026.08.1",
-  "description": "Consultas sintéticas para medir recuperación normativa del SGCIU.",
+  "version": "2026.08.2",
+  "description": "Consultas sintéticas para medir recuperación normativa del corpus ampliado de SGCIU.",
   "cases": [
     {
       "case_id": "RAG-001",
@@ -70,6 +70,60 @@
       "case_id": "RAG-012",
       "query": "¿Qué principios debe respetar una actuación de la administración pública?",
       "expected_document_keys": ["ley-6227-administracion-publica"]
+    },
+    {
+      "case_id": "RAG-013",
+      "query": "¿Qué obligaciones existen al recolectar y almacenar datos personales de una denuncia ciudadana?",
+      "expected_document_keys": [
+        "ley-8968-proteccion-datos-personales",
+        "decreto-37554-reglamento-datos-personales"
+      ]
+    },
+    {
+      "case_id": "RAG-014",
+      "query": "¿Qué procedimiento de cadena de custodia debe seguirse al recibir y trasladar un indicio material?",
+      "expected_document_keys": ["protocolo-cadena-custodia-2020"]
+    },
+    {
+      "case_id": "RAG-015",
+      "query": "¿Qué protección especial corresponde cuando una persona menor de edad participa como víctima o testigo?",
+      "expected_document_keys": ["ley-7739-codigo-ninez-adolescencia"]
+    },
+    {
+      "case_id": "RAG-016",
+      "query": "¿Qué competencias tiene la municipalidad para reglamentar la recolección y disposición de residuos?",
+      "expected_document_keys": ["ley-8839-gestion-integral-residuos"]
+    },
+    {
+      "case_id": "RAG-017",
+      "query": "¿Qué obligaciones de bienestar animal aplican ante un reporte de maltrato o abandono?",
+      "expected_document_keys": ["ley-7451-bienestar-animales"]
+    },
+    {
+      "case_id": "RAG-018",
+      "query": "¿Qué medidas y deberes de confidencialidad existen para proteger a víctimas y testigos de un proceso penal?",
+      "expected_document_keys": ["ley-8720-proteccion-victimas-testigos"]
+    },
+    {
+      "case_id": "RAG-019",
+      "query": "¿Qué establece la ley sobre la actuación policial sin dilación ante acoso sexual callejero?",
+      "expected_document_keys": [
+        "ley-9877-acoso-sexual-callejero",
+        "protocolo-acoso-sexual-espacios-publicos"
+      ]
+    },
+    {
+      "case_id": "RAG-020",
+      "query": "¿Qué requisitos reglamentarios aplican a permisos, matrícula y portación de armas?",
+      "expected_document_keys": [
+        "decreto-37985-reglamento-armas-explosivos",
+        "ley-7530-armas-explosivos"
+      ]
+    },
+    {
+      "case_id": "RAG-021",
+      "query": "¿Qué deberes de servicio establece el reglamento para los cuerpos policiales adscritos al Ministerio de Seguridad Pública?",
+      "expected_document_keys": ["decreto-23880-reglamento-cuerpos-policiales"]
     }
   ]
 }
