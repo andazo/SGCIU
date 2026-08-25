@@ -36,7 +36,9 @@ def search_legal_sources(
         "sources": [citation.model_dump() for citation in citations],
         "citation_note": (
             "pdf_page es la página física exacta, numerada desde 1, del PDF versionado. "
-            "Los scores son señales de ranking y no probabilidades jurídicas."
+            "allowed_classifications restringe si la fuente puede respaldar una obligación "
+            "legal, facultad municipal o procedimiento recomendado. Los scores son señales "
+            "de ranking y no probabilidades jurídicas."
         ),
     }
 
@@ -55,7 +57,8 @@ def legal_tool_definitions() -> list[ToolDefinition]:
             description=(
                 "Recupera fragmentos del corpus normativo costarricense mediante búsqueda "
                 "híbrida y devuelve documento, página PDF exacta, artículo y scores. Úsala "
-                "para consultas sobre normas, competencias o protocolos policiales."
+                "para consultas sobre normas, competencias o protocolos policiales. Cada "
+                "fuente declara qué clasificaciones jurídicas puede respaldar."
             ),
             input_model=SearchLegalSourcesInput,
             handler=search_legal_sources,

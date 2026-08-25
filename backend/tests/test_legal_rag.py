@@ -9,7 +9,11 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.models import LegalChunk, LegalDocument, LegalQueryTrace
 from app.rag.corpus import ExtractedPage, LegalCorpusIndexer, chunk_pages
-from app.rag.generation import GroundedLegalAnswer, LegalAnswerProvider
+from app.rag.generation import (
+    GroundedLegalAnswer,
+    GroundedLegalFinding,
+    LegalAnswerProvider,
+)
 from app.rag.retrieval import HybridLegalRetriever
 from app.schemas import ModelUsage
 from app.services.legal_rag import LegalRAGService
@@ -22,8 +26,14 @@ class CitedAnswerDouble(LegalAnswerProvider):
     def generate(self, query, sources):
         return (
             GroundedLegalAnswer(
-                answer="El procedimiento debe verificarse con la fuente recuperada [F1].",
-                cited_source_ids=["F1"],
+                summary="La fuente respalda una actuación preventiva.",
+                findings=[
+                    GroundedLegalFinding(
+                        classification="legal_obligation",
+                        statement="La actuación debe documentarse.",
+                        source_ids=["F1"],
+                    )
+                ],
             ),
             ModelUsage(input_tokens=25, output_tokens=12),
         )
@@ -35,14 +45,32 @@ class InvalidCitationDouble(LegalAnswerProvider):
     def generate(self, query, sources):
         return (
             GroundedLegalAnswer(
-                answer="Afirmación no atribuida [F99].",
-                cited_source_ids=["F99"],
+                summary="Afirmación no atribuida.",
+                findings=[
+                    GroundedLegalFinding(
+                        classification="legal_obligation",
+                        statement="Afirmación sin respaldo.",
+                        source_ids=["F99"],
+                    )
+                ],
             ),
             ModelUsage(),
         )
 
 
-def _add_legal_chunk(db_session, provider, *, key, title, page, content, priority=1):
+def _add_legal_chunk(
+    db_session,
+    provider,
+    *,
+    key,
+    title,
+    page,
+    content,
+    priority=1,
+    source_category="national_legislation",
+    allowed_classifications=None,
+):
+    allowed_classifications = allowed_classifications or ["legal_obligation"]
     document = LegalDocument(
         document_key=key,
         title=title,
@@ -56,7 +84,12 @@ def _add_legal_chunk(db_session, provider, *, key, title, page, content, priorit
         page_count=page,
         priority=priority,
         status="active",
-        document_metadata={},
+        document_metadata={
+            "source_category": source_category,
+            "legal_force": "binding",
+            "authority_scope": "general_national",
+            "allowed_classifications": allowed_classifications,
+        },
     )
     db_session.add(document)
     db_session.flush()
@@ -132,6 +165,7 @@ def test_indexer_persists_complete_document_before_embeddings(
                 "sha256": checksum,
                 "authority": "Autoridad de prueba",
                 "document_type": "reglamento",
+                "source_category": "national_legislation",
                 "priority": 1,
             }
         ],
@@ -162,14 +196,23 @@ def test_indexer_persists_complete_document_before_embeddings(
     first = indexer.index_all()
     second = indexer.index_all()
 
+    manifest["version"] = "test-v2"
+    manifest["documents"][0]["source_category"] = "municipal_regulation"
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    metadata_only = indexer.index_all()
+
     document = db_session.scalar(
         select(LegalDocument).where(LegalDocument.document_key == "reglamento-prueba")
     )
     assert first.documents_indexed == 1
     assert first.embeddings_created == 1
     assert second.documents_skipped == 1
+    assert metadata_only.documents_skipped == 1
     assert document is not None
     assert document.title == "Reglamento de prueba"
+    assert document.corpus_version == "test-v2"
+    assert document.document_metadata["authority_scope"] == "municipal_flores"
+    assert document.chunks[0].corpus_version == "test-v2"
     assert len(document.chunks) == 1
 
 
@@ -227,6 +270,8 @@ def test_grounded_answer_reports_embedding_counts_and_exact_pdf_page(db_session)
     assert response.indexed_embeddings == 1
     assert response.citations[0].pdf_page == 4
     assert response.citations[0].document_key == "reglamento-flores"
+    assert response.findings[0].classification == "legal_obligation"
+    assert "Obligación legal" in response.answer
     assert response.insufficient_evidence is False
     assert db_session.scalar(
         select(LegalQueryTrace).where(LegalQueryTrace.trace_id == response.trace_id)
@@ -254,3 +299,50 @@ def test_answer_fails_closed_when_model_cites_an_unretrieved_source(db_session):
     assert response.insufficient_evidence is True
     assert response.citations == []
     assert "atribución verificable" in response.answer
+
+
+class IncompatibleMunicipalAuthorityDouble(LegalAnswerProvider):
+    model_name = "test-incompatible-authority"
+
+    def generate(self, query, sources):
+        return (
+            GroundedLegalAnswer(
+                summary="La norma asigna una competencia.",
+                findings=[
+                    GroundedLegalFinding(
+                        classification="municipal_authority",
+                        statement="La Policía Municipal puede ejecutar esta actuación.",
+                        source_ids=["F1"],
+                    )
+                ],
+            ),
+            ModelUsage(),
+        )
+
+
+def test_answer_rejects_municipal_authority_inferred_from_national_police_source(
+    db_session,
+):
+    provider = LocalEmbeddingDouble()
+    _add_legal_chunk(
+        db_session,
+        provider,
+        key="reglamento-fuerza-publica",
+        title="Reglamento de cuerpos adscritos al Ministerio de Seguridad Pública",
+        page=4,
+        content="La Fuerza Pública realizará la actuación preventiva.",
+        source_category="national_police_regulation",
+        allowed_classifications=["legal_obligation"],
+    )
+    service = LegalRAGService(
+        db_session,
+        retriever=HybridLegalRetriever(db_session, embedding_provider=provider),
+        answer_provider=IncompatibleMunicipalAuthorityDouble(),
+    )
+
+    response = service.answer("¿Puede la Policía Municipal ejecutar esta actuación?")
+
+    assert response.insufficient_evidence is True
+    assert response.findings == []
+    assert response.citations == []
+    assert any("clasificación jurídica" in caveat for caveat in response.caveats)

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import re
 import time
 import uuid
 
@@ -16,9 +15,13 @@ from app.rag.generation import (
     get_legal_answer_provider,
 )
 from app.rag.retrieval import HybridLegalRetriever, RetrievedLegalSource
-from app.schemas import LegalCitation, LegalQueryResponse
+from app.schemas import LegalCitation, LegalFinding, LegalQueryResponse
 
-CITATION_PATTERN = re.compile(r"\[(F\d+)\]")
+CLASSIFICATION_LABELS = {
+    "legal_obligation": "Obligación legal",
+    "municipal_authority": "Facultad municipal",
+    "recommended_procedure": "Procedimiento recomendado",
+}
 
 
 def _excerpt(value: str, limit: int = 500) -> str:
@@ -27,6 +30,7 @@ def _excerpt(value: str, limit: int = 500) -> str:
 
 
 def source_to_citation(source: RetrievedLegalSource) -> LegalCitation:
+    metadata = source.document.document_metadata or {}
     return LegalCitation(
         source_id=source.source_id,
         chunk_id=source.chunk.id,
@@ -36,11 +40,27 @@ def source_to_citation(source: RetrievedLegalSource) -> LegalCitation:
         pdf_page=source.chunk.page_number,
         printed_page_label=source.chunk.printed_page_label,
         article_references=list(source.chunk.article_references),
+        source_category=str(metadata.get("source_category", "unclassified")),
+        legal_force=str(metadata.get("legal_force", "unclassified")),
+        authority_scope=str(metadata.get("authority_scope", "unclassified")),
+        allowed_classifications=list(metadata.get("allowed_classifications", [])),
         excerpt=_excerpt(source.chunk.content),
         semantic_score=source.semantic_score,
         lexical_score=source.lexical_score,
         fusion_score=source.fusion_score,
     )
+
+
+def _render_answer(summary: str, findings: list[LegalFinding]) -> str:
+    parts = [summary.strip()]
+    for finding in findings:
+        label = CLASSIFICATION_LABELS[finding.classification]
+        references = " ".join(f"[{source_id}]" for source_id in finding.source_ids)
+        line = f"- {label}: {finding.statement.strip()} {references}".strip()
+        if finding.applicability_note:
+            line += f" Aplicabilidad: {finding.applicability_note.strip()}"
+        parts.append(line)
+    return "\n\n".join(part for part in parts if part)
 
 
 class LegalRAGService:
@@ -118,27 +138,41 @@ class LegalRAGService:
             )
             raise
         valid_sources = {source.source_id: source for source in sources}
-        invalid_markers = {
-            marker
-            for marker in CITATION_PATTERN.findall(generated.answer)
-            if marker not in valid_sources
-        }
-        cited_in_answer = [
-            marker
-            for marker in dict.fromkeys(CITATION_PATTERN.findall(generated.answer))
-            if marker in valid_sources
-        ]
-        declared = set(generated.cited_source_ids)
-        cited_ids = [source_id for source_id in cited_in_answer if source_id in declared]
+        findings: list[LegalFinding] = []
+        invalid_attribution = False
+        cited_ids: list[str] = []
+        for generated_finding in generated.findings:
+            source_ids = list(dict.fromkeys(generated_finding.source_ids))
+            finding_sources = [valid_sources.get(source_id) for source_id in source_ids]
+            compatible = bool(finding_sources) and all(
+                source is not None
+                and generated_finding.classification
+                in (source.document.document_metadata or {}).get(
+                    "allowed_classifications", []
+                )
+                for source in finding_sources
+            )
+            if not compatible:
+                invalid_attribution = True
+                continue
+            findings.append(
+                LegalFinding(
+                    classification=generated_finding.classification,
+                    statement=generated_finding.statement,
+                    source_ids=source_ids,
+                    applicability_note=generated_finding.applicability_note,
+                )
+            )
+            cited_ids.extend(source_ids)
+        cited_ids = list(dict.fromkeys(cited_ids))
         caveats = list(generated.caveats)
         insufficient = generated.insufficient_evidence
-        answer = generated.answer.strip()
-        if invalid_markers:
+        if invalid_attribution:
             insufficient = True
-            caveats.append("La respuesta generada intentó citar una fuente no recuperada.")
-        attribution_failed = bool(invalid_markers) or (
-            not cited_ids and not generated.insufficient_evidence
-        )
+            caveats.append(
+                "Se descartó un hallazgo cuya fuente no permitía esa clasificación jurídica."
+            )
+        attribution_failed = not findings and not generated.insufficient_evidence
         if attribution_failed:
             insufficient = True
             caveats.append("La respuesta no superó la validación automática de atribución.")
@@ -146,9 +180,14 @@ class LegalRAGService:
                 "No fue posible producir una respuesta con atribución verificable. Revise las "
                 "fuentes recuperadas o reformule la consulta."
             )
+            findings = []
+            cited_ids = []
+        else:
+            answer = _render_answer(generated.summary, findings)
         citations = [source_to_citation(valid_sources[source_id]) for source_id in cited_ids]
         response = LegalQueryResponse(
             answer=answer,
+            findings=findings,
             citations=citations,
             retrieved_embeddings=len(sources),
             indexed_embeddings=indexed_embeddings,

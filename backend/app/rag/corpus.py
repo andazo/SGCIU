@@ -9,10 +9,11 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from pypdf import PdfReader
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.ai.embeddings import EmbeddingProvider, get_legal_embedding_provider
@@ -32,6 +33,39 @@ SECTION_PATTERN = re.compile(
 )
 LEGAL_INDEX_VERSION = "legal-index-v1"
 
+SOURCE_PROFILES: dict[str, dict[str, object]] = {
+    "national_legislation": {
+        "legal_force": "binding",
+        "authority_scope": "general_national",
+        "allowed_classifications": ["legal_obligation"],
+    },
+    "executive_regulation": {
+        "legal_force": "binding",
+        "authority_scope": "general_national",
+        "allowed_classifications": ["legal_obligation"],
+    },
+    "municipal_enabling_law": {
+        "legal_force": "binding",
+        "authority_scope": "municipal_national",
+        "allowed_classifications": ["legal_obligation", "municipal_authority"],
+    },
+    "municipal_regulation": {
+        "legal_force": "binding",
+        "authority_scope": "municipal_flores",
+        "allowed_classifications": ["legal_obligation", "municipal_authority"],
+    },
+    "national_police_regulation": {
+        "legal_force": "binding",
+        "authority_scope": "national_police_only",
+        "allowed_classifications": ["legal_obligation"],
+    },
+    "operational_protocol": {
+        "legal_force": "operational_guidance",
+        "authority_scope": "issuing_institution_only",
+        "allowed_classifications": ["recommended_procedure"],
+    },
+}
+
 
 class ManifestDocument(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -43,9 +77,25 @@ class ManifestDocument(BaseModel):
     sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     authority: str
     document_type: str
+    source_category: Literal[
+        "national_legislation",
+        "executive_regulation",
+        "municipal_enabling_law",
+        "municipal_regulation",
+        "national_police_regulation",
+        "operational_protocol",
+    ]
     priority: int = Field(default=3, ge=1, le=5)
     notes: str | None = None
     source_url: str | None = None
+
+    def source_profile(self) -> dict[str, object]:
+        try:
+            return SOURCE_PROFILES[self.source_category]
+        except KeyError as exc:
+            raise ValueError(
+                f"Categoría jurídica no soportada: {self.source_category}"
+            ) from exc
 
 
 class CorpusManifest(BaseModel):
@@ -94,7 +144,22 @@ def load_manifest(corpus_path: Path) -> CorpusManifest:
     keys = [document.key for document in manifest.documents]
     if len(keys) != len(set(keys)):
         raise RuntimeError("El manifiesto legal contiene claves de documento duplicadas.")
+    for document in manifest.documents:
+        document.source_profile()
     return manifest
+
+
+def _document_metadata(manifest: CorpusManifest, item: ManifestDocument) -> dict[str, object]:
+    return {
+        "corpus_id": manifest.corpus_id,
+        "language": manifest.language,
+        "notes": item.notes,
+        "source_url": item.source_url,
+        "citation_policy": manifest.citation_policy,
+        "indexer_version": LEGAL_INDEX_VERSION,
+        "source_category": item.source_category,
+        **item.source_profile(),
+    }
 
 
 def file_sha256(path: Path) -> str:
@@ -335,7 +400,6 @@ class LegalCorpusIndexer:
             not force
             and document is not None
             and document.source_sha256 == actual_sha
-            and document.corpus_version == manifest.version
             and (document.document_metadata or {}).get("indexer_version")
             == LEGAL_INDEX_VERSION
             and existing_chunks > 0
@@ -347,6 +411,22 @@ class LegalCorpusIndexer:
             )
             == existing_chunks
         ):
+            document.title = item.title
+            document.short_title = item.short_title
+            document.source_filename = item.filename
+            document.authority = item.authority
+            document.jurisdiction = manifest.jurisdiction
+            document.document_type = item.document_type
+            document.corpus_version = manifest.version
+            document.priority = item.priority
+            document.status = "active"
+            document.document_metadata = _document_metadata(manifest, item)
+            self.db.execute(
+                update(LegalChunk)
+                .where(LegalChunk.document_id == document.id)
+                .values(corpus_version=manifest.version)
+            )
+            self.db.flush()
             return None
         pages = extract_pdf_pages(pdf_path)
         drafts = chunk_pages(
@@ -375,14 +455,7 @@ class LegalCorpusIndexer:
         document.page_count = len(pages)
         document.priority = item.priority
         document.status = "active"
-        document.document_metadata = {
-            "corpus_id": manifest.corpus_id,
-            "language": manifest.language,
-            "notes": item.notes,
-            "source_url": item.source_url,
-            "citation_policy": manifest.citation_policy,
-            "indexer_version": LEGAL_INDEX_VERSION,
-        }
+        document.document_metadata = _document_metadata(manifest, item)
         self.db.flush()
         vectors: list[list[float]] = []
         provider = self._provider()

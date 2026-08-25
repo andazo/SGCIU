@@ -103,7 +103,7 @@ def search_legal_sources(
     document_keys: list[str] | None = None,
     top_k: int = 8,
 ) -> str:
-    """Recupera normativa con documento, página PDF exacta y artículo detectado."""
+    """Recupera normativa con página exacta y clasificación jurídica permitida."""
     return _execute(
         "search_legal_sources",
         {"query": query, "document_keys": document_keys, "top_k": top_k},

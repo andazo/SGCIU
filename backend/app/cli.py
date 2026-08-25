@@ -381,6 +381,11 @@ def _ask_legal_rag(db) -> None:
             f"  [{citation.source_id}] {citation.document_title} | página PDF "
             f"{citation.pdf_page}{printed} | {articles} | chunk #{citation.chunk_id}"
         )
+        classifications = ", ".join(citation.allowed_classifications)
+        print(
+            f"      alcance={citation.authority_scope} | fuerza={citation.legal_force} | "
+            f"clasificaciones permitidas={classifications}"
+        )
         print(
             f"      ranking: semántico={citation.semantic_score:.3f}, "
             f"léxico={citation.lexical_score:.3f}, híbrido={citation.fusion_score:.3f}"

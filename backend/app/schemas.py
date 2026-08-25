@@ -441,14 +441,28 @@ class LegalCitation(StrictModel):
     pdf_page: int
     printed_page_label: str | None = None
     article_references: list[str] = Field(default_factory=list)
+    source_category: str
+    legal_force: str
+    authority_scope: str
+    allowed_classifications: list[str] = Field(default_factory=list)
     excerpt: str
     semantic_score: float
     lexical_score: float
     fusion_score: float
 
 
+class LegalFinding(StrictModel):
+    classification: Literal[
+        "legal_obligation", "municipal_authority", "recommended_procedure"
+    ]
+    statement: str
+    source_ids: list[str] = Field(min_length=1)
+    applicability_note: str | None = None
+
+
 class LegalQueryResponse(StrictModel):
     answer: str
+    findings: list[LegalFinding] = Field(default_factory=list)
     citations: list[LegalCitation]
     retrieved_embeddings: int
     indexed_embeddings: int
