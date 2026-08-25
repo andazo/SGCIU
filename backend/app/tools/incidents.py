@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models import ComplaintSubmission, IncidentCluster
 from app.services.incidents import IncidentNotFoundError, IncidentService
 from app.services.semantic import SemanticIncidentService
+from app.tools.legal import legal_tool_definitions
 from app.tools.registry import ToolDefinition, ToolRegistry
 
 
@@ -23,6 +24,7 @@ class GetIncidentInput(ToolInput):
 class SearchIncidentsInput(ToolInput):
     district: str | None = None
     category: str | None = None
+    synthetic_only: bool | None = None
     limit: int = Field(default=20, ge=1, le=100)
 
 
@@ -30,6 +32,7 @@ class AggregateIncidentsInput(ToolInput):
     group_by: Literal["categoria_preliminar", "distrito"]
     district: str | None = None
     category: str | None = None
+    synthetic_only: bool | None = None
 
 
 class FindRelatedInput(ToolInput):
@@ -59,6 +62,8 @@ def _safe_incident(incident: ComplaintSubmission) -> dict[str, object]:
         "event_datetime": data.get("fecha_hora_aproximada"),
         "summary": incident.ai_summary_text,
         "requires_human_review": incident.requires_human_review,
+        "synthetic": bool((incident.analysis_metadata or {}).get("synthetic")),
+        "synthetic_case_id": (incident.analysis_metadata or {}).get("synthetic_case_id"),
     }
 
 
@@ -74,6 +79,7 @@ def search_incidents(db: Session, arguments: SearchIncidentsInput) -> dict[str, 
     incidents, total = IncidentService(db).list(
         district=arguments.district,
         category=arguments.category,
+        synthetic_only=arguments.synthetic_only,
         limit=arguments.limit,
     )
     return {
@@ -95,10 +101,19 @@ def aggregate_incidents(db: Session, arguments: AggregateIncidentsInput) -> dict
             ComplaintSubmission.ai_extracted_data["categoria_preliminar"].as_string()
             == arguments.category
         )
+    if arguments.synthetic_only is not None:
+        query = query.where(
+            ComplaintSubmission.analysis_metadata["synthetic"].as_boolean()
+            == arguments.synthetic_only
+        )
     rows = db.execute(query.order_by(func.count().desc())).all()
     return {
         "group_by": arguments.group_by,
-        "filters": {"district": arguments.district, "category": arguments.category},
+        "filters": {
+            "district": arguments.district,
+            "category": arguments.category,
+            "synthetic_only": arguments.synthetic_only,
+        },
         "groups": [{"value": value or "sin_clasificar", "count": count} for value, count in rows],
         "total": sum(count for _, count in rows),
     }
@@ -173,14 +188,17 @@ def build_incident_tool_registry() -> ToolRegistry:
             ToolDefinition(
                 name="search_incidents",
                 description=(
-                    "Busca incidentes aplicando filtros opcionales de distrito y categoría."
+                    "Busca incidentes por distrito, categoría y origen sintético opcional."
                 ),
                 input_model=SearchIncidentsInput,
                 handler=search_incidents,
             ),
             ToolDefinition(
                 name="aggregate_incidents",
-                description="Cuenta incidentes agrupados por categoría o distrito usando SQL.",
+                description=(
+                    "Cuenta incidentes por categoría o distrito y permite aislar datos "
+                    "sintéticos con synthetic_only."
+                ),
                 input_model=AggregateIncidentsInput,
                 handler=aggregate_incidents,
             ),
@@ -198,10 +216,14 @@ def build_incident_tool_registry() -> ToolRegistry:
             ),
             ToolDefinition(
                 name="request_human_review",
-                description="Crea una solicitud explícita de revisión humana para un incidente.",
+                description=(
+                    "Crea una revisión de calidad cuando un incidente sea ambiguo, "
+                    "incompleto o requiera validación; no representa despacho de emergencias."
+                ),
                 input_model=RequestReviewInput,
                 handler=request_human_review,
                 mutating=True,
             ),
+            *legal_tool_definitions(),
         ]
     )

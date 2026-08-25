@@ -39,12 +39,18 @@ def get_incident(incident_id: int) -> str:
 def search_incidents(
     district: str | None = None,
     category: str | None = None,
+    synthetic_only: bool | None = None,
     limit: int = 20,
 ) -> str:
     """Busca incidentes por distrito o categoría sin devolver datos de contacto."""
     return _execute(
         "search_incidents",
-        {"district": district, "category": category, "limit": limit},
+        {
+            "district": district,
+            "category": category,
+            "synthetic_only": synthetic_only,
+            "limit": limit,
+        },
     )
 
 
@@ -53,11 +59,17 @@ def aggregate_incidents(
     group_by: str,
     district: str | None = None,
     category: str | None = None,
+    synthetic_only: bool | None = None,
 ) -> str:
     """Agrupa y cuenta incidentes por categoria_preliminar o distrito."""
     return _execute(
         "aggregate_incidents",
-        {"group_by": group_by, "district": district, "category": category},
+        {
+            "group_by": group_by,
+            "district": district,
+            "category": category,
+            "synthetic_only": synthetic_only,
+        },
     )
 
 
@@ -85,18 +97,38 @@ def request_human_review(incident_id: int, reason: str) -> str:
     )
 
 
+@mcp.tool()
+def search_legal_sources(
+    query: str,
+    document_keys: list[str] | None = None,
+    top_k: int = 8,
+) -> str:
+    """Recupera normativa con página exacta y clasificación jurídica permitida."""
+    return _execute(
+        "search_legal_sources",
+        {"query": query, "document_keys": document_keys, "top_k": top_k},
+    )
+
+
+@mcp.tool()
+def get_legal_corpus_status() -> str:
+    """Informa la cobertura y cantidad de embeddings del corpus normativo."""
+    return _execute("get_legal_corpus_status", {})
+
+
 @mcp.resource("sgciu://capabilities")
 def capabilities() -> str:
     """Describe las capacidades y límites del servidor MCP de SGCIU."""
     return json.dumps(
         {
             "server": "sgciu-incident-intelligence",
-            "scope": "incidentes urbanos y clusters candidatos",
+            "scope": "incidentes urbanos, clusters candidatos y corpus normativo",
             "pii": "Los tools no devuelven nombre, correo ni teléfono.",
             "limitations": [
                 "No expone SQL arbitrario.",
                 "No determina culpabilidad.",
                 "Las similitudes requieren supervisión humana.",
+                "Las respuestas normativas no sustituyen criterio jurídico institucional.",
             ],
         },
         ensure_ascii=False,

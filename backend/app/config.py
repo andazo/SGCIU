@@ -29,6 +29,14 @@ def _normalize_database_url(value: str) -> str:
     return value
 
 
+def _as_choice(value: str, allowed: set[str], variable_name: str) -> str:
+    normalized = value.strip().lower()
+    if normalized not in allowed:
+        choices = ", ".join(sorted(allowed))
+        raise ValueError(f"{variable_name} debe ser uno de: {choices}.")
+    return normalized
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     app_name: str
@@ -36,11 +44,24 @@ class Settings:
     database_url: str
     cors_origins: tuple[str, ...]
     log_level: str
-    llm_provider: str
     openai_api_key: str | None
+    openai_timeout_seconds: float
     openai_model: str
+    openai_intake_model: str
+    intake_reasoning_effort: str
+    intake_max_follow_ups: int
     openai_embedding_model: str
     embedding_dimensions: int
+    legal_rag_model: str
+    legal_rag_reasoning_effort: str
+    legal_rag_embedding_model: str
+    legal_rag_embedding_dimensions: int
+    legal_rag_top_k: int
+    legal_rag_candidate_k: int
+    legal_rag_chunk_tokens: int
+    legal_rag_chunk_overlap_tokens: int
+    legal_rag_min_semantic_score: float
+    legal_rag_corpus_path: Path
     llm_input_cost_per_million: float
     llm_output_cost_per_million: float
     embedding_cost_per_million: float
@@ -75,11 +96,42 @@ def get_settings() -> Settings:
         ),
         cors_origins=_as_csv(os.getenv("CORS_ORIGINS"), default_origins),
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
-        llm_provider=os.getenv("LLM_PROVIDER", "openai").lower(),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
+        openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "90")),
         openai_model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
+        openai_intake_model=os.getenv("OPENAI_INTAKE_MODEL", "gpt-5.6"),
+        intake_reasoning_effort=_as_choice(
+            os.getenv("INTAKE_REASONING_EFFORT", "high"),
+            {"none", "low", "medium", "high", "xhigh"},
+            "INTAKE_REASONING_EFFORT",
+        ),
+        intake_max_follow_ups=max(1, int(os.getenv("INTAKE_MAX_FOLLOW_UPS", "4"))),
         openai_embedding_model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
         embedding_dimensions=int(os.getenv("EMBEDDING_DIMENSIONS", "1536")),
+        legal_rag_model=os.getenv("LEGAL_RAG_MODEL", os.getenv("OPENAI_MODEL", "gpt-5.4-mini")),
+        legal_rag_reasoning_effort=_as_choice(
+            os.getenv("LEGAL_RAG_REASONING_EFFORT", "medium"),
+            {"none", "low", "medium", "high", "xhigh"},
+            "LEGAL_RAG_REASONING_EFFORT",
+        ),
+        legal_rag_embedding_model=os.getenv(
+            "LEGAL_RAG_EMBEDDING_MODEL", "text-embedding-3-large"
+        ),
+        legal_rag_embedding_dimensions=int(
+            os.getenv("LEGAL_RAG_EMBEDDING_DIMENSIONS", "1536")
+        ),
+        legal_rag_top_k=max(1, int(os.getenv("LEGAL_RAG_TOP_K", "8"))),
+        legal_rag_candidate_k=max(8, int(os.getenv("LEGAL_RAG_CANDIDATE_K", "40"))),
+        legal_rag_chunk_tokens=max(128, int(os.getenv("LEGAL_RAG_CHUNK_TOKENS", "512"))),
+        legal_rag_chunk_overlap_tokens=max(
+            0, int(os.getenv("LEGAL_RAG_CHUNK_OVERLAP_TOKENS", "77"))
+        ),
+        legal_rag_min_semantic_score=float(
+            os.getenv("LEGAL_RAG_MIN_SEMANTIC_SCORE", "0.25")
+        ),
+        legal_rag_corpus_path=Path(
+            os.getenv("LEGAL_RAG_CORPUS_PATH", str(PROJECT_ROOT / "backend/corpus/legal"))
+        ).expanduser(),
         llm_input_cost_per_million=float(os.getenv("LLM_INPUT_COST_PER_MILLION", "0")),
         llm_output_cost_per_million=float(os.getenv("LLM_OUTPUT_COST_PER_MILLION", "0")),
         embedding_cost_per_million=float(os.getenv("EMBEDDING_COST_PER_MILLION", "0")),

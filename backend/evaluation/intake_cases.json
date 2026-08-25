@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Casos sintéticos y sin datos personales para regresión del intake SGCIU.",
   "cases": [
     {
@@ -54,6 +54,16 @@
       "id": "noise-neighbor-san-joaquin",
       "text": "Soy vecino y hoy reporto ruido de una fiesta en una casa de San Joaquin. Ubicación: 50 metros sur del parque.",
       "expected": {"relacion_incidente": "vecino", "categoria_preliminar": "ruido", "distrito": "San Joaquin", "tipo_lugar": "casa"}
+    },
+    {
+      "id": "robbery-witness-accented-san-joaquin",
+      "text": "Fui testigo de un asalto en la parada de bus en la calle principal de San Joaquín frente a la Tienda Gollo. Esto ocurrió el día lunes 7 de enero a las 4 pm de la tarde.",
+      "expected": {"relacion_incidente": "testigo", "categoria_preliminar": "robo", "distrito": "San Joaquin", "tipo_lugar": "otro"}
+    },
+    {
+      "id": "noise-local-address-typos-llorente",
+      "text": "El día 8 de marzo del 2026, un vecino de llorente estaba haciendo mucho ruido despúes de las 10 de la noche. La direcicón exacta del incidente es 150 mts norte del salón comunal de llorente.",
+      "expected": {"relacion_incidente": null, "categoria_preliminar": "ruido", "distrito": "Llorente", "tipo_lugar": null}
     }
   ]
 }

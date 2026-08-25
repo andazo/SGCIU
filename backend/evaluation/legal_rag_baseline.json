@@ -1,0 +1,17 @@
+{
+  "evaluated_on": "2026-08-24",
+  "environment": "local-postgresql-pgvector",
+  "corpus_version": "2026.08.2",
+  "indexer_version": "legal-index-v1",
+  "dataset_version": "2026.08.2",
+  "embedding_model": "text-embedding-3-large",
+  "embedding_dimensions": 1536,
+  "indexed_embeddings": 4985,
+  "cases": 21,
+  "hit_rate_at_1": 0.8095238095238095,
+  "hit_rate_at_3": 1.0,
+  "hit_rate_at_8": 1.0,
+  "mean_reciprocal_rank": 0.8968253968253967,
+  "average_latency_ms": 657.6640456194235,
+  "misses_at_8": []
+}

@@ -14,6 +14,7 @@ RUN pip install -r requirements.txt
 COPY alembic.ini ./
 COPY migrations ./migrations
 COPY app ./app
+COPY corpus ./corpus
 
 USER sgciu
 EXPOSE 8000

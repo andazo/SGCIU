@@ -35,6 +35,12 @@ def _vector_type():
     return Vector(get_settings().embedding_dimensions).with_variant(JSON(), "sqlite")
 
 
+def _legal_vector_type():
+    if Vector is None:
+        return JSON_TYPE
+    return Vector(get_settings().legal_rag_embedding_dimensions).with_variant(JSON(), "sqlite")
+
+
 class FormSubmission(Base):
     __tablename__ = "form_submissions"
 
@@ -50,6 +56,7 @@ class ComplaintSubmission(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(120), nullable=True)
+    identification = Column(String(64), nullable=True)
     email = Column(String(120), nullable=True, index=True)
     phone = Column(String(40), nullable=True)
     ai_extracted_data = Column(JSON_TYPE, nullable=False)
@@ -67,6 +74,12 @@ class ComplaintSubmission(Base):
 
     embedding_record = relationship("IncidentEmbedding", back_populates="incident", uselist=False)
     cluster_memberships = relationship("IncidentClusterMember", back_populates="incident")
+    highlights = relationship(
+        "IncidentHighlight", back_populates="incident", cascade="all, delete-orphan"
+    )
+    human_reviews = relationship(
+        "HumanReview", back_populates="incident", cascade="all, delete-orphan"
+    )
 
 
 class IntakeSession(Base):
@@ -96,6 +109,75 @@ class IncidentEmbedding(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     incident = relationship("ComplaintSubmission", back_populates="embedding_record")
+
+
+class LegalDocument(Base):
+    __tablename__ = "legal_documents"
+
+    id = Column(Integer, primary_key=True)
+    document_key = Column(String(160), nullable=False, unique=True, index=True)
+    title = Column(String(500), nullable=False)
+    short_title = Column(String(240), nullable=False)
+    source_filename = Column(String(300), nullable=False)
+    source_sha256 = Column(String(64), nullable=False)
+    authority = Column(String(240), nullable=False)
+    jurisdiction = Column(String(120), nullable=False, default="Costa Rica")
+    document_type = Column(String(80), nullable=False)
+    corpus_version = Column(String(40), nullable=False, index=True)
+    page_count = Column(Integer, nullable=False)
+    priority = Column(Integer, nullable=False, default=3)
+    status = Column(String(32), nullable=False, default="active", index=True)
+    document_metadata = Column("metadata", JSON_TYPE, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    chunks = relationship("LegalChunk", back_populates="document", cascade="all, delete-orphan")
+
+
+class LegalChunk(Base):
+    __tablename__ = "legal_chunks"
+    __table_args__ = (UniqueConstraint("document_id", "chunk_index"),)
+
+    id = Column(Integer, primary_key=True)
+    document_id = Column(
+        Integer, ForeignKey("legal_documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    chunk_index = Column(Integer, nullable=False)
+    page_number = Column(Integer, nullable=False, index=True)
+    printed_page_label = Column(String(32), nullable=True)
+    section_path = Column(String(500), nullable=True)
+    article_references = Column(JSON_TYPE, nullable=False, default=list)
+    content = Column(Text, nullable=False)
+    content_hash = Column(String(64), nullable=False, index=True)
+    estimated_tokens = Column(Integer, nullable=False)
+    embedding = Column(_legal_vector_type(), nullable=False)
+    embedding_model = Column(String(120), nullable=False)
+    corpus_version = Column(String(40), nullable=False, index=True)
+    chunk_metadata = Column("metadata", JSON_TYPE, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    document = relationship("LegalDocument", back_populates="chunks")
+
+
+class LegalQueryTrace(Base):
+    __tablename__ = "legal_query_traces"
+
+    id = Column(Integer, primary_key=True)
+    trace_id = Column(String(36), nullable=False, unique=True, index=True)
+    query_hash = Column(String(64), nullable=False)
+    cited_chunk_ids = Column(JSON_TYPE, nullable=False, default=list)
+    retrieved_embeddings = Column(Integer, nullable=False, default=0)
+    indexed_embeddings = Column(Integer, nullable=False, default=0)
+    model_name = Column(String(120), nullable=False)
+    embedding_model = Column(String(120), nullable=False)
+    prompt_version = Column(String(40), nullable=False)
+    corpus_version = Column(String(40), nullable=False)
+    input_tokens = Column(Integer, nullable=False, default=0)
+    output_tokens = Column(Integer, nullable=False, default=0)
+    latency_ms = Column(Float, nullable=False, default=0)
+    success = Column(Boolean, nullable=False, default=True)
+    error_type = Column(String(120), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class IncidentCluster(Base):
@@ -138,10 +220,43 @@ class HumanReview(Base):
         Integer, ForeignKey("complaint_submissions.id", ondelete="CASCADE"), index=True
     )
     reason = Column(Text, nullable=False)
+    review_type = Column(String(64), nullable=False, default="data_quality")
+    ai_summary = Column(Text, nullable=True)
+    quality_issues = Column(JSON_TYPE, nullable=False, default=list)
+    recommended_actions = Column(JSON_TYPE, nullable=False, default=list)
+    contact_available = Column(Boolean, nullable=False, default=False)
     status = Column(String(32), nullable=False, default="pending", index=True)
     resolution_notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+    incident = relationship("ComplaintSubmission", back_populates="human_reviews")
+
+
+class IncidentHighlight(Base):
+    __tablename__ = "incident_highlights"
+
+    id = Column(Integer, primary_key=True)
+    incident_id = Column(
+        Integer,
+        ForeignKey("complaint_submissions.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    attention_level = Column(String(32), nullable=False)
+    reasons = Column(JSON_TYPE, nullable=False, default=list)
+    ai_summary = Column(Text, nullable=False)
+    recommended_precautions = Column(JSON_TYPE, nullable=False, default=list)
+    evidence = Column(JSON_TYPE, nullable=False, default=list)
+    status = Column(String(32), nullable=False, default="pending", index=True)
+    resolution_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+    incident = relationship("ComplaintSubmission", back_populates="highlights")
 
 
 class AssistantFeedback(Base):

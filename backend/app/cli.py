@@ -9,10 +9,12 @@ from pydantic import ValidationError
 from app.agents.gateway import LocalToolGateway, connect_mcp_gateway
 from app.agents.operational import OperationalAgent
 from app.db import SessionLocal
-from app.schemas import IntakeSubmissionRequest
+from app.rag.corpus import LegalCorpusIndexer
+from app.schemas import CitizenProfile, IntakeSubmissionRequest
 from app.services.incidents import IncidentNotFoundError, IncidentService
-from app.services.intake import IntakeService
-from app.services.reviews import ReviewNotFoundError, ReviewService
+from app.services.intake import EMERGENCY_NOTICE, IntakeService
+from app.services.legal_rag import LegalRAGService
+from app.services.reviews import HighlightNotFoundError, ReviewNotFoundError, ReviewService
 from app.services.semantic import SemanticIncidentService
 
 
@@ -25,7 +27,35 @@ def _optional(prompt: str) -> str | None:
     return value or None
 
 
+def _collect_citizen_profile() -> CitizenProfile | None:
+    print("\nInformación general del ciudadano")
+    print("La identificación y los datos de contacto son opcionales.")
+    while True:
+        name = input("Nombre completo: ").strip()
+        if name.casefold() in {"salir", "cancelar"}:
+            return None
+        identification = _optional("Identificación opcional: ")
+        email = _optional("Correo opcional: ")
+        phone = _optional("Teléfono opcional: ")
+        try:
+            return CitizenProfile(
+                name=name,
+                identification=identification,
+                email=email,
+                phone=phone,
+            )
+        except ValidationError as exc:
+            messages = "; ".join(error["msg"] for error in exc.errors())
+            print(f"Revise la información general: {messages}")
+
+
 def run_citizen() -> None:
+    print("\nAviso importante SGCIU")
+    print(EMERGENCY_NOTICE)
+    profile = _collect_citizen_profile()
+    if profile is None:
+        print("Registro cancelado; no se creó ninguna denuncia.")
+        return
     with SessionLocal() as db:
         try:
             service = IntakeService(db)
@@ -58,9 +88,10 @@ def run_citizen() -> None:
                 continue
             try:
                 payload = IntakeSubmissionRequest(
-                    name=_optional("Nombre opcional: "),
-                    email=_optional("Correo opcional: "),
-                    phone=_optional("Teléfono opcional: "),
+                    name=profile.name,
+                    identification=profile.identification,
+                    email=profile.email,
+                    phone=profile.phone,
                     truth_confirmation=True,
                     data_usage_consent=_yes(
                         "¿Acepta el uso institucional de los datos de la denuncia? [s/N]: "
@@ -94,6 +125,10 @@ def _print_incident(db) -> None:
         return
     data = incident.ai_extracted_data or {}
     print(f"\nIncidente #{incident.id}")
+    print("Nombre:", incident.name or "No proporcionado")
+    print("Identificación:", incident.identification or "No proporcionada")
+    print("Correo:", incident.email or "No proporcionado")
+    print("Teléfono:", incident.phone or "No proporcionado")
     print("Resumen:", incident.ai_summary_text or "Sin resumen")
     for field in (
         "categoria_preliminar",
@@ -134,24 +169,150 @@ def _print_clusters(db) -> None:
         print(f"Cluster {cluster.id}: {cluster.label} [{cluster.status}] -> {members}")
 
 
-def _manage_reviews(db) -> None:
+def _manage_clusters(db) -> None:
+    while True:
+        print("\nClusters y embeddings")
+        print("1. Ver clusters candidatos")
+        print("2. Recalcular embeddings y clusters")
+        print("0. Volver")
+        selection = input("Seleccione una opción: ").strip()
+        if selection == "0":
+            return
+        if selection == "1":
+            _print_clusters(db)
+            continue
+        if selection != "2":
+            print("Opción inválida.")
+            continue
+        print(
+            "Esta acción volverá a generar los embeddings con OpenAI y reconstruirá "
+            "los clusters candidatos."
+        )
+        if not _yes("¿Desea continuar? [s/N]: "):
+            continue
+        result = SemanticIncidentService(db).recalculate_all()
+        print("\nRecálculo semántico completado")
+        print("Incidentes encontrados:", result.incidents_found)
+        print("Embeddings actualizados:", result.embeddings_updated)
+        print("Embeddings fallidos:", result.embeddings_failed)
+        print("Clusters reconstruidos:", result.clusters_rebuilt)
+        print("Miembros agrupados:", result.cluster_members)
+
+
+def _print_recommended_actions(actions: list[dict[str, str]]) -> None:
+    if not actions:
+        print("Acciones sugeridas: ninguna")
+        return
+    print("Acciones sugeridas:")
+    for action in actions:
+        print(f"  - {action.get('code')}: {action.get('rationale')}")
+
+
+def _manage_quality_reviews(db) -> None:
     service = ReviewService(db)
-    reviews = service.list("pending")
+    reviews = service.list_active()
     if not reviews:
-        print("No hay revisiones pendientes.")
+        print("No hay revisiones de calidad activas.")
         return
     for review in reviews:
-        print(f"Revisión {review.id} | incidente #{review.incident_id} | {review.reason}")
-    if not _yes("¿Desea resolver una revisión? [s/N]: "):
+        print(
+            f"\nRevisión {review.id} | incidente #{review.incident_id} | "
+            f"{review.review_type} | {review.status}"
+        )
+        print("Motivo:", review.reason)
+        print("Análisis IA:", review.ai_summary or "Sin análisis detallado")
+        print("Problemas detectados:", "; ".join(review.quality_issues) or "No detallados")
+        print("Contacto disponible:", "sí" if review.contact_available else "no")
+        _print_recommended_actions(review.recommended_actions)
+    if not _yes("¿Desea gestionar una revisión? [s/N]: "):
         return
     try:
         review_id = int(input("ID de revisión: "))
-        notes = input("Notas de resolución: ").strip()
-        review = service.resolve(review_id, notes)
+        print("1. Iniciar revisión")
+        print("2. Resolver")
+        print("3. Descartar revisión por información insuficiente")
+        print("4. Escalar")
+        action = {"1": "start", "2": "resolve", "3": "dismiss", "4": "escalate"}.get(
+            input("Acción: ").strip()
+        )
+        if action is None:
+            raise ValueError
+        notes = input("Notas de la decisión: ").strip()
+        if len(notes) < 3:
+            raise ValueError
+        review = service.transition_review(review_id, action, notes)
     except (ValueError, ReviewNotFoundError):
-        print("No se pudo resolver la revisión.")
+        print("No se pudo actualizar la revisión.")
         return
-    print(f"Revisión {review.id} resuelta.")
+    print(f"Revisión {review.id} actualizada a {review.status}.")
+
+
+def _manage_highlights(db) -> None:
+    service = ReviewService(db)
+    highlights = service.list_active_highlights()
+    if not highlights:
+        print("No hay resaltados operativos activos.")
+        return
+    for highlight in highlights:
+        print(
+            f"\nResaltado {highlight.id} | incidente #{highlight.incident_id} | "
+            f"atención={highlight.attention_level} | {highlight.status}"
+        )
+        print("Razones:", "; ".join(highlight.reasons))
+        print("Resumen IA:", highlight.ai_summary)
+        print("Precauciones sugeridas:")
+        for precaution in highlight.recommended_precautions:
+            print("  -", precaution)
+        if highlight.evidence:
+            print("Evidencia utilizada:", "; ".join(highlight.evidence))
+    if not _yes("¿Desea gestionar un resaltado? [s/N]: "):
+        return
+    try:
+        highlight_id = int(input("ID del resaltado: "))
+        print("1. Iniciar análisis")
+        print("2. Resolver")
+        print("3. Escalar")
+        action = {"1": "start", "2": "resolve", "3": "escalate"}.get(input("Acción: ").strip())
+        if action is None:
+            raise ValueError
+        notes = input("Notas de la decisión: ").strip()
+        if len(notes) < 3:
+            raise ValueError
+        highlight = service.transition_highlight(highlight_id, action, notes)
+    except (ValueError, HighlightNotFoundError):
+        print("No se pudo actualizar el resaltado.")
+        return
+    print(f"Resaltado {highlight.id} actualizado a {highlight.status}.")
+
+
+def _manage_reviews(db) -> None:
+    while True:
+        print("\nResaltados y revisiones de calidad")
+        print("1. Gestionar resaltados operativos")
+        print("2. Gestionar revisiones de calidad")
+        print("3. Analizar con IA incidentes pendientes")
+        print("0. Volver")
+        selection = input("Seleccione una opción: ").strip()
+        if selection == "0":
+            return
+        if selection == "1":
+            _manage_highlights(db)
+        elif selection == "2":
+            _manage_quality_reviews(db)
+        elif selection == "3":
+            if not _yes("¿Analizar los incidentes pendientes con OpenAI? [s/N]: "):
+                continue
+            pending, completed, failed = ReviewService(db).assess_pending_incidents(
+                lambda position, total, incident_id: print(
+                    f"  [{position}/{total}] incidente #{incident_id} procesado"
+                )
+            )
+            print(
+                f"Análisis finalizado: pendientes={pending}, completados={completed}, "
+                f"fallidos={failed}."
+            )
+        else:
+            print("Opción inválida.")
 
 
 async def _ask_agent(db, transport: str) -> None:
@@ -165,6 +326,7 @@ async def _ask_agent(db, transport: str) -> None:
         response = await OperationalAgent(LocalToolGateway(db)).run(query)
     print("\nAgente:", response.answer)
     print("Incidentes citados:", response.incident_citations or "ninguno")
+    print("Fuentes normativas citadas:", response.legal_citations or "ninguna")
     print("Trace ID:", response.trace_id)
     for step in response.steps:
         print(
@@ -173,14 +335,113 @@ async def _ask_agent(db, transport: str) -> None:
         )
 
 
+def _print_legal_corpus_status(db) -> None:
+    status = LegalCorpusIndexer(db).status()
+    print(f"\nCorpus normativo SGCIU {status.corpus_version}")
+    print(
+        f"Documentos: {status.indexed_documents}/{status.documents_in_manifest} | "
+        f"embeddings indexados: {status.indexed_embeddings}"
+    )
+    for document in status.documents:
+        print(
+            f"- {document.title} | páginas={document.page_count} | "
+            f"embeddings={document.embeddings}"
+        )
+    if status.known_gaps:
+        print("Vacíos documentales conocidos:")
+        for gap in status.known_gaps:
+            print("  -", gap)
+
+
+def _ask_legal_rag(db) -> None:
+    query = input("Consulta normativa: ").strip()
+    if not query:
+        return
+    try:
+        response = LegalRAGService(db).answer(query)
+    except RuntimeError as exc:
+        print(f"No se pudo completar la consulta normativa: {exc}")
+        return
+    print("\nAsistente normativo SGCIU:\n", response.answer, sep="")
+    print(
+        f"\nEmbeddings recuperados: {response.retrieved_embeddings} | "
+        f"embeddings indexados: {response.indexed_embeddings}"
+    )
+    print("Fuentes verificables:")
+    if not response.citations:
+        print("  Ninguna; la respuesta se marcó con evidencia insuficiente.")
+    for citation in response.citations:
+        articles = ", ".join(citation.article_references) or "sin artículo detectado"
+        printed = (
+            f" (numeración impresa {citation.printed_page_label})"
+            if citation.printed_page_label
+            else ""
+        )
+        print(
+            f"  [{citation.source_id}] {citation.document_title} | página PDF "
+            f"{citation.pdf_page}{printed} | {articles} | chunk #{citation.chunk_id}"
+        )
+        classifications = ", ".join(citation.allowed_classifications)
+        print(
+            f"      alcance={citation.authority_scope} | fuerza={citation.legal_force} | "
+            f"clasificaciones permitidas={classifications}"
+        )
+        print(
+            f"      ranking: semántico={citation.semantic_score:.3f}, "
+            f"léxico={citation.lexical_score:.3f}, híbrido={citation.fusion_score:.3f}"
+        )
+    for caveat in response.caveats:
+        print("Aviso:", caveat)
+    print("Trace ID:", response.trace_id)
+    print("Esta orientación no sustituye criterio jurídico institucional.")
+
+
+def _manage_legal_rag(db) -> None:
+    while True:
+        print("\nConsulta normativa RAG")
+        print("1. Ver estado del corpus")
+        print("2. Indexar o actualizar documentos")
+        print("3. Consultar normativa")
+        print("0. Volver")
+        selection = input("Seleccione una opción: ").strip()
+        if selection == "0":
+            return
+        if selection == "1":
+            _print_legal_corpus_status(db)
+        elif selection == "2":
+            print(
+                "Se validarán los PDF y se crearán embeddings solo para documentos "
+                "nuevos o modificados. Esta acción utiliza OpenAI."
+            )
+            if not _yes("¿Desea continuar? [s/N]: "):
+                continue
+            result = LegalCorpusIndexer(db).index_all(
+                progress=lambda position, total, key, status: print(
+                    f"  [{position}/{total}] {key}: {status}"
+                )
+            )
+            print(
+                f"Indexación finalizada: documentos actualizados={result.documents_indexed}, "
+                f"sin cambios={result.documents_skipped}, fallidos={result.documents_failed}, "
+                f"embeddings creados={result.embeddings_created}."
+            )
+            for failure in result.failures:
+                print("  Error:", failure)
+        elif selection == "3":
+            _ask_legal_rag(db)
+        else:
+            print("Opción inválida.")
+
+
 def run_admin(transport: str) -> None:
     options = {
         "1": "Listar incidentes",
         "2": "Consultar detalle",
         "3": "Buscar relacionados",
-        "4": "Ver clusters candidatos",
+        "4": "Clusters y recálculo de embeddings",
         "5": "Preguntar al agente operativo",
-        "6": "Gestionar revisiones humanas",
+        "6": "Gestionar resaltados y revisiones de calidad",
+        "7": "Consultar normativa (RAG)",
         "0": "Salir",
     }
     with SessionLocal() as db:
@@ -198,11 +459,13 @@ def run_admin(transport: str) -> None:
             elif selection == "3":
                 _print_related(db)
             elif selection == "4":
-                _print_clusters(db)
+                _manage_clusters(db)
             elif selection == "5":
                 asyncio.run(_ask_agent(db, transport))
             elif selection == "6":
                 _manage_reviews(db)
+            elif selection == "7":
+                _manage_legal_rag(db)
             else:
                 print("Opción inválida.")
 

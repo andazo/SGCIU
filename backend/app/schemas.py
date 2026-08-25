@@ -28,10 +28,68 @@ CategoriaPreliminar = Literal[
 Distrito = Literal["San Joaquin", "Barrantes", "Llorente"]
 TipoLugar = Literal["establecimiento", "casa", "parque", "escuela", "otro"]
 Urgencia = Literal["baja", "media", "alta", "inmediata"]
+IntakeFieldStatus = Literal["known", "missing", "ambiguous", "unknown", "declined"]
+IntakeCompletionReason = Literal[
+    "needs_follow_up",
+    "all_fields_resolved",
+    "user_finished",
+    "follow_up_limit_reached",
+]
+ReviewType = Literal[
+    "data_quality",
+    "classification",
+    "location_validation",
+    "possible_duplicate",
+    "sensitive_content",
+    "agent_request",
+]
+ReviewStatus = Literal["pending", "in_review", "resolved", "dismissed", "escalated"]
+HighlightStatus = Literal["pending", "in_review", "resolved", "escalated"]
+AttentionLevel = Literal["prompt", "priority"]
+ReviewActionCode = Literal[
+    "inspect_incident",
+    "search_related",
+    "validate_location",
+    "reclassify",
+    "contact_citizen",
+    "dismiss_if_unrecoverable",
+    "escalate_authorized",
+]
 
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class CitizenProfile(StrictModel):
+    name: str = Field(min_length=2, max_length=120)
+    identification: str | None = Field(default=None, max_length=64)
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=40)
+
+    @field_validator("name")
+    @classmethod
+    def strip_required_name(cls, value: str):
+        value = value.strip()
+        if len(value) < 2:
+            raise ValueError("El nombre completo es obligatorio.")
+        return value
+
+    @field_validator("identification", "phone", mode="before")
+    @classmethod
+    def empty_optional_values_to_none(cls, value):
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def empty_optional_email_to_none(cls, value):
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
 
 
 class FormSubmissionCreate(BaseModel):
@@ -83,6 +141,28 @@ class FieldConfidence(StrictModel):
         return self
 
 
+class IntakeFieldObservation(StrictModel):
+    status: IntakeFieldStatus = "missing"
+    confidence: float | None = None
+    evidence: str | None = None
+
+    @model_validator(mode="after")
+    def confidence_must_be_normalized(self):
+        if self.confidence is not None and not 0 <= self.confidence <= 1:
+            raise ValueError("La confianza del campo debe estar entre 0 y 1.")
+        return self
+
+
+class IntakeFieldStates(StrictModel):
+    descripcion_detallada: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
+    relacion_incidente: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
+    categoria_preliminar: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
+    distrito: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
+    direccion_exacta: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
+    tipo_lugar: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
+    fecha_hora_aproximada: IntakeFieldObservation = Field(default_factory=IntakeFieldObservation)
+
+
 class ComplaintExtractedData(StrictModel):
     descripcion_detallada: str | None = None
     relacion_incidente: RelacionIncidente | None = None
@@ -94,6 +174,7 @@ class ComplaintExtractedData(StrictModel):
     entities: IncidentEntities = Field(default_factory=IncidentEntities)
     urgency: Urgencia = "media"
     confidence_by_field: FieldConfidence = Field(default_factory=FieldConfidence)
+    field_states: IntakeFieldStates = Field(default_factory=IntakeFieldStates)
 
 
 class ChatMessage(StrictModel):
@@ -123,12 +204,15 @@ class ComplaintIntakeChatResponse(StrictModel):
     requires_human_review: bool = False
     review_reason: str | None = None
     emergency_guidance: bool = False
+    user_wants_to_finish: bool = False
+    completion_reason: IntakeCompletionReason = "needs_follow_up"
     model_name: str | None = None
-    prompt_version: str = "intake-v2"
+    prompt_version: str = "intake-v4"
 
 
 class IntakeSessionCreateResponse(StrictModel):
     session_id: str
+    emergency_notice: str
     assistant_message: str
     prompt_version: str
 
@@ -151,12 +235,17 @@ class IntakeSessionResponse(StrictModel):
     summary_text: str | None
     requires_human_review: bool
     review_reason: str | None
+    emergency_guidance_shown: bool = False
+    user_wants_to_finish: bool
+    completion_reason: IntakeCompletionReason
+    follow_up_count: int
     model_name: str | None
     prompt_version: str
 
 
 class ComplaintSubmissionCreate(BaseModel):
     name: str | None = None
+    identification: str | None = Field(default=None, max_length=64)
     email: EmailStr | None = None
     phone: str | None = None
     ai_extracted_data: ComplaintExtractedData
@@ -169,7 +258,9 @@ class ComplaintSubmissionCreate(BaseModel):
     truth_confirmation: bool
     data_usage_consent: bool
 
-    @field_validator("name", "phone", "ai_summary_text", "review_reason", mode="before")
+    @field_validator(
+        "name", "identification", "phone", "ai_summary_text", "review_reason", mode="before"
+    )
     @classmethod
     def empty_strings_to_none(cls, value):
         if isinstance(value, str) and not value.strip():
@@ -196,6 +287,7 @@ class ComplaintSubmissionCreate(BaseModel):
 
 class IntakeSubmissionRequest(StrictModel):
     name: str | None = None
+    identification: str | None = Field(default=None, max_length=64)
     email: EmailStr | None = None
     phone: str | None = None
     truth_confirmation: bool
@@ -207,6 +299,7 @@ class ComplaintSubmissionResponse(BaseModel):
 
     id: int
     name: str | None
+    identification: str | None
     email: str | None
     phone: str | None
     ai_extracted_data: ComplaintExtractedData
@@ -236,9 +329,32 @@ class HumanReviewResponse(BaseModel):
     id: int
     incident_id: int
     reason: str
+    review_type: str
+    ai_summary: str | None
+    quality_issues: list[str]
+    recommended_actions: list[dict[str, str]]
+    contact_available: bool
     status: str
     resolution_notes: str | None
     created_at: datetime
+    updated_at: datetime | None
+    resolved_at: datetime | None
+
+
+class IncidentHighlightResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    incident_id: int
+    attention_level: str
+    reasons: list[str]
+    ai_summary: str
+    recommended_precautions: list[str]
+    evidence: list[str]
+    status: str
+    resolution_notes: str | None
+    created_at: datetime
+    updated_at: datetime | None
     resolved_at: datetime | None
 
 
@@ -271,6 +387,14 @@ class IncidentClusterResponse(StrictModel):
     members: list[ClusterMemberResponse]
 
 
+class SemanticRecalculationResponse(StrictModel):
+    incidents_found: int
+    embeddings_updated: int
+    embeddings_failed: int
+    clusters_rebuilt: int
+    cluster_members: int
+
+
 class OperationalQueryRequest(StrictModel):
     query: str = Field(min_length=3, max_length=2_000)
 
@@ -294,6 +418,7 @@ class ModelUsage(StrictModel):
 class OperationalQueryResponse(StrictModel):
     answer: str
     incident_citations: list[int]
+    legal_citations: list[str] = Field(default_factory=list)
     trace_id: str
     steps: list[ToolExecutionTrace]
     model_name: str
@@ -302,7 +427,93 @@ class OperationalQueryResponse(StrictModel):
     usage: ModelUsage = Field(default_factory=ModelUsage)
 
 
+class LegalQueryRequest(StrictModel):
+    query: str = Field(min_length=3, max_length=4_000)
+    document_keys: list[str] | None = Field(default=None, max_length=20)
+
+
+class LegalCitation(StrictModel):
+    source_id: str
+    chunk_id: int
+    document_key: str
+    document_title: str
+    source_filename: str
+    pdf_page: int
+    printed_page_label: str | None = None
+    article_references: list[str] = Field(default_factory=list)
+    source_category: str
+    legal_force: str
+    authority_scope: str
+    allowed_classifications: list[str] = Field(default_factory=list)
+    excerpt: str
+    semantic_score: float
+    lexical_score: float
+    fusion_score: float
+
+
+class LegalFinding(StrictModel):
+    classification: Literal[
+        "legal_obligation", "municipal_authority", "recommended_procedure"
+    ]
+    statement: str
+    source_ids: list[str] = Field(min_length=1)
+    applicability_note: str | None = None
+
+
+class LegalQueryResponse(StrictModel):
+    answer: str
+    findings: list[LegalFinding] = Field(default_factory=list)
+    citations: list[LegalCitation]
+    retrieved_embeddings: int
+    indexed_embeddings: int
+    trace_id: str
+    model_name: str
+    embedding_model: str
+    prompt_version: str
+    corpus_version: str
+    insufficient_evidence: bool = False
+    caveats: list[str] = Field(default_factory=list)
+    usage: ModelUsage = Field(default_factory=ModelUsage)
+
+
+class LegalCorpusDocumentStatus(StrictModel):
+    document_key: str
+    title: str
+    page_count: int
+    embeddings: int
+    status: str
+    source_sha256: str
+
+
+class LegalCorpusStatus(StrictModel):
+    corpus_version: str
+    documents_in_manifest: int
+    indexed_documents: int
+    indexed_embeddings: int
+    known_gaps: list[str] = Field(default_factory=list)
+    documents: list[LegalCorpusDocumentStatus] = Field(default_factory=list)
+
+
+class LegalIndexingResult(StrictModel):
+    corpus_version: str
+    documents_found: int
+    documents_indexed: int
+    documents_skipped: int
+    documents_failed: int
+    embeddings_created: int
+    failures: list[str] = Field(default_factory=list)
+
+
+class LegalIndexingRequest(StrictModel):
+    force: bool = False
+
+
 class ResolveReviewRequest(StrictModel):
+    notes: str = Field(min_length=3, max_length=2_000)
+
+
+class WorkflowTransitionRequest(StrictModel):
+    action: Literal["start", "resolve", "dismiss", "escalate"]
     notes: str = Field(min_length=3, max_length=2_000)
 
 

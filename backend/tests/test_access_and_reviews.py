@@ -8,7 +8,7 @@ from app.api.dependencies import validate_admin_key
 from app.cli import parse_args
 from app.config import get_settings
 from app.main import app
-from app.models import HumanReview
+from app.models import HumanReview, IncidentHighlight
 from app.schemas import ComplaintExtractedData, ComplaintSubmissionCreate
 from app.services.incidents import IncidentService
 from app.services.reviews import ReviewService
@@ -73,6 +73,51 @@ def test_review_resolution_updates_incident_state(db_session):
     assert incident.status == "reviewed"
     assert incident.requires_human_review is False
     assert db_session.scalar(select(HumanReview).where(HumanReview.id == review.id)) is resolved
+
+
+def test_incident_can_have_highlight_and_quality_review_and_dismiss_preserves_it(db_session):
+    incident = IncidentService(db_session).create(
+        ComplaintSubmissionCreate(
+            ai_extracted_data=ComplaintExtractedData(
+                descripcion_detallada="Se reportó un robo violento, pero falta la dirección.",
+                relacion_incidente="testigo",
+                categoria_preliminar="robo",
+                distrito="San Joaquin",
+                fecha_hora_aproximada="anoche",
+                urgency="alta",
+            ),
+            requires_human_review=True,
+            review_reason="La ubicación es insuficiente.",
+            truth_confirmation=True,
+            data_usage_consent=True,
+        )
+    )
+
+    review = db_session.scalar(select(HumanReview).where(HumanReview.incident_id == incident.id))
+    highlight = db_session.scalar(
+        select(IncidentHighlight).where(IncidentHighlight.incident_id == incident.id)
+    )
+
+    assert review is not None
+    assert highlight is not None
+    assert review.contact_available is False
+    assert any(
+        action["code"] == "dismiss_if_unrecoverable"
+        for action in review.recommended_actions
+    )
+    assert highlight.status == "pending"
+
+    dismissed = ReviewService(db_session).transition_review(
+        review.id,
+        "dismiss",
+        "No existe contacto ni información suficiente para aclarar la ubicación.",
+    )
+
+    assert dismissed.status == "dismissed"
+    assert incident.status == "insufficient_information"
+    assert incident.requires_human_review is False
+    assert db_session.get(type(incident), incident.id) is incident
+    assert highlight.status == "pending"
 
 
 def test_cli_accepts_explicit_role_and_mcp_transport():

@@ -34,8 +34,6 @@ def evaluate_user_message(content: str) -> GuardrailResult:
     if any(re.search(pattern, normalized) for pattern in EMERGENCY_PATTERNS):
         return GuardrailResult(
             emergency_guidance=True,
-            requires_human_review=True,
-            review_reason="El relato contiene señales de posible riesgo inmediato.",
         )
     return GuardrailResult()
 
@@ -53,7 +51,5 @@ def evaluate_analysis(data: ComplaintExtractedData) -> GuardrailResult:
     if data.urgency == "inmediata":
         return GuardrailResult(
             emergency_guidance=True,
-            requires_human_review=True,
-            review_reason="La clasificación preliminar indica urgencia inmediata.",
         )
     return GuardrailResult()

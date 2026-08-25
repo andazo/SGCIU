@@ -109,7 +109,12 @@ class MCPToolGateway(ToolGateway):
         if response.isError:
             raise RuntimeError(f"MCP tool failed: {name}")
         if response.structuredContent:
-            return dict(response.structuredContent)
+            structured = dict(response.structuredContent)
+            wrapped = structured.get("result")
+            if len(structured) == 1 and isinstance(wrapped, str):
+                parsed = json.loads(wrapped)
+                return parsed if isinstance(parsed, dict) else {"result": parsed}
+            return structured
         text_parts = [item.text for item in response.content if hasattr(item, "text")]
         if not text_parts:
             return {}

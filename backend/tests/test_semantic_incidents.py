@@ -1,7 +1,7 @@
-from app.ai.embeddings import DeterministicEmbeddingProvider
 from app.schemas import ComplaintExtractedData, ComplaintSubmissionCreate, IncidentEntities
 from app.services.incidents import IncidentService
 from app.services.semantic import SemanticIncidentService, canonical_incident_text
+from tests.fakes import LocalEmbeddingDouble
 
 
 def incident_payload(description: str, address: str) -> ComplaintSubmissionCreate:
@@ -36,7 +36,7 @@ def test_similar_incidents_are_indexed_and_grouped(db_session):
 
     service = SemanticIncidentService(
         db_session,
-        provider=DeterministicEmbeddingProvider(),
+        provider=LocalEmbeddingDouble(),
     )
     related = service.find_related(second, top_k=3)
     clusters = service.list_clusters()
@@ -61,3 +61,23 @@ def test_canonical_text_redacts_people_and_contact_data(db_session):
     assert "8888-9999" not in text
     assert "juan@example.com" not in text
     assert "[PERSONA]" in text
+
+
+def test_manual_recalculation_rebuilds_embeddings_and_clusters(db_session):
+    IncidentService(db_session).create(
+        incident_payload("Ruido recurrente frente a la escuela.", "Frente a la escuela")
+    )
+    IncidentService(db_session).create(
+        incident_payload("Ruido recurrente frente a la escuela.", "Frente a la escuela")
+    )
+
+    result = SemanticIncidentService(
+        db_session,
+        provider=LocalEmbeddingDouble(),
+    ).recalculate_all()
+
+    assert result.incidents_found == 2
+    assert result.embeddings_updated == 2
+    assert result.embeddings_failed == 0
+    assert result.clusters_rebuilt == 1
+    assert result.cluster_members == 2

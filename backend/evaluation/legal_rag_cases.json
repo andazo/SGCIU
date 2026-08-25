@@ -1,0 +1,129 @@
+{
+  "version": "2026.08.2",
+  "description": "Consultas sintéticas para medir recuperación normativa del corpus ampliado de SGCIU.",
+  "cases": [
+    {
+      "case_id": "RAG-001",
+      "query": "¿Cuáles son las funciones preventivas y los límites de la Policía Municipal de Flores?",
+      "expected_document_keys": [
+        "reglamento-policia-municipal-flores",
+        "ley-9542-policia-municipal"
+      ]
+    },
+    {
+      "case_id": "RAG-002",
+      "query": "¿Qué requisitos establece la ley para crear y fortalecer una policía municipal?",
+      "expected_document_keys": ["ley-9542-policia-municipal"]
+    },
+    {
+      "case_id": "RAG-003",
+      "query": "¿Cómo se presenta y atiende una denuncia por ruido ambiental durante la noche?",
+      "expected_document_keys": ["decreto-44486-s-control-ruido"]
+    },
+    {
+      "case_id": "RAG-004",
+      "query": "¿Qué reglas debe considerar Flores para una licencia de venta de bebidas alcohólicas?",
+      "expected_document_keys": [
+        "reglamento-alcohol-flores",
+        "ley-9047-bebidas-alcoholicas"
+      ]
+    },
+    {
+      "case_id": "RAG-005",
+      "query": "¿Qué restricciones existen para portar o manipular armas de fuego?",
+      "expected_document_keys": ["ley-7530-armas-explosivos"]
+    },
+    {
+      "case_id": "RAG-006",
+      "query": "¿Qué medidas de protección existen ante una situación de violencia doméstica?",
+      "expected_document_keys": [
+        "ley-7586-violencia-domestica",
+        "protocolo-violencia-intrafamiliar"
+      ]
+    },
+    {
+      "case_id": "RAG-007",
+      "query": "¿Cómo debe intervenir la policía ante acoso sexual en un espacio público?",
+      "expected_document_keys": ["protocolo-acoso-sexual-espacios-publicos"]
+    },
+    {
+      "case_id": "RAG-008",
+      "query": "¿Qué normativa aplica a un vehículo mal estacionado que obstruye la vía pública?",
+      "expected_document_keys": ["ley-9078-transito"]
+    },
+    {
+      "case_id": "RAG-009",
+      "query": "¿Cuáles son los principios y deberes generales de los cuerpos policiales en Costa Rica?",
+      "expected_document_keys": ["ley-7410-general-policia"]
+    },
+    {
+      "case_id": "RAG-010",
+      "query": "¿Qué competencias tiene el Ministerio de Salud frente a contaminación que afecta a la comunidad?",
+      "expected_document_keys": ["ley-5395-general-salud"]
+    },
+    {
+      "case_id": "RAG-011",
+      "query": "¿Qué competencias y responsabilidades generales corresponden a una municipalidad?",
+      "expected_document_keys": ["ley-7794-codigo-municipal"]
+    },
+    {
+      "case_id": "RAG-012",
+      "query": "¿Qué principios debe respetar una actuación de la administración pública?",
+      "expected_document_keys": ["ley-6227-administracion-publica"]
+    },
+    {
+      "case_id": "RAG-013",
+      "query": "¿Qué obligaciones existen al recolectar y almacenar datos personales de una denuncia ciudadana?",
+      "expected_document_keys": [
+        "ley-8968-proteccion-datos-personales",
+        "decreto-37554-reglamento-datos-personales"
+      ]
+    },
+    {
+      "case_id": "RAG-014",
+      "query": "¿Qué procedimiento de cadena de custodia debe seguirse al recibir y trasladar un indicio material?",
+      "expected_document_keys": ["protocolo-cadena-custodia-2020"]
+    },
+    {
+      "case_id": "RAG-015",
+      "query": "¿Qué protección especial corresponde cuando una persona menor de edad participa como víctima o testigo?",
+      "expected_document_keys": ["ley-7739-codigo-ninez-adolescencia"]
+    },
+    {
+      "case_id": "RAG-016",
+      "query": "¿Qué competencias tiene la municipalidad para reglamentar la recolección y disposición de residuos?",
+      "expected_document_keys": ["ley-8839-gestion-integral-residuos"]
+    },
+    {
+      "case_id": "RAG-017",
+      "query": "¿Qué obligaciones de bienestar animal aplican ante un reporte de maltrato o abandono?",
+      "expected_document_keys": ["ley-7451-bienestar-animales"]
+    },
+    {
+      "case_id": "RAG-018",
+      "query": "¿Qué medidas y deberes de confidencialidad existen para proteger a víctimas y testigos de un proceso penal?",
+      "expected_document_keys": ["ley-8720-proteccion-victimas-testigos"]
+    },
+    {
+      "case_id": "RAG-019",
+      "query": "¿Qué establece la ley sobre la actuación policial sin dilación ante acoso sexual callejero?",
+      "expected_document_keys": [
+        "ley-9877-acoso-sexual-callejero",
+        "protocolo-acoso-sexual-espacios-publicos"
+      ]
+    },
+    {
+      "case_id": "RAG-020",
+      "query": "¿Qué requisitos reglamentarios aplican a permisos, matrícula y portación de armas?",
+      "expected_document_keys": [
+        "decreto-37985-reglamento-armas-explosivos",
+        "ley-7530-armas-explosivos"
+      ]
+    },
+    {
+      "case_id": "RAG-021",
+      "query": "¿Qué deberes de servicio establece el reglamento para los cuerpos policiales adscritos al Ministerio de Seguridad Pública?",
+      "expected_document_keys": ["decreto-23880-reglamento-cuerpos-policiales"]
+    }
+  ]
+}

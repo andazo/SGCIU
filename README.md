@@ -10,20 +10,23 @@ conserva como prototipo, pero no es el foco de esta etapa.
 
 ## Funcionalidades implementadas
 
-- Sesiones persistentes de intake ciudadano con correcciones acumulativas.
-- Clasificación, resumen, entidades, urgencia y confianza por campo.
+- Sesiones persistentes de intake ciudadano con correcciones acumulativas y razonamiento
+  de alta precisión mediante OpenAI.
+- Registro previo por CLI de nombre, identificación y contacto antes del relato.
+- Clasificación, resumen, entidades, urgencia, evidencia y confianza por campo.
+- Follow-ups priorizados según valor operativo, con cierre parcial cuando la persona no
+  sabe o no desea aportar más información.
 - Revisión humana ante baja confianza, riesgo inmediato o prompt injection.
 - Embeddings de incidentes con PostgreSQL y `pgvector`.
 - Detección híbrida de incidentes relacionados y clusters candidatos.
 - Agente operativo ReAct con límite de pasos, tools y trazas sanitizadas.
 - Servidor MCP `sgciu-incident-intelligence` sin acceso a SQL arbitrario.
+- RAG normativo con corpus versionado, extracción por página, recuperación híbrida,
+  abstención y citas verificables de documento, página PDF y artículo detectado.
 - Control opcional de endpoints administrativos mediante `X-Admin-Key`.
 - CLI para ciudadanos y administradores.
 - Dataset sintético y métricas reproducibles para regresión del workflow.
 - Logs JSON con correlation IDs, latencia, tokens y auditoría de tools.
-
-El RAG de políticas municipales está deliberadamente fuera de esta versión porque aún
-no se dispone del corpus documental autorizado.
 
 ## Ejecución local
 
@@ -38,8 +41,18 @@ python3 -m venv .venv
 .venv/bin/alembic -c alembic.ini upgrade head
 ```
 
-Para trabajar sin consumir una API externa, configure `LLM_PROVIDER=mock`. Para usar
-OpenAI, configure `LLM_PROVIDER=openai` y `OPENAI_API_KEY`.
+El runtime usa exclusivamente servicios de OpenAI. Configure `OPENAI_API_KEY`; el modelo
+general se define con `OPENAI_MODEL` y el intake ciudadano, de forma independiente, con
+`OPENAI_INTAKE_MODEL`. `INTAKE_REASONING_EFFORT=high` activa razonamiento reforzado solo en
+la recepción ciudadana y `INTAKE_MAX_FOLLOW_UPS` limita la extensión de la conversación.
+
+La suite automatizada reemplaza las conexiones externas mediante dobles ubicados únicamente
+en `backend/tests/`; no existe un modo offline seleccionable en la aplicación.
+
+El RAG utiliza de forma independiente `LEGAL_RAG_MODEL` y
+`LEGAL_RAG_EMBEDDING_MODEL`. El valor recomendado y configurado por defecto para el corpus
+en español es `text-embedding-3-large` reducido a 1536 dimensiones. Los embeddings legales
+no se mezclan con los embeddings de denuncias.
 
 ### Interfaz terminal
 
@@ -55,6 +68,102 @@ También se puede seleccionar el rol directamente:
 .venv/bin/python -m app.cli --role admin --transport local
 .venv/bin/python -m app.cli --role admin --transport mcp
 ```
+
+El flujo ciudadano solicita primero el nombre completo. La identificación, el correo y el
+teléfono son opcionales; estos datos se persisten con la denuncia, pero se excluyen de
+embeddings, tools del agente y trazas. El agente entiende referencias locales de Costa Rica,
+registra evidencia por campo y permite terminar con frases como `eso es todo` o
+`no tengo más información`; en ese caso guarda el reporte con los datos disponibles.
+
+### Datos sintéticos para el panel administrativo
+
+El repositorio incluye 50 incidentes completamente ficticios y sin datos personales para
+probar listados, búsquedas, embeddings, clusters, revisiones humanas y el agente ReAct. Antes
+de cargarlos, asegúrese de que PostgreSQL esté activo y que `OPENAI_API_KEY` esté configurada:
+
+```bash
+cd backend
+.venv/bin/alembic -c alembic.ini upgrade head
+.venv/bin/python -m app.evaluation.seed_incidents
+```
+
+El comando es idempotente: cada caso tiene un identificador `FLO-*` y las ejecuciones
+posteriores omiten registros existentes. También intenta completar embeddings pendientes. El
+resultado indica cuántos casos fueron creados, omitidos, indexados y agrupados.
+
+Después puede iniciar el administrador:
+
+```bash
+.venv/bin/python -m app.cli --role admin --transport mcp
+```
+
+Consultas sugeridas para la opción `5. Preguntar al agente operativo`:
+
+- `¿Cuántos incidentes hay por distrito?`
+- `¿Cuál es la categoría más frecuente en San Joaquín?`
+- `Busca incidentes de ruido en Barrantes.`
+- `¿Qué incidentes podrían estar relacionados con el incidente <ID>?`
+- `Muéstrame los casos que requieren revisión humana.`
+
+El dataset está en `backend/evaluation/flores_synthetic_incidents.json`. Las ubicaciones sirven
+como contexto de prueba; todos los hechos descritos son inventados y no deben interpretarse
+como denuncias reales.
+
+### Clusters, resaltados y revisiones de calidad
+
+La opción administrativa `4. Clusters y recálculo de embeddings` permite consultar los
+clusters candidatos existentes o regenerar manualmente todos los embeddings con OpenAI y
+reconstruir las agrupaciones. El recálculo solicita confirmación porque consume tokens y puede
+tardar según la cantidad de incidentes.
+
+La opción `6. Gestionar resaltados y revisiones de calidad` separa dos decisiones independientes:
+
+- Los **resaltados operativos** identifican hechos pasados o sin peligro de vida actual que
+  merecen atención más pronta o precauciones especiales. Incluyen un resumen de IA, razones,
+  evidencia y precauciones sugeridas.
+- Las **revisiones de calidad** identifican datos incompletos, contradictorios o ambiguos.
+  Incluyen un diagnóstico de IA, disponibilidad de contacto y acciones recomendadas. Al usar
+  `dismissed`, solo se descarta la revisión; la denuncia se conserva con estado
+  `insufficient_information`.
+
+Un incidente puede aparecer en ambos apartados. Para analizar datos anteriores a esta función,
+utilice `3. Analizar con IA incidentes pendientes` dentro de la opción 6.
+
+El inicio ciudadano muestra siempre que SGCIU no sustituye al 9-1-1. Si durante la conversación
+se detecta peligro inmediato, el agente repite esa orientación, pero no la confunde con una
+revisión de calidad administrativa.
+
+### Consulta normativa RAG
+
+Después de aplicar las migraciones, abra el administrador y seleccione
+`7. Consultar normativa (RAG)`:
+
+```bash
+cd backend
+.venv/bin/alembic -c alembic.ini upgrade head
+.venv/bin/python -m app.cli --role admin --transport mcp
+```
+
+La primera vez use `2. Indexar o actualizar documentos`. La operación valida checksums,
+extrae el texto sin cruzar páginas, crea actualmente 4.985 fragmentos y solicita un
+embedding por fragmento. Es idempotente: en ejecuciones posteriores omite documentos cuyo
+PDF, modelo e indexador no hayan cambiado; los cambios exclusivos de metadatos se actualizan
+sin recalcular embeddings.
+
+Luego use `3. Consultar normativa`. Cada respuesta informa:
+
+- embeddings recuperados y total de embeddings indexados;
+- documento y archivo PDF versionado;
+- página física exacta del PDF, empezando en 1;
+- artículo detectado, chunk y señales de ranking semántico, léxico e híbrido;
+- clasificación de cada hallazgo como obligación legal, facultad municipal o procedimiento
+  recomendado, validada contra el alcance y fuerza jurídica de la fuente;
+- trace ID, advertencias y abstención cuando la evidencia no es suficiente.
+
+El corpus contiene 27 documentos. El manifiesto registra como vacíos conocidos la
+Constitución Política y el Código Procesal Penal;
+el asistente no debe inferir su contenido. Consulte la [guía del RAG](docs/legal-rag.md) para
+la cobertura y operación detalladas.
 
 ### API
 
@@ -86,6 +195,8 @@ Tools disponibles:
 - `find_related_incidents`
 - `get_incident_cluster`
 - `request_human_review`
+- `search_legal_sources`
+- `get_legal_corpus_status`
 
 ## Calidad y evaluación
 
@@ -93,17 +204,23 @@ Tools disponibles:
 cd backend
 .venv/bin/ruff check app tests migrations
 .venv/bin/pytest --cov=app --cov-fail-under=70
-LLM_PROVIDER=mock PYTHONPATH=. .venv/bin/python -m app.evaluation.runner --provider mock
 ```
 
-Para evaluar el proveedor configurado:
+Para evaluar el intake real de OpenAI contra el dataset sintético:
 
 ```bash
-PYTHONPATH=. .venv/bin/python -m app.evaluation.runner --provider configured
+PYTHONPATH=. .venv/bin/python -m app.evaluation.runner
 ```
 
 El dataset se encuentra en `backend/evaluation/intake_cases.json` y contiene únicamente
-casos sintéticos.
+casos sintéticos. El comando de evaluación sí consume la API de OpenAI; las pruebas de
+`pytest` no realizan llamadas externas.
+
+Para medir Hit@k y MRR de la recuperación legal con 12 consultas sintéticas:
+
+```bash
+PYTHONPATH=. .venv/bin/python -m app.evaluation.legal_rag_runner
+```
 
 ## Documentación técnica
 

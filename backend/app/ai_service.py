@@ -2,7 +2,7 @@
 
 from fastapi import HTTPException, status
 
-from app.ai.intake import REQUIRED_FIELDS, get_intake_provider
+from app.ai.intake import DESIRED_FIELDS, get_intake_provider
 from app.schemas import (
     ComplaintExtractedData,
     ComplaintIntakeChatRequest,
@@ -20,7 +20,7 @@ def run_complaint_intake_chat(
                 "Puede corregir cualquier dato interpretado incorrectamente."
             ),
             is_complete=False,
-            missing_fields=list(REQUIRED_FIELDS),
+            missing_fields=list(DESIRED_FIELDS),
             extracted_data=ComplaintExtractedData(),
         )
     try:
