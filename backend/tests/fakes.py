@@ -121,6 +121,9 @@ class LocalEmbeddingDouble:
         norm = math.sqrt(sum(value * value for value in vector)) or 1.0
         return [value / norm for value in vector]
 
+    def embed_many(self, texts: list[str]) -> list[list[float]]:
+        return [self.embed(text) for text in texts]
+
 
 class LocalIncidentAssessmentDouble(IncidentAssessmentProvider):
     model_name = "test-incident-assessment"

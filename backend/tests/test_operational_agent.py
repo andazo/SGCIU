@@ -131,4 +131,6 @@ async def test_mcp_server_exposes_domain_tools_without_sql():
     names = {tool.name for tool in tools}
     assert "search_incidents" in names
     assert "find_related_incidents" in names
+    assert "search_legal_sources" in names
+    assert "get_legal_corpus_status" in names
     assert "execute_sql" not in names
