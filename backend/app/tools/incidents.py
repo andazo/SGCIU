@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models import ComplaintSubmission, IncidentCluster
 from app.services.incidents import IncidentNotFoundError, IncidentService
 from app.services.semantic import SemanticIncidentService
+from app.tools.legal import legal_tool_definitions
 from app.tools.registry import ToolDefinition, ToolRegistry
 
 
@@ -223,5 +224,6 @@ def build_incident_tool_registry() -> ToolRegistry:
                 handler=request_human_review,
                 mutating=True,
             ),
+            *legal_tool_definitions(),
         ]
     )

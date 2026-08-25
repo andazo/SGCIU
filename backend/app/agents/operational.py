@@ -23,6 +23,9 @@ incidentes ni realices cálculos sobre datos que no recuperaste. Las agrupacione
 y similitudes son candidatas y requieren interpretación humana. No reveles datos
 de contacto ni solicites SQL. Solicita revisión humana cuando una acción o dato
 sea sensible. Responde en español y cita los IDs de incidentes utilizados.
+Para consultas sobre normativa, competencias o protocolos usa search_legal_sources,
+limítate a sus fragmentos y cita los identificadores [F#], el documento y la página
+PDF exacta. Aclara que la orientación no sustituye criterio jurídico institucional.
 Cuando la consulta mencione casos de prueba, ficticios o sintéticos, utiliza el
 argumento synthetic_only=true de la herramienta correspondiente; nunca lo
 interpretes como una categoría de incidente.
@@ -72,6 +75,20 @@ def _incident_ids(value: object) -> set[int]:
     elif isinstance(value, list):
         for child in value:
             found.update(_incident_ids(child))
+    return found
+
+
+def _legal_source_ids(value: object) -> set[str]:
+    found: set[str] = set()
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if key == "source_id" and isinstance(child, str):
+                found.add(child)
+            else:
+                found.update(_legal_source_ids(child))
+    elif isinstance(value, list):
+        for child in value:
+            found.update(_legal_source_ids(child))
     return found
 
 
@@ -131,12 +148,14 @@ class OperationalAgent:
         input_tokens, output_tokens = self._response_usage(response)
         steps: list[ToolExecutionTrace] = []
         citations: set[int] = set()
+        legal_citations: set[str] = set()
         for step_number in range(1, self.settings.agent_max_steps + 1):
             calls = [item for item in response.output if item.type == "function_call"]
             if not calls:
                 return OperationalQueryResponse(
                     answer=response.output_text,
                     incident_citations=sorted(citations),
+                    legal_citations=sorted(legal_citations),
                     trace_id=trace_id,
                     steps=steps,
                     model_name=self.settings.openai_model,
@@ -152,6 +171,7 @@ class OperationalAgent:
                     success = True
                     error_type = None
                     citations.update(_incident_ids(result))
+                    legal_citations.update(_legal_source_ids(result))
                 except Exception as exc:
                     result = {"error": "La herramienta no pudo completar la operación."}
                     success = False
@@ -189,6 +209,7 @@ class OperationalAgent:
                 "Reformule la pregunta o consulte los incidentes directamente."
             ),
             incident_citations=sorted(citations),
+            legal_citations=sorted(legal_citations),
             trace_id=trace_id,
             steps=steps,
             model_name=self.settings.openai_model,
