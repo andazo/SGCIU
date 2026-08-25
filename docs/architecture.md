@@ -100,8 +100,12 @@ los candidatos densos en PostgreSQL, mientras que el componente léxico protege 
 exactos como números de ley, artículos y nombres de protocolos. Los scores son señales de
 ordenamiento, no probabilidades ni confianza jurídica.
 
-La generación solo recibe los fragmentos recuperados, usa identificadores `[F#]` y devuelve
-una estructura Pydantic. Una validación posterior descarta identificadores inexistentes y
-falla de forma cerrada si una respuesta afirmativa no tiene atribución verificable. Las
+La generación solo recibe los fragmentos recuperados y devuelve hallazgos Pydantic con
+identificadores `[F#]`. Cada documento declara fuerza jurídica, alcance institucional y si
+puede respaldar una obligación legal, facultad municipal o procedimiento recomendado. Una
+validación posterior descarta identificadores inexistentes y clasificaciones incompatibles;
+por ejemplo, no permite inferir una facultad municipal desde una norma exclusiva de Fuerza
+Pública. El servicio falla de forma cerrada si una respuesta afirmativa no tiene atribución
+verificable. Las
 consultas se auditan mediante hash, IDs de chunk, versión de prompt/modelo, latencia y uso,
 sin persistir el texto original de la pregunta.

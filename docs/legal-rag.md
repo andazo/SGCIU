@@ -6,7 +6,7 @@ Este módulo ayuda al personal autorizado de la Policía Municipal de Flores a l
 comprender normativa relevante. No determina culpabilidad, no sustituye asesoría jurídica y
 no convierte una recomendación de protocolo en una obligación legal.
 
-El corpus `2026.08.1` contiene 16 documentos nacionales y municipales. El archivo
+El corpus `2026.08.2` contiene 27 documentos nacionales, municipales e institucionales. El archivo
 `backend/corpus/legal/manifest.json` es la fuente de verdad para títulos, autoridad, prioridad,
 checksum y vacíos conocidos. Los PDF normalizados están en `backend/corpus/legal/pdfs/`.
 
@@ -18,8 +18,13 @@ que incluye sus 40 artículos y el transitorio.
 Vacíos conocidos que deben incorporarse en una versión posterior del corpus:
 
 - Constitución Política de Costa Rica;
-- Código Procesal Penal;
-- protocolo oficial de cadena de custodia.
+- Código Procesal Penal.
+
+El segundo lote incorporó normativa sobre datos personales, bienestar animal, niñez y
+adolescencia, violencia contra las mujeres, protección de víctimas y testigos, residuos,
+acoso sexual callejero, cadena de custodia y reglamentos de armas y cuerpos policiales. Se
+excluyó deliberadamente el Decreto 39428-S sobre ruido porque está derogado por el Decreto
+44486-S ya versionado en el corpus.
 
 ## Decisiones técnicas
 
@@ -32,7 +37,25 @@ Vacíos conocidos que deben incorporarse en una versión posterior del corpus:
 - Diversificación: máximo tres fragmentos por documento y eliminación por hash de duplicados.
 - Contexto de generación: hasta ocho fragmentos con identificadores `[F1]`, `[F2]`, etc.
 - Respuesta estructurada, validación posterior de citas y abstención segura.
+- Perfil jurídico por documento: fuerza vinculante u orientación operativa, alcance de la
+  autoridad y clasificaciones permitidas.
+- Hallazgos separados como `Obligación legal`, `Facultad municipal` o `Procedimiento
+  recomendado`; una validación determinista impide usar una fuente fuera de su alcance.
 - Auditoría: hash de consulta, chunks citados, modelos, versión de prompt, tokens y latencia.
+
+### Distinción jurídica de las respuestas
+
+- **Obligación legal**: deber, prohibición o requisito expreso de una ley o reglamento. La
+  respuesta identifica al sujeto obligado y no traslada el deber a la Municipalidad por analogía.
+- **Facultad municipal**: competencia atribuida expresamente a una municipalidad o policía
+  municipal por normativa habilitante o municipal.
+- **Procedimiento recomendado**: paso extraído de un protocolo operativo. Si el emisor es
+  Fuerza Pública o Poder Judicial, se presenta como referencia y se advierte que su aplicación
+  directa en Flores debe ser confirmada institucionalmente.
+
+Esta separación se aplica tanto en el RAG dedicado como en los resultados de la tool MCP. No
+depende únicamente del prompt: el backend rechaza un hallazgo si la fuente citada no permite
+la clasificación elegida.
 
 La API de embeddings de OpenAI acepta entradas en lote y permite reducir las dimensiones de
 los modelos `text-embedding-3`. La configuración utilizada conserva lotes pequeños para no
@@ -57,7 +80,7 @@ En el menú use `7. Consultar normativa (RAG)`:
 2. `Indexar o actualizar documentos` valida e indexa únicamente cambios.
 3. `Consultar normativa` genera una respuesta con fuentes verificables.
 
-La primera indexación actual genera 3.505 embeddings. El número puede cambiar de forma
+La indexación actual genera 4.985 embeddings. El número puede cambiar de forma
 controlada cuando se actualice un PDF, el algoritmo de chunking o la versión del corpus.
 
 ## API y MCP
@@ -94,7 +117,8 @@ Evaluación real de recuperación, con consumo de OpenAI:
 PYTHONPATH=. .venv/bin/python -m app.evaluation.legal_rag_runner
 ```
 
-El reporte calcula `Hit@1`, `Hit@3`, `Hit@8`, MRR y latencia sobre 12 preguntas sintéticas.
+El reporte calcula `Hit@1`, `Hit@3`, `Hit@8`, MRR y latencia sobre 21 preguntas sintéticas.
+La línea base de `2026.08.2` obtuvo `Hit@3=1.0`, `Hit@8=1.0` y cero omisiones en el top 8.
 Para la evaluación cualitativa del TFM se recomienda además revisar una muestra estratificada
 con estos criterios: exactitud jurídica, groundedness, cobertura de citas, utilidad operativa,
 abstención apropiada y claridad. Toda respuesta sensible debe ser validada por personal con

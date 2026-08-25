@@ -145,9 +145,10 @@ cd backend
 ```
 
 La primera vez use `2. Indexar o actualizar documentos`. La operación valida checksums,
-extrae el texto sin cruzar páginas, crea aproximadamente 3.505 fragmentos y solicita un
+extrae el texto sin cruzar páginas, crea actualmente 4.985 fragmentos y solicita un
 embedding por fragmento. Es idempotente: en ejecuciones posteriores omite documentos cuyo
-PDF, versión de corpus, modelo e indexador no hayan cambiado.
+PDF, modelo e indexador no hayan cambiado; los cambios exclusivos de metadatos se actualizan
+sin recalcular embeddings.
 
 Luego use `3. Consultar normativa`. Cada respuesta informa:
 
@@ -155,10 +156,12 @@ Luego use `3. Consultar normativa`. Cada respuesta informa:
 - documento y archivo PDF versionado;
 - página física exacta del PDF, empezando en 1;
 - artículo detectado, chunk y señales de ranking semántico, léxico e híbrido;
+- clasificación de cada hallazgo como obligación legal, facultad municipal o procedimiento
+  recomendado, validada contra el alcance y fuerza jurídica de la fuente;
 - trace ID, advertencias y abstención cuando la evidencia no es suficiente.
 
-El corpus inicial contiene 16 documentos. El manifiesto registra como vacíos conocidos la
-Constitución Política, el Código Procesal Penal y un protocolo oficial de cadena de custodia;
+El corpus contiene 27 documentos. El manifiesto registra como vacíos conocidos la
+Constitución Política y el Código Procesal Penal;
 el asistente no debe inferir su contenido. Consulte la [guía del RAG](docs/legal-rag.md) para
 la cobertura y operación detalladas.
 
