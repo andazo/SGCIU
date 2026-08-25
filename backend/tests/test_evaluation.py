@@ -3,12 +3,12 @@ from types import SimpleNamespace
 
 from app.config import _normalize_database_url, get_settings
 from app.costs import estimate_embedding_cost, estimate_llm_cost
-from app.evaluation.metrics import accuracy, macro_f1, recall_at_k, reciprocal_rank
 from app.evaluation.legal_rag_runner import (
     LegalRetrievalCase,
     LegalRetrievalDataset,
     evaluate_retrieval,
 )
+from app.evaluation.metrics import accuracy, macro_f1, recall_at_k, reciprocal_rank
 from app.evaluation.runner import evaluate_intake, load_dataset
 from tests.fakes import QueueIntakeProvider, extracted_data, intake_response
 

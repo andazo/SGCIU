@@ -4,7 +4,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 
-from openai import OpenAI
+from openai import OpenAI, OpenAIError
 
 from app.config import Settings, get_settings
 from app.costs import estimate_embedding_cost
@@ -30,10 +30,11 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         model_name: str | None = None,
         dimensions: int | None = None,
         feature: str = "incident_embedding",
+        client: OpenAI | None = None,
     ):
-        if not settings.openai_api_key:
+        if not settings.openai_api_key and client is None:
             raise RuntimeError("OPENAI_API_KEY no está configurada para generar embeddings.")
-        self.client = OpenAI(
+        self.client = client or OpenAI(
             api_key=settings.openai_api_key,
             timeout=settings.openai_timeout_seconds,
             max_retries=2,
@@ -50,11 +51,14 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         if not texts:
             return []
         started = time.perf_counter()
-        response = self.client.embeddings.create(
-            model=self.model_name,
-            input=texts,
-            dimensions=self.dimensions,
-        )
+        try:
+            response = self.client.embeddings.create(
+                model=self.model_name,
+                input=texts,
+                dimensions=self.dimensions,
+            )
+        except OpenAIError as exc:
+            raise RuntimeError("No se pudieron generar embeddings con OpenAI.") from exc
         input_tokens = int(getattr(response.usage, "prompt_tokens", 0) or 0)
         logger.info(
             "Embedding model call completed",

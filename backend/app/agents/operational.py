@@ -13,7 +13,7 @@ from app.costs import estimate_llm_cost
 from app.schemas import ModelUsage, OperationalQueryResponse, ToolExecutionTrace
 
 logger = logging.getLogger(__name__)
-AGENT_PROMPT_VERSION = "operational-react-v2"
+AGENT_PROMPT_VERSION = "operational-react-v3"
 SYSTEM_PROMPT = """
 Eres un asistente operativo para personal autorizado de la Policía Municipal de
 Flores. Responde preguntas exclusivamente a partir de las herramientas SGCIU.
