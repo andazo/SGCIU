@@ -1,14 +1,13 @@
 {
   "corpus_id": "sgciu-legal-corpus-cr",
-  "version": "2026.08.1",
+  "version": "2026.08.2",
   "jurisdiction": "Costa Rica",
   "language": "es",
   "description": "Corpus normativo inicial para consultas de la Policía Municipal de Flores.",
   "citation_policy": "La página citada siempre corresponde a la página física, numerada desde 1, del PDF versionado en este repositorio.",
   "known_gaps": [
     "Constitución Política de Costa Rica",
-    "Código Procesal Penal",
-    "Protocolo oficial de cadena de custodia"
+    "Código Procesal Penal"
   ],
   "documents": [
     {
@@ -19,6 +18,7 @@
       "sha256": "ee5bc67fd18ce758d2387d51afd8058363a2240e2b103878c27c004ec1a38748",
       "authority": "Municipalidad de Flores",
       "document_type": "reglamento municipal",
+      "source_category": "municipal_regulation",
       "priority": 1
     },
     {
@@ -29,6 +29,7 @@
       "sha256": "1f1c51b70a0ff3bd24a4d34a38d1381f06d31a2e9c1854995ce79bf4ead1a118",
       "authority": "Asamblea Legislativa de Costa Rica",
       "document_type": "ley",
+      "source_category": "municipal_enabling_law",
       "priority": 1
     },
     {
@@ -39,6 +40,7 @@
       "sha256": "d637418dfd21e74fb00c72159125721a777b36dd125206db69f2e7c911d667ae",
       "authority": "Asamblea Legislativa de Costa Rica",
       "document_type": "ley",
+      "source_category": "municipal_enabling_law",
       "priority": 2
     },
     {
@@ -49,6 +51,7 @@
       "sha256": "70e75142a7210ecfc5fe113f06fd7de5b5ba0004dcbae167fad86c801acc23a7",
       "authority": "Asamblea Legislativa de Costa Rica",
       "document_type": "ley",
+      "source_category": "national_legislation",
       "priority": 1
     },
     {
@@ -59,6 +62,7 @@
       "sha256": "777d58cf41c75e1e9cc246f2ee3d186d7d80afc93737080b909612ee88a4b1ce",
       "authority": "Asamblea Legislativa de Costa Rica",
       "document_type": "código",
+      "source_category": "national_legislation",
       "priority": 2
     },
     {
@@ -69,6 +73,7 @@
       "sha256": "24fe4c4e3e6a3444a27c7bde690c7e94cd2100a7c972c05873b27f4737e47d71",
       "authority": "Asamblea Legislativa de Costa Rica",
       "document_type": "ley",
+      "source_category": "national_legislation",
       "priority": 3
     },
     {
@@ -79,6 +84,7 @@
       "sha256": "b9c1efdcff380ba52009fb1800e8c40feccc71d74a65e3ae50d339a56e589ab0",
       "authority": "Asamblea Legislativa de Costa Rica",
       "document_type": "ley",
+      "source_category": "national_legislation",
       "priority": 2
     },
     {
@@ -89,6 +95,7 @@
       "sha256": "4bc50afcff83e470fb024fab9c811971240db4a3637640ed39e656854da4753f",
       "authority": "Asamblea Legislativa de Costa Rica",
       "document_type": "ley",
+      "source_category": "national_legislation",
       "priority": 2
     },
     {
@@ -99,6 +106,7 @@
       "sha256": "797179831361533596157c443ff02ba876145402d6fa970fd8970314421fb211",
       "authority": "Poder Ejecutivo de Costa Rica",
       "document_type": "decreto ejecutivo",
+      "source_category": "executive_regulation",
       "priority": 1,
       "notes": "Extracto íntegro de las páginas 40 a 65 del Alcance N.º 114 a La Gaceta N.º 110 del 18 de junio de 2024.",
       "source_url": "https://www.imprentanacional.go.cr/pub/2024/06/18/ALCA114_18_06_2024.pdf"
@@ -111,6 +119,7 @@
       "sha256": "8b152d187b69aeeb4ea889860c966f14a13c6f1b24a7a92fd93e7db077a7609f",
       "authority": "Asamblea Legislativa de Costa Rica",
       "document_type": "ley",
+      "source_category": "municipal_enabling_law",
       "priority": 2
     },
     {
@@ -121,6 +130,7 @@
       "sha256": "3f55d7007903dc6116ced41776a5c355df95625c3ab842977f979cf1d0d874fc",
       "authority": "Municipalidad de Flores",
       "document_type": "reglamento municipal",
+      "source_category": "municipal_regulation",
       "priority": 1
     },
     {
@@ -131,6 +141,7 @@
       "sha256": "08f1a4c8f55312b09dad928ba4bcbf4bcda9f8a586f9ee0360774d7c2ff3e3c8",
       "authority": "Municipalidad de Flores",
       "document_type": "reglamento municipal",
+      "source_category": "municipal_regulation",
       "priority": 3
     },
     {
@@ -141,6 +152,7 @@
       "sha256": "3809a80619670c02c2a251e09e00f226a2a9933038abb5d886a968672c41a4cd",
       "authority": "Asamblea Legislativa de Costa Rica",
       "document_type": "ley",
+      "source_category": "national_legislation",
       "priority": 2
     },
     {
@@ -151,6 +163,7 @@
       "sha256": "e3623aa2c43eb1a74b371ba7c51f2223fecaf314ecfab25fe9e36abc2813252e",
       "authority": "Asamblea Legislativa de Costa Rica",
       "document_type": "ley",
+      "source_category": "national_legislation",
       "priority": 1
     },
     {
@@ -161,6 +174,7 @@
       "sha256": "e016d9c171d3769ce54958eb9288fdee1c3664a6a4004c30001d07e5d00d88a5",
       "authority": "Ministerio de Seguridad Pública de Costa Rica",
       "document_type": "protocolo policial",
+      "source_category": "operational_protocol",
       "priority": 1
     },
     {
@@ -171,7 +185,143 @@
       "sha256": "81f2e8cc67cdc95d5318792e22196d9be69b7567672c1b181dc19171384e3df9",
       "authority": "Ministerio de Seguridad Pública de Costa Rica",
       "document_type": "protocolo policial",
+      "source_category": "operational_protocol",
       "priority": 1
+    },
+    {
+      "key": "decreto-37554-reglamento-datos-personales",
+      "title": "Decreto Ejecutivo N.º 37554-JP, Reglamento a la Ley de Protección de la Persona frente al Tratamiento de sus Datos Personales",
+      "short_title": "Reglamento de datos personales",
+      "filename": "17_decreto_37554_reglamento_datos_personales.pdf",
+      "sha256": "32011128e8111c748d4728451747fb3e6b75747c7ba4b5301056204746e8b1c8",
+      "authority": "Poder Ejecutivo de Costa Rica",
+      "document_type": "decreto ejecutivo",
+      "source_category": "executive_regulation",
+      "priority": 1,
+      "notes": "Texto completo vigente descargado del SCIJ el 24 de agosto de 2026."
+    },
+    {
+      "key": "ley-7451-bienestar-animales",
+      "title": "Ley N.º 7451, Ley de Bienestar de los Animales",
+      "short_title": "Ley de Bienestar de los Animales",
+      "filename": "18_ley_7451_bienestar_animales.pdf",
+      "sha256": "7e8392f29dc165fdc26f84b9a5c0dea04311545fc10e5f3c36b0ac55ef7655bd",
+      "authority": "Asamblea Legislativa de Costa Rica",
+      "document_type": "ley",
+      "source_category": "national_legislation",
+      "priority": 2,
+      "notes": "Texto completo vigente descargado del SCIJ el 24 de agosto de 2026."
+    },
+    {
+      "key": "ley-7739-codigo-ninez-adolescencia",
+      "title": "Ley N.º 7739, Código de la Niñez y la Adolescencia",
+      "short_title": "Código de la Niñez y la Adolescencia",
+      "filename": "19_ley_7739_codigo_ninez_adolescencia.pdf",
+      "sha256": "6417d792bce8c3f204729260d37d770780bb79a5ccb6f7a77d8d85df039aa449",
+      "authority": "Asamblea Legislativa de Costa Rica",
+      "document_type": "código",
+      "source_category": "national_legislation",
+      "priority": 1,
+      "notes": "Texto completo vigente descargado del SCIJ el 24 de agosto de 2026."
+    },
+    {
+      "key": "ley-8589-violencia-contra-mujeres",
+      "title": "Ley N.º 8589, Ley de Penalización de la Violencia Contra las Mujeres",
+      "short_title": "Ley de Penalización de la Violencia Contra las Mujeres",
+      "filename": "20_ley_8589_penalizacion_violencia_mujeres.pdf",
+      "sha256": "3931c77fe00d77654a9e5702a20a93d5f3fd743360bd8905c20f6bde5cc8062a",
+      "authority": "Asamblea Legislativa de Costa Rica",
+      "document_type": "ley",
+      "source_category": "national_legislation",
+      "priority": 1,
+      "notes": "Texto completo vigente descargado del SCIJ el 24 de agosto de 2026."
+    },
+    {
+      "key": "ley-8720-proteccion-victimas-testigos",
+      "title": "Ley N.º 8720, Ley de protección a víctimas, testigos y demás sujetos intervinientes en el proceso penal",
+      "short_title": "Ley de protección a víctimas y testigos",
+      "filename": "21_ley_8720_proteccion_victimas_testigos.pdf",
+      "sha256": "b509f4fe731480ef273415b5c106a6668b30d7d3d4a41a1cf8885f27f64713a4",
+      "authority": "Asamblea Legislativa de Costa Rica",
+      "document_type": "ley",
+      "source_category": "national_legislation",
+      "priority": 1,
+      "notes": "Texto completo vigente descargado del SCIJ el 24 de agosto de 2026."
+    },
+    {
+      "key": "ley-8839-gestion-integral-residuos",
+      "title": "Ley N.º 8839, Ley para la Gestión Integral de Residuos",
+      "short_title": "Ley para la Gestión Integral de Residuos",
+      "filename": "22_ley_8839_gestion_integral_residuos.pdf",
+      "sha256": "f2552e70ca50fbaca4dcb9f1fd48ee400cae52c792052a13228d3aa2ef1a0b72",
+      "authority": "Asamblea Legislativa de Costa Rica",
+      "document_type": "ley",
+      "source_category": "municipal_enabling_law",
+      "priority": 2,
+      "notes": "Contiene obligaciones y competencias municipales expresas. Texto vigente descargado del SCIJ el 24 de agosto de 2026."
+    },
+    {
+      "key": "ley-8968-proteccion-datos-personales",
+      "title": "Ley N.º 8968, Ley de Protección de la Persona frente al tratamiento de sus datos personales",
+      "short_title": "Ley de protección de datos personales",
+      "filename": "23_ley_8968_proteccion_datos_personales.pdf",
+      "sha256": "270a84a1f30f9cccd3392f2c3efdb2e0483739e352434db72c4dffceb82694e4",
+      "authority": "Asamblea Legislativa de Costa Rica",
+      "document_type": "ley",
+      "source_category": "national_legislation",
+      "priority": 1,
+      "notes": "Texto completo vigente descargado del SCIJ el 24 de agosto de 2026."
+    },
+    {
+      "key": "ley-9877-acoso-sexual-callejero",
+      "title": "Ley N.º 9877, Ley contra el acoso sexual callejero",
+      "short_title": "Ley contra el acoso sexual callejero",
+      "filename": "24_ley_9877_acoso_sexual_callejero.pdf",
+      "sha256": "e216de1df44f30eb7963e875c834da11019bed84201443ea346d0773f214e832",
+      "authority": "Asamblea Legislativa de Costa Rica",
+      "document_type": "ley",
+      "source_category": "national_legislation",
+      "priority": 1,
+      "notes": "Texto completo vigente descargado del SCIJ el 24 de agosto de 2026."
+    },
+    {
+      "key": "protocolo-cadena-custodia-2020",
+      "title": "Protocolo de Cadena de Custodia en el manejo de los procesos penales, versión II",
+      "short_title": "Protocolo de Cadena de Custodia",
+      "filename": "25_protocolo_cadena_custodia.pdf",
+      "sha256": "50d279032bbe136ee8d35184148cab3d44fbea120839f76ddbaa9912a0b95c3c",
+      "authority": "Poder Judicial de Costa Rica",
+      "document_type": "protocolo institucional",
+      "source_category": "operational_protocol",
+      "priority": 1,
+      "notes": "Versión II aprobada por Circular N.º 99-2020; su alcance directo corresponde al Poder Judicial.",
+      "source_url": "https://www.pgrweb.go.cr/DOCS/NORMAS/1/VIGENTE/CIR/2020-2029/2020-2024/2020/164FA/13748A.HTML"
+    },
+    {
+      "key": "decreto-37985-reglamento-armas-explosivos",
+      "title": "Decreto Ejecutivo N.º 37985-SP, Reglamento a la Ley de Armas y Explosivos",
+      "short_title": "Reglamento a la Ley de Armas y Explosivos",
+      "filename": "26_decreto_37985_reglamento_armas_explosivos.pdf",
+      "sha256": "382b6e3e6c03bb0fe2d68a8e03bdc0ed32054ccdc1b17199ea1f436058312394",
+      "authority": "Poder Ejecutivo de Costa Rica",
+      "document_type": "decreto ejecutivo",
+      "source_category": "executive_regulation",
+      "priority": 2,
+      "notes": "Versión vigente descargada de SINALEVI el 24 de agosto de 2026.",
+      "source_url": "https://sinalevi.go.cr/ResultadosNormativa/Informacion?param1=75845&param2=142524&param3=1"
+    },
+    {
+      "key": "decreto-23880-reglamento-cuerpos-policiales",
+      "title": "Decreto Ejecutivo N.º 23880-SP, Reglamento de Servicio de los Cuerpos Policiales adscritos al Ministerio de Seguridad Pública",
+      "short_title": "Reglamento de Servicio de los Cuerpos Policiales",
+      "filename": "27_decreto_23880_reglamento_cuerpos_policiales.pdf",
+      "sha256": "d5837bf30472e34b79d7f18eb81f41ba4b733873555ee197e1d7f69ff4c1b50c",
+      "authority": "Poder Ejecutivo de Costa Rica",
+      "document_type": "decreto ejecutivo policial",
+      "source_category": "national_police_regulation",
+      "priority": 2,
+      "notes": "Regula cuerpos adscritos al Ministerio de Seguridad Pública; no otorga por sí solo facultades a la Policía Municipal de Flores. Versión vigente descargada de SINALEVI el 24 de agosto de 2026.",
+      "source_url": "https://sinalevi.go.cr/ResultadosNormativa/Informacion?param1=68369&param2=137881&param3=1"
     }
   ]
 }
