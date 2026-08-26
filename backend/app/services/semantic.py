@@ -71,6 +71,23 @@ def canonical_incident_text(incident: ComplaintSubmission) -> str:
     return ". ".join(str(part).strip() for part in parts if part)
 
 
+def canonical_location_text(incident: ComplaintSubmission) -> str:
+    """Build the location-only text used by recurrent-pattern scoring."""
+    data = incident.ai_extracted_data or {}
+    entities = data.get("entities") or {}
+    landmarks = entities.get("landmarks", [])
+    establishments = entities.get("establishments", [])
+    parts = (
+        f"distrito {data.get('distrito')}",
+        f"dirección {data.get('direccion_exacta')}",
+        f"tipo de lugar {data.get('tipo_lugar')}",
+        "referencias " + ", ".join([*landmarks, *establishments])
+        if landmarks or establishments
+        else None,
+    )
+    return ". ".join(str(part).strip() for part in parts if part)
+
+
 def cosine_similarity(left: list[float], right: list[float]) -> float:
     if len(left) != len(right) or not left:
         return 0.0
@@ -80,6 +97,14 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
     if left_norm == 0 or right_norm == 0:
         return 0.0
     return dot / (left_norm * right_norm)
+
+
+def _is_recent(created_at: datetime | None, cutoff: datetime) -> bool:
+    if created_at is None:
+        return False
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=UTC)
+    return created_at >= cutoff
 
 
 class SemanticIncidentService:
@@ -95,7 +120,7 @@ class SemanticIncidentService:
 
     def index_incident(self, incident: ComplaintSubmission) -> IncidentEmbedding:
         canonical_text = canonical_incident_text(incident)
-        vector = self.provider.embed(canonical_text)
+        vectors = self.provider.embed_many([canonical_text, canonical_location_text(incident)])
         record = self.db.scalar(
             select(IncidentEmbedding).where(IncidentEmbedding.incident_id == incident.id)
         )
@@ -103,7 +128,8 @@ class SemanticIncidentService:
             record = IncidentEmbedding(incident_id=incident.id)
             self.db.add(record)
         record.canonical_text = canonical_text
-        record.embedding = vector
+        record.embedding = vectors[0]
+        record.location_embedding = vectors[1]
         record.embedding_model = self.provider.model_name
         self.db.commit()
         self.db.refresh(record)
@@ -142,18 +168,31 @@ class SemanticIncidentService:
             semantic_score = cosine_similarity(
                 list(source_embedding.embedding), list(candidate_embedding.embedding)
             )
+            location_score = cosine_similarity(
+                list(source_embedding.location_embedding or []),
+                list(candidate_embedding.location_embedding or []),
+            )
             reasons: list[str] = []
             district_bonus = 0.0
             category_bonus = 0.0
             if source_data.get("distrito") == candidate_data.get("distrito"):
-                district_bonus = 0.15
+                district_bonus = 0.10
                 reasons.append("mismo distrito")
             if source_data.get("categoria_preliminar") == candidate_data.get(
                 "categoria_preliminar"
             ):
-                category_bonus = 0.10
+                category_bonus = 0.08
                 reasons.append("misma categoría")
-            score = min(1.0, semantic_score * 0.70 + district_bonus + category_bonus + 0.05)
+            if location_score >= 0.60:
+                reasons.insert(0, "ubicación semánticamente similar")
+            score = min(
+                1.0,
+                semantic_score * 0.52
+                + location_score * 0.28
+                + district_bonus
+                + category_bonus
+                + 0.02,
+            )
             if semantic_score >= 0.45:
                 reasons.insert(0, "descripción semánticamente similar")
             if score >= threshold:
@@ -248,6 +287,20 @@ class SemanticIncidentService:
                 .order_by(IncidentCluster.updated_at.desc())
             )
         )
+
+    def list_recurrent_patterns(self, *, minimum_incidents: int = 3) -> list[IncidentCluster]:
+        """Return proactive patterns with at least N recent incident members."""
+        cutoff = datetime.now(UTC) - timedelta(days=self.settings.cluster_time_window_days)
+        recurrent: list[IncidentCluster] = []
+        for cluster in self.list_clusters():
+            recent_count = sum(
+                1
+                for member in cluster.members
+                if member.incident and _is_recent(member.incident.created_at, cutoff)
+            )
+            if recent_count >= minimum_incidents:
+                recurrent.append(cluster)
+        return recurrent
 
     def recalculate_all(self) -> SemanticRecalculationResult:
         incidents = list(

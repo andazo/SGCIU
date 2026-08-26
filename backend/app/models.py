@@ -105,6 +105,7 @@ class IncidentEmbedding(Base):
     )
     canonical_text = Column(Text, nullable=False)
     embedding = Column(_vector_type(), nullable=False)
+    location_embedding = Column(_vector_type(), nullable=True)
     embedding_model = Column(String(120), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
