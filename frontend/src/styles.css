@@ -161,6 +161,65 @@ h2 {
   line-height: 1.5;
 }
 
+.recurrentPatternsPanel {
+  display: grid;
+  gap: 20px;
+}
+
+.recurrentPatternList {
+  display: grid;
+  gap: 18px;
+}
+
+.recurrentPatternCard {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid #d8e5dc;
+  border-radius: 12px;
+  background: #fbfdfb;
+}
+
+.recurrentPatternHeader {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.recurrentPatternHeader h2 {
+  margin: 5px 0 0;
+  color: #184f34;
+}
+
+.recurrentPatternHeader > strong {
+  color: #184f34;
+  white-space: nowrap;
+}
+
+.recurrentPatternSummary {
+  margin: 0;
+  color: #52636f;
+}
+
+.recurrentPatternBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.patternSignal {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #e7f3eb;
+  color: #24633f;
+  font-size: 0.82rem;
+}
+
 input,
 textarea {
   width: 100%;

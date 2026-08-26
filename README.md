@@ -18,7 +18,8 @@ conserva como prototipo, pero no es el foco de esta etapa.
   sabe o no desea aportar más información.
 - Revisión humana ante baja confianza, riesgo inmediato o prompt injection.
 - Embeddings de incidentes con PostgreSQL y `pgvector`.
-- Detección híbrida de incidentes relacionados y clusters candidatos.
+- Agrupación recurrente proactiva de incidentes similares en los últimos 30 días, con
+  similitud semántica de ubicación, relato, categoría y refuerzo por distrito.
 - Agente operativo ReAct con límite de pasos, tools y trazas sanitizadas.
 - Servidor MCP `sgciu-incident-intelligence` sin acceso a SQL arbitrario.
 - RAG normativo con corpus versionado, extracción por página, recuperación híbrida,
@@ -110,6 +111,13 @@ como contexto de prueba; todos los hechos descritos son inventados y no deben in
 como denuncias reales.
 
 ### Clusters, resaltados y revisiones de calidad
+
+La sección administrativa **Agrupación recurrente** muestra de forma independiente los
+patrones que reúnen al menos tres incidentes similares dentro de una ventana móvil de 30 días.
+La puntuación combina el embedding general del incidente con un embedding específico de la
+ubicación, y aumenta cuando coinciden el distrito, la categoría o las referencias del lugar.
+Estos patrones son informativos y proactivos: no sustituyen las denuncias originales ni
+requieren confirmación o rechazo por parte del personal policial.
 
 La opción administrativa `4. Clusters y recálculo de embeddings` permite consultar los
 clusters candidatos existentes o regenerar manualmente todos los embeddings con OpenAI y

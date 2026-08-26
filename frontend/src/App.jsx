@@ -6,6 +6,7 @@ const ADMIN_ROUTE = '/admin';
 const NAV_ITEMS = [
   { label: 'Inicio', icon: '⌂' },
   { label: 'Incidentes', icon: '!' },
+  { label: 'Agrupación recurrente', icon: '↻' },
   { label: 'Analítica', icon: '∿' },
   { label: 'Asistente de Políticas', icon: '?' },
 ];
@@ -204,6 +205,76 @@ function CategoryChart({ complaints }) {
   );
 }
 
+function RecurrentPatternsPanel({ patterns, isLoading, error }) {
+  if (isLoading) {
+    return <p className="adminEmpty">Buscando patrones recurrentes...</p>;
+  }
+
+  if (error) {
+    return <p className="statusMessage error">{error}</p>;
+  }
+
+  if (patterns.length === 0) {
+    return (
+      <p className="adminEmpty">
+        No se han detectado patrones recurrentes en los últimos 30 días.
+      </p>
+    );
+  }
+
+  return (
+    <div className="recurrentPatternList">
+      {patterns.map((pattern) => (
+        <article className="recurrentPatternCard" key={pattern.id}>
+          <div className="recurrentPatternHeader">
+            <div>
+              <span className="eyebrow">Patrón recurrente #{pattern.id}</span>
+              <h2>{pattern.title}</h2>
+            </div>
+            <strong>{pattern.incident_count} incidentes</strong>
+          </div>
+          <p className="recurrentPatternSummary">
+            Repetición detectada entre {formatDateTime(pattern.first_seen)} y{' '}
+            {formatDateTime(pattern.last_seen)}. Similitud promedio:{' '}
+            {(pattern.average_similarity * 100).toFixed(0)}%.
+          </p>
+          <div className="recurrentPatternBadges">
+            <span className="tableBadge district">{normalizeValue(pattern.district)}</span>
+            <span className="tableBadge category">{normalizeValue(pattern.category)}</span>
+            {pattern.signals.map((signal) => (
+              <span className="patternSignal" key={signal}>{signal}</span>
+            ))}
+          </div>
+          <div className="adminTableWrap">
+            <table className="adminTable">
+              <thead>
+                <tr>
+                  <th>Incidente</th>
+                  <th>Fecha</th>
+                  <th>Ubicación</th>
+                  <th>Coincidencias</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pattern.members.map((member) => (
+                  <tr key={member.incident_id}>
+                    <td><span className="idBadge">#{member.incident_id}</span></td>
+                    <td>{formatDateTime(member.created_at)}</td>
+                    <td>{member.address || 'Sin dirección registrada'}</td>
+                    <td>
+                      {(member.similarity_score * 100).toFixed(0)}% · {member.match_reason}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
 function AdminDashboard() {
   const [isMenuOpen, setIsMenuOpen] = useState(true);
   const [activeItem, setActiveItem] = useState('Inicio');
@@ -213,6 +284,9 @@ function AdminDashboard() {
   const [dateFilter, setDateFilter] = useState('');
   const [districtFilter, setDistrictFilter] = useState('Todos');
   const [incidentSearch, setIncidentSearch] = useState('');
+  const [recurrentPatterns, setRecurrentPatterns] = useState([]);
+  const [isPatternsLoading, setIsPatternsLoading] = useState(true);
+  const [patternsError, setPatternsError] = useState('');
 
   useEffect(() => {
     async function loadComplaints() {
@@ -238,6 +312,30 @@ function AdminDashboard() {
     }
 
     loadComplaints();
+  }, []);
+
+  useEffect(() => {
+    async function loadRecurrentPatterns() {
+      setIsPatternsLoading(true);
+      setPatternsError('');
+      try {
+        const response = await fetch(`${API_BASE_URL}/v1/incidents/clusters/recurrent`);
+        if (!response.ok) {
+          throw new Error('No se pudieron cargar los patrones recurrentes.');
+        }
+        setRecurrentPatterns(await response.json());
+      } catch (error) {
+        setPatternsError(
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error al cargar los patrones recurrentes.',
+        );
+      } finally {
+        setIsPatternsLoading(false);
+      }
+    }
+
+    loadRecurrentPatterns();
   }, []);
 
   const filteredComplaints = useMemo(
@@ -354,7 +452,24 @@ function AdminDashboard() {
           </div>
         </header>
 
-        {activeItem !== 'Inicio' && (
+        {activeItem === 'Agrupación recurrente' && (
+          <section className="adminPanel recurrentPatternsPanel">
+            <div className="adminPanelHeader">
+              <div>
+                <h2>Agrupación recurrente</h2>
+                <p>Patrones proactivos detectados automáticamente en los últimos 30 días.</p>
+              </div>
+              <span>Sin confirmación manual</span>
+            </div>
+            <RecurrentPatternsPanel
+              patterns={recurrentPatterns}
+              isLoading={isPatternsLoading}
+              error={patternsError}
+            />
+          </section>
+        )}
+
+        {activeItem !== 'Inicio' && activeItem !== 'Agrupación recurrente' && (
           <p className="adminNotice">
             {activeItem} ya está disponible en el menú. La pantalla individual se implementará después.
           </p>
@@ -362,6 +477,8 @@ function AdminDashboard() {
 
         {loadError && <p className="statusMessage error">{loadError}</p>}
 
+        {activeItem === 'Inicio' && (
+          <>
         <section className="adminStats" aria-label="Indicadores principales">
           <StatCard label="Número reportes de hoy" value={isLoading ? '...' : todayReports} />
           <StatCard label="Categoría más común" value={isLoading ? '...' : mostCommonCategory} />
@@ -431,6 +548,8 @@ function AdminDashboard() {
             </table>
           </div>
         </section>
+          </>
+        )}
       </main>
     </div>
   );
