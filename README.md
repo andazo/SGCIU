@@ -124,6 +124,10 @@ clusters candidatos existentes o regenerar manualmente todos los embeddings con 
 reconstruir las agrupaciones. El recálculo solicita confirmación porque consume tokens y puede
 tardar según la cantidad de incidentes.
 
+La opción `8. Agrupación recurrente` muestra en la terminal los patrones que cumplen el mínimo
+de tres incidentes recientes, incluyendo sus puntuaciones, ubicación, categoría y motivos de
+coincidencia. Esta consulta no modifica los datos ni requiere confirmación policial.
+
 La opción `6. Gestionar resaltados y revisiones de calidad` separa dos decisiones independientes:
 
 - Los **resaltados operativos** identifican hechos pasados o sin peligro de vida actual que

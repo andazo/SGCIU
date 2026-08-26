@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 
 from pydantic import ValidationError
 
@@ -15,7 +16,7 @@ from app.services.incidents import IncidentNotFoundError, IncidentService
 from app.services.intake import EMERGENCY_NOTICE, IntakeService
 from app.services.legal_rag import LegalRAGService
 from app.services.reviews import HighlightNotFoundError, ReviewNotFoundError, ReviewService
-from app.services.semantic import SemanticIncidentService
+from app.services.semantic import SemanticIncidentService, _is_recent
 
 
 def _yes(prompt: str) -> bool:
@@ -167,6 +168,44 @@ def _print_clusters(db) -> None:
     for cluster in clusters:
         members = ", ".join(f"#{member.incident_id}" for member in cluster.members)
         print(f"Cluster {cluster.id}: {cluster.label} [{cluster.status}] -> {members}")
+
+
+def _print_recurrent_patterns(db) -> None:
+    service = SemanticIncidentService(db)
+    patterns = service.list_recurrent_patterns()
+    if not patterns:
+        print(
+            "No se detectaron patrones recurrentes en los últimos "
+            f"{service.settings.cluster_time_window_days} días."
+        )
+        return
+
+    threshold = datetime.now(UTC) - timedelta(days=service.settings.cluster_time_window_days)
+    print(
+        f"\nPatrones recurrentes de los últimos {service.settings.cluster_time_window_days} días"
+    )
+    for pattern in patterns:
+        members = [
+            member
+            for member in pattern.members
+            if member.incident and _is_recent(member.incident.created_at, threshold)
+        ]
+        if not members:
+            continue
+        scores = [member.similarity_score for member in members]
+        print(f"\nPatrón #{pattern.id}: {pattern.label}")
+        print(f"Incidentes relacionados: {len(members)}")
+        print(f"Similitud promedio: {sum(scores) / len(scores):.3f}")
+        print("Incidentes:")
+        for member in sorted(members, key=lambda item: item.incident.created_at):
+            incident = member.incident
+            data = incident.ai_extracted_data or {}
+            print(
+                f"  #{incident.id} | {incident.created_at} | "
+                f"{data.get('categoria_preliminar')} | "
+                f"{data.get('distrito')} | {data.get('direccion_exacta')} | "
+                f"score={member.similarity_score:.3f} | {member.match_reason}"
+            )
 
 
 def _manage_clusters(db) -> None:
@@ -442,6 +481,7 @@ def run_admin(transport: str) -> None:
         "5": "Preguntar al agente operativo",
         "6": "Gestionar resaltados y revisiones de calidad",
         "7": "Consultar normativa (RAG)",
+        "8": "Agrupación recurrente",
         "0": "Salir",
     }
     with SessionLocal() as db:
@@ -466,6 +506,8 @@ def run_admin(transport: str) -> None:
                 _manage_reviews(db)
             elif selection == "7":
                 _manage_legal_rag(db)
+            elif selection == "8":
+                _print_recurrent_patterns(db)
             else:
                 print("Opción inválida.")
 
