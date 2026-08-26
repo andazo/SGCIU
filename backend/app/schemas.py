@@ -387,6 +387,29 @@ class IncidentClusterResponse(StrictModel):
     members: list[ClusterMemberResponse]
 
 
+class RecurrentPatternMemberResponse(StrictModel):
+    incident_id: int
+    created_at: datetime
+    category: str | None
+    district: str | None
+    address: str | None
+    similarity_score: float
+    match_reason: str
+
+
+class RecurrentPatternResponse(StrictModel):
+    id: int
+    title: str
+    incident_count: int
+    first_seen: datetime
+    last_seen: datetime
+    district: str | None
+    category: str | None
+    average_similarity: float
+    signals: list[str]
+    members: list[RecurrentPatternMemberResponse]
+
+
 class SemanticRecalculationResponse(StrictModel):
     incidents_found: int
     embeddings_updated: int
