@@ -66,6 +66,7 @@ razonamiento interno del modelo.
 | `aggregate_incidents` | Lectura | Obtener conteos deterministas mediante SQL |
 | `find_related_incidents` | Lectura | Aplicar recuperación semántica híbrida |
 | `get_incident_cluster` | Lectura | Inspeccionar un cluster candidato |
+| `get_recurrent_patterns` | Lectura | Consultar patrones recurrentes recientes |
 | `request_human_review` | Escritura acotada | Crear una revisión humana |
 | `search_legal_sources` | Lectura | Recuperar normativa con página y artículo |
 | `get_legal_corpus_status` | Lectura | Inspeccionar versión, cobertura y embeddings |

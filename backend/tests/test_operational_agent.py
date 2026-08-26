@@ -118,6 +118,25 @@ def test_registry_does_not_expose_contact_data_or_unknown_tools(db_session):
         registry.call(db_session, "execute_sql", {}, actor_role="admin")
 
 
+def test_recurrent_patterns_tool_returns_recent_sanitized_patterns(db_session):
+    create_incident(db_session)
+    create_incident(db_session)
+    create_incident(db_session)
+
+    result = build_incident_tool_registry().call(
+        db_session,
+        "get_recurrent_patterns",
+        {},
+        actor_role="admin",
+    )
+
+    assert result["window_days"] == 30
+    assert result["minimum_incidents"] == 3
+    assert result["total_patterns"] == 1
+    assert result["patterns"][0]["incident_count"] == 3
+    assert "private@example.com" not in str(result)
+
+
 @pytest.mark.asyncio
 async def test_react_agent_uses_typed_tool_and_records_audit(db_session):
     create_incident(db_session, "ruido")

@@ -124,9 +124,10 @@ clusters candidatos existentes o regenerar manualmente todos los embeddings con 
 reconstruir las agrupaciones. El recálculo solicita confirmación porque consume tokens y puede
 tardar según la cantidad de incidentes.
 
-La opción `8. Agrupación recurrente` muestra en la terminal los patrones que cumplen el mínimo
-de tres incidentes recientes, incluyendo sus puntuaciones, ubicación, categoría y motivos de
-coincidencia. Esta consulta no modifica los datos ni requiere confirmación policial.
+Dentro de la opción `4. Agrupación semántica y recurrente`, la opción `3. Ver agrupaciones
+recurrentes` muestra en la terminal los patrones que cumplen el mínimo de tres incidentes
+recientes, incluyendo sus puntuaciones, ubicación, categoría y motivos de coincidencia. Esta
+consulta no modifica los datos ni requiere confirmación policial.
 
 La opción `6. Gestionar resaltados y revisiones de calidad` separa dos decisiones independientes:
 
@@ -206,6 +207,7 @@ Tools disponibles:
 - `aggregate_incidents`
 - `find_related_incidents`
 - `get_incident_cluster`
+- `get_recurrent_patterns`
 - `request_human_review`
 - `search_legal_sources`
 - `get_legal_corpus_status`

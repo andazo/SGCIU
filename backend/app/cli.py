@@ -210,15 +210,19 @@ def _print_recurrent_patterns(db) -> None:
 
 def _manage_clusters(db) -> None:
     while True:
-        print("\nClusters y embeddings")
+        print("\nAgrupación semántica y recurrente")
         print("1. Ver clusters candidatos")
         print("2. Recalcular embeddings y clusters")
+        print("3. Ver agrupaciones recurrentes")
         print("0. Volver")
         selection = input("Seleccione una opción: ").strip()
         if selection == "0":
             return
         if selection == "1":
             _print_clusters(db)
+            continue
+        if selection == "3":
+            _print_recurrent_patterns(db)
             continue
         if selection != "2":
             print("Opción inválida.")
@@ -477,11 +481,10 @@ def run_admin(transport: str) -> None:
         "1": "Listar incidentes",
         "2": "Consultar detalle",
         "3": "Buscar relacionados",
-        "4": "Clusters y recálculo de embeddings",
+        "4": "Agrupación semántica y recurrente",
         "5": "Preguntar al agente operativo",
         "6": "Gestionar resaltados y revisiones de calidad",
         "7": "Consultar normativa (RAG)",
-        "8": "Agrupación recurrente",
         "0": "Salir",
     }
     with SessionLocal() as db:
@@ -506,8 +509,6 @@ def run_admin(transport: str) -> None:
                 _manage_reviews(db)
             elif selection == "7":
                 _manage_legal_rag(db)
-            elif selection == "8":
-                _print_recurrent_patterns(db)
             else:
                 print("Opción inválida.")
 

@@ -89,6 +89,12 @@ def get_incident_cluster(cluster_id: int) -> str:
 
 
 @mcp.tool()
+def get_recurrent_patterns() -> str:
+    """Obtiene patrones recurrentes proactivos de incidentes similares recientes."""
+    return _execute("get_recurrent_patterns", {})
+
+
+@mcp.tool()
 def request_human_review(incident_id: int, reason: str) -> str:
     """Solicita revisión humana explícita de un incidente; no modifica su clasificación."""
     return _execute(
@@ -122,7 +128,10 @@ def capabilities() -> str:
     return json.dumps(
         {
             "server": "sgciu-incident-intelligence",
-            "scope": "incidentes urbanos, clusters candidatos y corpus normativo",
+            "scope": (
+                "incidentes urbanos, clusters candidatos, patrones recurrentes "
+                "y corpus normativo"
+            ),
             "pii": "Los tools no devuelven nombre, correo ni teléfono.",
             "limitations": [
                 "No expone SQL arbitrario.",
