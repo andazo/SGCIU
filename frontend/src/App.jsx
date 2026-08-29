@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { label: 'Agrupación recurrente', icon: '↻' },
   { label: 'Analítica', icon: '∿' },
   { label: 'Asistente de Políticas', icon: '?' },
+  { label: 'Revisiones', icon: '✓' },
 ];
 const DISTRICTS = ['Todos', 'San Joaquin', 'Barrantes', 'Llorente'];
 
@@ -66,6 +67,27 @@ const INITIAL_AI_MESSAGE = {
   content:
     'Describa la denuncia cuando esté listo. Le haré preguntas solo si falta algún dato importante. Si detecto información incorrecta, puede indicármelo para corregirla.',
 };
+
+async function apiRequest(path, options = {}) {
+  const response = await fetch(API_BASE_URL + path, options);
+  if (!response.ok) {
+    let message = 'La operación no se pudo completar (' + response.status + ').';
+    try {
+      const body = await response.json();
+      message = body.detail || message;
+    } catch {
+      const body = await response.text();
+      if (body) {
+        message = body;
+      }
+    }
+    throw new Error(message);
+  }
+  if (response.status === 204) {
+    return null;
+  }
+  return response.json();
+}
 
 function normalizeValue(value) {
   if (value === null || value === undefined || value === '') {
@@ -276,7 +298,534 @@ function RecurrentPatternsPanel({ patterns, isLoading, error }) {
   );
 }
 
-function InternalIncidentForm() {
+function CandidateClustersPanel({ clusters, isLoading, error }) {
+  if (isLoading) {
+    return <p className="adminEmpty">Cargando clusters candidatos...</p>;
+  }
+  if (error) {
+    return <p className="statusMessage error">{error}</p>;
+  }
+  if (clusters.length === 0) {
+    return <p className="adminEmpty">No hay clusters candidatos disponibles.</p>;
+  }
+  return (
+    <div className="candidateClusterList">
+      {clusters.map((cluster) => (
+        <article className="candidateClusterCard" key={cluster.id}>
+          <div>
+            <span className="eyebrow">Cluster #{cluster.id} · {cluster.status}</span>
+            <h3>{cluster.label}</h3>
+          </div>
+          <p>{cluster.explanation || 'Agrupación generada a partir de similitud semántica.'}</p>
+          <div className="clusterMembers">
+            {cluster.members.map((member) => (
+              <span key={member.incident_id}>
+                #{member.incident_id} · {(member.similarity_score * 100).toFixed(0)}%
+              </span>
+            ))}
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function ReviewsPanel({ onRefresh }) {
+  const [reviews, setReviews] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [workingId, setWorkingId] = useState(null);
+
+  async function loadReviews() {
+    setIsLoading(true);
+    setError('');
+    try {
+      setReviews(await apiRequest('/v1/reviews?status=pending'));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudieron cargar las revisiones.');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadReviews();
+  }, []);
+
+  async function transition(review, action) {
+    setWorkingId(review.id);
+    setError('');
+    try {
+      const path = action === 'resolve'
+        ? '/v1/reviews/' + review.id + '/resolve'
+        : '/v1/reviews/' + review.id + '/transition';
+      await apiRequest(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          action === 'resolve'
+            ? { notes: 'Gestionado desde el panel administrativo.' }
+            : { notes: 'Gestionado desde el panel administrativo.', action },
+        ),
+      });
+      await loadReviews();
+      await onRefresh();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo actualizar la revisión.');
+    } finally {
+      setWorkingId(null);
+    }
+  }
+
+  return (
+    <section className="adminPanel workspacePanel">
+      <div className="sectionIntro">
+        <div>
+          <span className="eyebrow">Control humano</span>
+          <h2>Revisiones pendientes</h2>
+          <p>Revisa los casos que necesitan criterio administrativo y conserva la trazabilidad de la decisión.</p>
+        </div>
+        <button className="secondaryButton" type="button" onClick={loadReviews}>↻ Actualizar</button>
+      </div>
+      {error && <p className="statusMessage error">{error}</p>}
+      {isLoading ? (
+        <p className="adminEmpty">Cargando revisiones...</p>
+      ) : reviews.length === 0 ? (
+        <p className="adminEmpty">No hay revisiones pendientes.</p>
+      ) : (
+        <div className="reviewList">
+          {reviews.map((review) => (
+            <article className="reviewCard" key={review.id}>
+              <div className="reviewHeader">
+                <div>
+                  <span className="eyebrow">Revisión #{review.id} · incidente #{review.incident_id}</span>
+                  <h3>{review.reason}</h3>
+                </div>
+                <span className="sourceBadge">{review.review_type}</span>
+              </div>
+              {review.ai_summary && <p>{review.ai_summary}</p>}
+              {review.quality_issues?.length > 0 && (
+                <ul>
+                  {review.quality_issues.map((issue) => <li key={issue}>{issue}</li>)}
+                </ul>
+              )}
+              <div className="panelActions">
+                <button className="secondaryButton" type="button" disabled={workingId === review.id} onClick={() => transition(review, 'start')}>
+                  Iniciar
+                </button>
+                <button className="primaryButton" type="button" disabled={workingId === review.id} onClick={() => transition(review, 'resolve')}>
+                  Resolver
+                </button>
+                <button className="ghostButton" type="button" disabled={workingId === review.id} onClick={() => transition(review, 'dismiss')}>
+                  Descartar
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function IncidentTable({ incidents, selectedId, onSelect }) {
+  return (
+    <div className="adminTableWrap">
+      <table className="adminTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Registro</th>
+            <th>Distrito</th>
+            <th>Categoría</th>
+            <th>Momento del hecho</th>
+            <th>Origen</th>
+          </tr>
+        </thead>
+        <tbody>
+          {incidents.map((incident) => (
+            <tr
+              className={selectedId === incident.id ? 'isSelected' : ''}
+              key={incident.id}
+              onClick={() => onSelect(incident)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onSelect(incident);
+                }
+              }}
+              tabIndex="0"
+            >
+              <td><span className="idBadge">#{incident.id}</span></td>
+              <td>{formatDateTime(incident.created_at)}</td>
+              <td>{normalizeValue(incident.ai_extracted_data?.distrito)}</td>
+              <td>{normalizeValue(incident.ai_extracted_data?.categoria_preliminar)}</td>
+              <td>
+                <span className={'temporalBadge ' + (incident.ai_extracted_data?.temporal_relation || 'desconocido')}>
+                  {normalizeValue(incident.ai_extracted_data?.temporal_relation)}
+                </span>
+              </td>
+              <td>
+                {incident.police_input
+                  ? 'Personal · ' + (incident.entered_by_badge || 'sin badge')
+                  : 'Ciudadano'}
+              </td>
+            </tr>
+          ))}
+          {incidents.length === 0 && (
+            <tr>
+              <td colSpan="6" className="adminEmptyTable">
+                No hay incidentes que coincidan con los filtros.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function IncidentDetail({ incident, related, isLoadingRelated, onFindRelated, onReindex }) {
+  const data = incident?.ai_extracted_data || {};
+  if (!incident) {
+    return (
+      <aside className="detailEmpty">
+        <span className="detailIcon" aria-hidden="true">↗</span>
+        <h3>Selecciona un incidente</h3>
+        <p>Consulta el resumen, la ubicación y sus coincidencias semánticas.</p>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="incidentDetail">
+      <div className="detailHeader">
+        <div>
+          <span className="eyebrow">Ficha operativa</span>
+          <h3>Incidente #{incident.id}</h3>
+        </div>
+        <span className={incident.police_input ? 'sourceBadge staff' : 'sourceBadge'}>
+          {incident.police_input ? 'Personal' : 'Ciudadano'}
+        </span>
+      </div>
+      <p className="detailSummary">
+        {incident.ai_summary_text || data.descripcion_detallada || 'Sin resumen disponible.'}
+      </p>
+      <dl className="detailGrid">
+        <div><dt>Categoría</dt><dd>{normalizeValue(data.categoria_preliminar)}</dd></div>
+        <div><dt>Distrito</dt><dd>{normalizeValue(data.distrito)}</dd></div>
+        <div><dt>Ubicación</dt><dd>{data.direccion_exacta || 'Pendiente'}</dd></div>
+        <div><dt>Momento</dt><dd>{data.fecha_hora_aproximada || 'Pendiente'}</dd></div>
+        <div><dt>Relación temporal</dt><dd>{normalizeValue(data.temporal_relation)}</dd></div>
+        <div><dt>Estado del embedding</dt><dd>{incident.analysis_metadata?.embedding_status || 'Pendiente'}</dd></div>
+      </dl>
+      <div className="detailActions">
+        <button className="secondaryButton" type="button" onClick={onFindRelated} disabled={isLoadingRelated}>
+          {isLoadingRelated ? 'Buscando...' : 'Buscar similares'}
+        </button>
+        <button className="ghostButton" type="button" onClick={onReindex}>
+          Recalcular embedding
+        </button>
+      </div>
+      {related && (
+        <section className="relatedResults">
+          <h4>Incidentes relacionados</h4>
+          {related.length === 0 ? (
+            <p className="adminEmpty">No se encontraron coincidencias suficientes.</p>
+          ) : (
+            <ul>
+              {related.map((item) => (
+                <li key={item.incident_id}>
+                  <strong>#{item.incident_id}</strong>
+                  <span>{(item.similarity_score * 100).toFixed(0)}% · {item.match_reasons.join(', ')}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+    </aside>
+  );
+}
+
+function IncidentsPanel({ incidents, onRefresh }) {
+  const [selectedIncident, setSelectedIncident] = useState(null);
+  const [related, setRelated] = useState(null);
+  const [isLoadingRelated, setIsLoadingRelated] = useState(false);
+  const [actionMessage, setActionMessage] = useState('');
+  const [error, setError] = useState('');
+
+  async function findRelated() {
+    if (!selectedIncident) return;
+    setIsLoadingRelated(true);
+    setError('');
+    try {
+      const result = await apiRequest('/v1/incidents/' + selectedIncident.id + '/related?top_k=8');
+      setRelated(result.items);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudieron buscar similares.');
+    } finally {
+      setIsLoadingRelated(false);
+    }
+  }
+
+  async function reindex() {
+    if (!selectedIncident) return;
+    setError('');
+    setActionMessage('');
+    try {
+      await apiRequest('/v1/incidents/' + selectedIncident.id + '/semantic-index', { method: 'POST' });
+      setActionMessage('Embedding del incidente #' + selectedIncident.id + ' actualizado.');
+      await onRefresh();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo recalcular el embedding.');
+    }
+  }
+
+  return (
+    <section className="adminPanel workspacePanel">
+      <div className="sectionIntro">
+        <div>
+          <span className="eyebrow">Consulta operacional</span>
+          <h2>Incidentes</h2>
+          <p>Explora los registros y abre su ficha para consultar coincidencias semánticas.</p>
+        </div>
+        <button className="secondaryButton" type="button" onClick={onRefresh}>↻ Actualizar lista</button>
+      </div>
+      {actionMessage && <p className="statusMessage success">{actionMessage}</p>}
+      {error && <p className="statusMessage error">{error}</p>}
+      <div className="incidentWorkspace">
+        <IncidentTable
+          incidents={incidents}
+          selectedId={selectedIncident?.id}
+          onSelect={(incident) => {
+            setSelectedIncident(incident);
+            setRelated(null);
+            setActionMessage('');
+          }}
+        />
+        <IncidentDetail
+          incident={selectedIncident}
+          related={related}
+          isLoadingRelated={isLoadingRelated}
+          onFindRelated={findRelated}
+          onReindex={reindex}
+        />
+      </div>
+    </section>
+  );
+}
+
+function AnalyticsPanel({ incidents }) {
+  const [query, setQuery] = useState('');
+  const [answer, setAnswer] = useState(null);
+  const [isRunning, setIsRunning] = useState(false);
+  const [error, setError] = useState('');
+  const categories = Object.entries(
+    countBy(incidents, (incident) => incident.ai_extracted_data?.categoria_preliminar),
+  ).sort(([, countA], [, countB]) => countB - countA);
+  const districts = Object.entries(
+    countBy(incidents, (incident) => incident.ai_extracted_data?.distrito),
+  ).sort(([, countA], [, countB]) => countB - countA);
+  const staffReports = incidents.filter((incident) => incident.police_input).length;
+  const pendingReviews = incidents.filter((incident) => incident.requires_human_review).length;
+
+  async function runQuery(event) {
+    event.preventDefault();
+    if (!query.trim()) return;
+    setIsRunning(true);
+    setError('');
+    try {
+      setAnswer(await apiRequest('/v1/operational/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query.trim() }),
+      }));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo consultar al asistente.');
+    } finally {
+      setIsRunning(false);
+    }
+  }
+
+  return (
+    <section className="adminPanel workspacePanel">
+      <div className="sectionIntro">
+        <div>
+          <span className="eyebrow">Lectura del territorio</span>
+          <h2>Analítica operativa</h2>
+          <p>Observa tendencias y pregunta por los datos usando el asistente operacional.</p>
+        </div>
+      </div>
+      <div className="analyticsKpis">
+        <StatCard label="Registros totales" value={incidents.length} />
+        <StatCard label="Ingresados por personal" value={staffReports} />
+        <StatCard label="Requieren revisión" value={pendingReviews} />
+      </div>
+      <div className="analyticsGrid">
+        <article className="insightCard">
+          <h3>Distribución por distrito</h3>
+          {districts.map(([district, count]) => (
+            <div className="insightRow" key={district}>
+              <span>{normalizeValue(district)}</span><strong>{count}</strong>
+            </div>
+          ))}
+          {districts.length === 0 && <p className="adminEmpty">Sin datos.</p>}
+        </article>
+        <article className="insightCard">
+          <h3>Categorías más frecuentes</h3>
+          {categories.slice(0, 6).map(([category, count]) => (
+            <div className="insightRow" key={category}>
+              <span>{normalizeValue(category)}</span><strong>{count}</strong>
+            </div>
+          ))}
+          {categories.length === 0 && <p className="adminEmpty">Sin datos.</p>}
+        </article>
+      </div>
+      <form className="agentQueryBox" onSubmit={runQuery}>
+        <label htmlFor="operational-query"><strong>Pregunta al asistente operacional</strong></label>
+        <div className="queryRow">
+          <input
+            id="operational-query"
+            type="text"
+            placeholder="Ej. ¿Qué incidentes de ruido hubo en Llorente?"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <button className="primaryButton" type="submit" disabled={isRunning || !query.trim()}>
+            {isRunning ? 'Consultando...' : 'Consultar'}
+          </button>
+        </div>
+      </form>
+      {error && <p className="statusMessage error">{error}</p>}
+      {answer && (
+        <article className="agentAnswer">
+          <div className="answerHeader">
+            <h3>Respuesta del asistente</h3>
+            <span>{answer.steps?.length || 0} pasos trazables</span>
+          </div>
+          <p>{answer.answer}</p>
+          {answer.incident_citations?.length > 0 && (
+            <p className="citationLine">
+              Incidentes consultados: {answer.incident_citations.map((id) => '#' + id).join(', ')}
+            </p>
+          )}
+        </article>
+      )}
+    </section>
+  );
+}
+
+function PolicyAssistantPanel() {
+  const [query, setQuery] = useState('');
+  const [result, setResult] = useState(null);
+  const [corpus, setCorpus] = useState(null);
+  const [isQuerying, setIsQuerying] = useState(false);
+  const [isIndexing, setIsIndexing] = useState(false);
+  const [error, setError] = useState('');
+
+  async function loadCorpus() {
+    try {
+      setCorpus(await apiRequest('/v1/legal-rag/corpus'));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo consultar el corpus normativo.');
+    }
+  }
+
+  useEffect(() => {
+    loadCorpus();
+  }, []);
+
+  async function indexCorpus() {
+    setIsIndexing(true);
+    setError('');
+    try {
+      await apiRequest('/v1/legal-rag/corpus/index', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: false }),
+      });
+      await loadCorpus();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo indexar el corpus.');
+    } finally {
+      setIsIndexing(false);
+    }
+  }
+
+  async function askPolicy(event) {
+    event.preventDefault();
+    if (!query.trim()) return;
+    setIsQuerying(true);
+    setError('');
+    try {
+      setResult(await apiRequest('/v1/legal-rag/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query.trim() }),
+      }));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo consultar la normativa.');
+    } finally {
+      setIsQuerying(false);
+    }
+  }
+
+  return (
+    <section className="adminPanel workspacePanel policyWorkspace">
+      <div className="sectionIntro">
+        <div>
+          <span className="eyebrow">Normativa autorizada</span>
+          <h2>Asistente de Políticas</h2>
+          <p>Consulta procedimientos municipales respaldados por fuentes citables.</p>
+        </div>
+        <div className="corpusStatus">
+          <span className={'statusDot ' + (corpus?.indexed_documents > 0 ? 'ready' : '')} />
+          <span>{corpus?.indexed_documents > 0 ? corpus.indexed_documents + ' documentos indexados' : 'Corpus pendiente'}</span>
+          <button className="ghostButton" type="button" onClick={indexCorpus} disabled={isIndexing}>
+            {isIndexing ? 'Indexando...' : 'Actualizar corpus'}
+          </button>
+        </div>
+      </div>
+      <form className="policyQuery" onSubmit={askPolicy}>
+        <label htmlFor="policy-query"><strong>¿Qué necesitas consultar?</strong></label>
+        <textarea
+          id="policy-query"
+          rows="3"
+          placeholder="Ej. ¿Qué procedimiento aplica para una denuncia de ruido?"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <button className="primaryButton" type="submit" disabled={isQuerying || !query.trim()}>
+          {isQuerying ? 'Revisando fuentes...' : 'Consultar normativa'}
+        </button>
+      </form>
+      {error && <p className="statusMessage error">{error}</p>}
+      {result && (
+        <article className="policyAnswer">
+          <div className="answerHeader">
+            <h3>Respuesta fundamentada</h3>
+            <span>{result.insufficient_evidence ? 'Evidencia insuficiente' : (result.citations?.length || 0) + ' fuentes'}</span>
+          </div>
+          <p className="policyAnswerText">{result.answer}</p>
+          {result.citations?.length > 0 && (
+            <div className="citationCards">
+              {result.citations.map((citation) => (
+                <article key={citation.source_id}>
+                  <strong>[{citation.source_id}] {citation.document_title}</strong>
+                  <span>Página {citation.pdf_page} · {citation.source_category}</span>
+                  <p>{citation.excerpt}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </article>
+      )}
+    </section>
+  );
+}
+
+function InternalIncidentForm({ onSaved }) {
   const [enteredByBadge, setEnteredByBadge] = useState('');
   const [sessionId, setSessionId] = useState('');
   const [messages, setMessages] = useState([]);
@@ -384,6 +933,9 @@ function InternalIncidentForm() {
         throw new Error((await response.text()) || 'No se pudo guardar el incidente.');
       }
       const saved = await response.json();
+      if (onSaved) {
+        await onSaved(saved);
+      }
       setSuccessMessage(`Incidente #${saved.id} guardado correctamente.`);
       setEnteredByBadge('');
       setMessages([]);
@@ -502,56 +1054,88 @@ function AdminDashboard() {
   const [recurrentPatterns, setRecurrentPatterns] = useState([]);
   const [isPatternsLoading, setIsPatternsLoading] = useState(true);
   const [patternsError, setPatternsError] = useState('');
+  const [candidateClusters, setCandidateClusters] = useState([]);
+  const [isClustersLoading, setIsClustersLoading] = useState(true);
+  const [isRecalculating, setIsRecalculating] = useState(false);
+  const [recalculationMessage, setRecalculationMessage] = useState('');
+
+  async function refreshComplaints() {
+    setIsLoading(true);
+    setLoadError('');
+    try {
+      setComplaints(await apiRequest('/complaints'));
+    } catch (error) {
+      setLoadError(
+        error instanceof Error
+          ? error.message
+          : 'Ocurrió un error inesperado al cargar los incidentes.',
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function refreshRecurrentPatterns() {
+    setIsPatternsLoading(true);
+    setPatternsError('');
+    try {
+      setRecurrentPatterns(await apiRequest('/v1/incidents/clusters/recurrent'));
+    } catch (error) {
+      setPatternsError(
+        error instanceof Error
+          ? error.message
+          : 'Ocurrió un error al cargar los patrones recurrentes.',
+      );
+    } finally {
+      setIsPatternsLoading(false);
+    }
+  }
+
+  async function refreshCandidateClusters() {
+    setIsClustersLoading(true);
+    try {
+      setCandidateClusters(await apiRequest('/v1/incidents/clusters/candidates'));
+    } catch (error) {
+      setPatternsError(
+        error instanceof Error
+          ? error.message
+          : 'Ocurrió un error al cargar los clusters candidatos.',
+      );
+    } finally {
+      setIsClustersLoading(false);
+    }
+  }
 
   useEffect(() => {
-    async function loadComplaints() {
-      setIsLoading(true);
-      setLoadError('');
-
-      try {
-        const response = await fetch(`${API_BASE_URL}/complaints`);
-        if (!response.ok) {
-          throw new Error('No se pudieron cargar los incidentes.');
-        }
-
-        setComplaints(await response.json());
-      } catch (error) {
-        setLoadError(
-          error instanceof Error
-            ? error.message
-            : 'Ocurrió un error inesperado al cargar los incidentes.',
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    loadComplaints();
+    refreshComplaints();
+    refreshRecurrentPatterns();
+    refreshCandidateClusters();
   }, []);
 
-  useEffect(() => {
-    async function loadRecurrentPatterns() {
-      setIsPatternsLoading(true);
-      setPatternsError('');
-      try {
-        const response = await fetch(`${API_BASE_URL}/v1/incidents/clusters/recurrent`);
-        if (!response.ok) {
-          throw new Error('No se pudieron cargar los patrones recurrentes.');
-        }
-        setRecurrentPatterns(await response.json());
-      } catch (error) {
-        setPatternsError(
-          error instanceof Error
-            ? error.message
-            : 'Ocurrió un error al cargar los patrones recurrentes.',
-        );
-      } finally {
-        setIsPatternsLoading(false);
-      }
+  async function recalculateSemanticIndex() {
+    setIsRecalculating(true);
+    setRecalculationMessage('');
+    setPatternsError('');
+    try {
+      const result = await apiRequest('/v1/incidents/clusters/recalculate', { method: 'POST' });
+      setRecalculationMessage(
+        result.embeddings_failed
+          ? 'El cálculo terminó con algunos embeddings pendientes.'
+          : result.embeddings_updated + ' embeddings y ' + result.clusters_rebuilt + ' clusters actualizados.',
+      );
+      await Promise.all([
+        refreshComplaints(),
+        refreshRecurrentPatterns(),
+        refreshCandidateClusters(),
+      ]);
+    } catch (error) {
+      setPatternsError(
+        error instanceof Error ? error.message : 'No se pudo recalcular la agrupación semántica.',
+      );
+    } finally {
+      setIsRecalculating(false);
     }
-
-    loadRecurrentPatterns();
-  }, []);
+  }
 
   const filteredComplaints = useMemo(
     () =>
@@ -630,7 +1214,11 @@ function AdminDashboard() {
 
       <main className="adminContent">
         <header className="adminTop">
-          <h1>Sistema de Gestión y Clasificación de Incidentes Urbanos</h1>
+          <div className="adminTopHeading">
+            <span className="eyebrow">Centro operativo municipal</span>
+            <h1>Sistema de Gestión y Clasificación de Incidentes Urbanos</h1>
+            <p>Convierte cada denuncia en contexto útil para actuar mejor en Flores.</p>
+          </div>
           <div className="filterSection">
             <button
               className="filterToggle"
@@ -706,13 +1294,40 @@ function AdminDashboard() {
                 <h2>Agrupación recurrente</h2>
                 <p>Patrones proactivos detectados automáticamente en los últimos 30 días.</p>
               </div>
-              <span>Sin confirmación manual</span>
+              <div className="panelActions">
+                <button className="secondaryButton" type="button" onClick={refreshRecurrentPatterns}>
+                  ↻ Actualizar
+                </button>
+                <button
+                  className="primaryButton"
+                  type="button"
+                  onClick={recalculateSemanticIndex}
+                  disabled={isRecalculating}
+                >
+                  {isRecalculating ? 'Calculando...' : 'Recalcular embeddings y clusters'}
+                </button>
+              </div>
             </div>
+            {recalculationMessage && <p className="statusMessage success">{recalculationMessage}</p>}
             <RecurrentPatternsPanel
               patterns={recurrentPatterns}
               isLoading={isPatternsLoading}
               error={patternsError}
             />
+            <div className="subPanel">
+              <div className="subPanelHeader">
+                <div>
+                  <span className="eyebrow">Vista técnica</span>
+                  <h3>Clusters candidatos</h3>
+                  <p>Consulta las agrupaciones calculadas antes de que formen un patrón recurrente.</p>
+                </div>
+              </div>
+              <CandidateClustersPanel
+                clusters={candidateClusters}
+                isLoading={isClustersLoading}
+                error={patternsError}
+              />
+            </div>
           </section>
         )}
 
@@ -725,17 +1340,19 @@ function AdminDashboard() {
               </div>
               <span>Registro administrativo</span>
             </div>
-            <InternalIncidentForm />
+            <InternalIncidentForm onSaved={refreshComplaints} />
           </section>
         )}
 
-        {activeItem !== 'Inicio' &&
-          activeItem !== 'Agrupación recurrente' &&
-          activeItem !== 'Registrar incidente' && (
-          <p className="adminNotice">
-            {activeItem} ya está disponible en el menú. La pantalla individual se implementará después.
-          </p>
+        {activeItem === 'Incidentes' && (
+          <IncidentsPanel incidents={filteredComplaints} onRefresh={refreshComplaints} />
         )}
+
+        {activeItem === 'Analítica' && <AnalyticsPanel incidents={filteredComplaints} />}
+
+        {activeItem === 'Asistente de Políticas' && <PolicyAssistantPanel />}
+
+        {activeItem === 'Revisiones' && <ReviewsPanel onRefresh={refreshComplaints} />}
 
         {loadError && <p className="statusMessage error">{loadError}</p>}
 
