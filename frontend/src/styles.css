@@ -629,10 +629,47 @@ pre {
   font-size: clamp(1.35rem, 3vw, 2rem);
 }
 
+.filterSection {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+
+.filterToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #b7cbb6;
+  border-radius: 9px;
+  padding: 9px 13px;
+  color: #184f34;
+  background: #f8fbf4;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+.filterToggle:hover,
+.filterToggle:focus-visible {
+  border-color: #184f34;
+  background: #edf9ef;
+}
+
+.filterToggleState {
+  color: #52616f;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
 .adminFilters {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+  width: min(100%, 720px);
+  padding: 14px;
+  border: 1px solid #dce8d9;
+  border-radius: 10px;
+  background: #ffffff;
 }
 
 .adminFilters label {
@@ -662,6 +699,19 @@ pre {
 .adminFilters select:focus {
   border-color: #226641;
   box-shadow: 0 0 0 3px rgba(34, 102, 65, 0.16);
+}
+
+.clearFiltersButton {
+  align-self: end;
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #184f34;
+  background: #edf9ef;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
 }
 
 .adminNotice {

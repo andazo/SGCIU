@@ -487,6 +487,7 @@ function InternalIncidentForm() {
 
 function AdminDashboard() {
   const [isMenuOpen, setIsMenuOpen] = useState(true);
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [activeItem, setActiveItem] = useState(
     window.location.pathname.includes('/registrar-incidente')
       ? 'Registrar incidente'
@@ -630,39 +631,71 @@ function AdminDashboard() {
       <main className="adminContent">
         <header className="adminTop">
           <h1>Sistema de Gestión y Clasificación de Incidentes Urbanos</h1>
-          <div className="adminFilters">
-            <label>
-              <span>Fecha</span>
-              <input
-                type="date"
-                value={dateFilter}
-                onChange={(event) => setDateFilter(event.target.value)}
-              />
-            </label>
+          <div className="filterSection">
+            <button
+              className="filterToggle"
+              type="button"
+              aria-expanded={isFiltersOpen}
+              aria-controls="incident-filters"
+              onClick={() => setIsFiltersOpen((open) => !open)}
+            >
+              <span aria-hidden="true">⌕</span>
+              Filtros principales
+              <span className="filterToggleState">
+                {isFiltersOpen ? 'Ocultar' : 'Mostrar'}
+              </span>
+            </button>
 
-            <label>
-              <span>Distrito</span>
-              <select
-                value={districtFilter}
-                onChange={(event) => setDistrictFilter(event.target.value)}
-              >
-                {DISTRICTS.map((district) => (
-                  <option key={district} value={district}>
-                    {district}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {isFiltersOpen && (
+              <div className="adminFilters" id="incident-filters">
+                <label>
+                  <span>Fecha</span>
+                  <input
+                    type="date"
+                    value={dateFilter}
+                    onChange={(event) => setDateFilter(event.target.value)}
+                  />
+                </label>
 
-            <label>
-              <span>ID incidente</span>
-              <input
-                type="search"
-                placeholder="Ej. 24"
-                value={incidentSearch}
-                onChange={(event) => setIncidentSearch(event.target.value)}
-              />
-            </label>
+                <label>
+                  <span>Distrito</span>
+                  <select
+                    value={districtFilter}
+                    onChange={(event) => setDistrictFilter(event.target.value)}
+                  >
+                    {DISTRICTS.map((district) => (
+                      <option key={district} value={district}>
+                        {district}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  <span>ID incidente</span>
+                  <input
+                    type="search"
+                    placeholder="Ej. 24"
+                    value={incidentSearch}
+                    onChange={(event) => setIncidentSearch(event.target.value)}
+                  />
+                </label>
+
+                {(dateFilter || districtFilter !== 'Todos' || incidentSearch) && (
+                  <button
+                    className="clearFiltersButton"
+                    type="button"
+                    onClick={() => {
+                      setDateFilter('');
+                      setDistrictFilter('Todos');
+                      setIncidentSearch('');
+                    }}
+                  >
+                    Limpiar filtros
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </header>
 
