@@ -337,6 +337,7 @@ function ReviewsPanel({ onRefresh }) {
   const [isHighlightsLoading, setIsHighlightsLoading] = useState(true);
   const [error, setError] = useState('');
   const [workingId, setWorkingId] = useState(null);
+  const [assessmentMessage, setAssessmentMessage] = useState('');
 
   async function loadReviews() {
     setIsLoading(true);
@@ -413,6 +414,25 @@ function ReviewsPanel({ onRefresh }) {
     }
   }
 
+  async function assessPending() {
+    setWorkingId('assessment');
+    setAssessmentMessage('');
+    setError('');
+    try {
+      const result = await apiRequest('/v1/reviews/assess-pending', { method: 'POST' });
+      setAssessmentMessage(
+        'Análisis terminado: ' + result.completed + ' completados, ' + result.failed + ' fallidos.',
+      );
+      await loadReviews();
+      await loadHighlights();
+      await onRefresh();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo analizar la cola pendiente.');
+    } finally {
+      setWorkingId(null);
+    }
+  }
+
   return (
     <section className="adminPanel workspacePanel">
       <div className="sectionIntro">
@@ -421,8 +441,14 @@ function ReviewsPanel({ onRefresh }) {
           <h2>Revisiones pendientes</h2>
           <p>Revisa los casos que necesitan criterio administrativo y conserva la trazabilidad de la decisión.</p>
         </div>
-        <button className="secondaryButton" type="button" onClick={loadReviews}>↻ Actualizar</button>
+        <div className="panelActions">
+          <button className="secondaryButton" type="button" onClick={loadReviews}>↻ Actualizar</button>
+          <button className="primaryButton" type="button" onClick={assessPending} disabled={workingId === 'assessment'}>
+            {workingId === 'assessment' ? 'Analizando...' : 'Analizar pendientes con IA'}
+          </button>
+        </div>
       </div>
+      {assessmentMessage && <p className="statusMessage success">{assessmentMessage}</p>}
       {error && <p className="statusMessage error">{error}</p>}
       {!isHighlightsLoading && highlights.length > 0 && (
         <section className="highlightSection">
