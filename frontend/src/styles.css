@@ -202,6 +202,52 @@ h2 {
   color: #52636f;
 }
 
+.internalIncidentPanel {
+  display: grid;
+  gap: 20px;
+}
+
+.internalIncidentForm {
+  display: grid;
+  gap: 20px;
+}
+
+.internalBadgeField {
+  max-width: 440px;
+}
+
+.internalBadgeField small {
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.internalSummary {
+  padding: 18px;
+  border: 1px solid #d8e5dc;
+  border-radius: 10px;
+  background: #fbfdfb;
+}
+
+.internalSummary h3 {
+  margin-top: 0;
+  color: #184f34;
+}
+
+.internalSummary ul {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.internalSummaryText {
+  margin-bottom: 0;
+  color: #52636f;
+}
+
+.internalSubmitButton {
+  justify-self: start;
+}
+
 .recurrentPatternBadges {
   display: flex;
   flex-wrap: wrap;

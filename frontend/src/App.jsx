@@ -5,6 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000
 const ADMIN_ROUTE = '/admin';
 const NAV_ITEMS = [
   { label: 'Inicio', icon: '⌂' },
+  { label: 'Registrar incidente', icon: '+' },
   { label: 'Incidentes', icon: '!' },
   { label: 'Agrupación recurrente', icon: '↻' },
   { label: 'Analítica', icon: '∿' },
@@ -275,9 +276,222 @@ function RecurrentPatternsPanel({ patterns, isLoading, error }) {
   );
 }
 
+function InternalIncidentForm() {
+  const [enteredByBadge, setEnteredByBadge] = useState('');
+  const [sessionId, setSessionId] = useState('');
+  const [messages, setMessages] = useState([]);
+  const [currentMessage, setCurrentMessage] = useState('');
+  const [extractedData, setExtractedData] = useState(INITIAL_EXTRACTED_DATA);
+  const [isAiComplete, setIsAiComplete] = useState(false);
+  const [summaryText, setSummaryText] = useState('');
+  const [truthConfirmation, setTruthConfirmation] = useState(false);
+  const [dataUsageConsent, setDataUsageConsent] = useState(false);
+  const [isStarting, setIsStarting] = useState(true);
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+
+  async function startSession() {
+    setIsStarting(true);
+    setError('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/v1/internal-intake/sessions`, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        throw new Error('No se pudo iniciar la sesión interna de registro.');
+      }
+      const data = await response.json();
+      setSessionId(data.session_id);
+      setMessages([{ role: 'assistant', content: data.assistant_message }]);
+    } catch (startError) {
+      setError(startError instanceof Error ? startError.message : 'No se pudo iniciar el registro.');
+    } finally {
+      setIsStarting(false);
+    }
+  }
+
+  useEffect(() => {
+    startSession();
+  }, []);
+
+  const canSubmit = Boolean(
+    sessionId &&
+      enteredByBadge.trim() &&
+      isAiComplete &&
+      truthConfirmation &&
+      dataUsageConsent &&
+      !isSubmitting,
+  );
+
+  async function handleSendMessage(event) {
+    event.preventDefault();
+    const trimmedMessage = currentMessage.trim();
+    if (!trimmedMessage || !sessionId || isChatLoading) {
+      return;
+    }
+
+    setCurrentMessage('');
+    setError('');
+    setIsChatLoading(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/v1/internal-intake/sessions/${sessionId}/messages`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: trimmedMessage }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error((await response.text()) || 'No se pudo analizar el mensaje.');
+      }
+      const data = await response.json();
+      setMessages(data.messages);
+      setExtractedData(data.extracted_data);
+      setIsAiComplete(Boolean(data.is_complete));
+      setSummaryText(data.summary_text ?? '');
+    } catch (chatError) {
+      setError(chatError instanceof Error ? chatError.message : 'No se pudo analizar el mensaje.');
+    } finally {
+      setIsChatLoading(false);
+    }
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (!canSubmit) {
+      return;
+    }
+    setError('');
+    setSuccessMessage('');
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/v1/internal-intake/sessions/${sessionId}/submit`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            entered_by_badge: enteredByBadge.trim(),
+            truth_confirmation: truthConfirmation,
+            data_usage_consent: dataUsageConsent,
+          }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error((await response.text()) || 'No se pudo guardar el incidente.');
+      }
+      const saved = await response.json();
+      setSuccessMessage(`Incidente #${saved.id} guardado correctamente.`);
+      setEnteredByBadge('');
+      setMessages([]);
+      setCurrentMessage('');
+      setExtractedData(INITIAL_EXTRACTED_DATA);
+      setIsAiComplete(false);
+      setSummaryText('');
+      setTruthConfirmation(false);
+      setDataUsageConsent(false);
+      await startSession();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'No se pudo guardar el incidente.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <form className="internalIncidentForm" onSubmit={handleSubmit}>
+      <label className="field internalBadgeField" htmlFor="enteredByBadge">
+        <span>Badge del funcionario que registra</span>
+        <input
+          id="enteredByBadge"
+          type="text"
+          autoComplete="off"
+          placeholder="Ej. POL-042 o ADM-015"
+          value={enteredByBadge}
+          onChange={(event) => setEnteredByBadge(event.target.value)}
+        />
+        <small>Este dato se registra manualmente para identificar al funcionario responsable.</small>
+      </label>
+
+      <div className="chatPanel" aria-live="polite">
+        <div className="chatMessages">
+          {isStarting && <div className="chatBubble assistant"><p>Iniciando asistente interno...</p></div>}
+          {messages.map((message, index) => (
+            <div className={`chatBubble ${message.role}`} key={`${message.role}-${index}`}>
+              <p>{message.content}</p>
+            </div>
+          ))}
+          {isChatLoading && (
+            <div className="chatBubble assistant"><p>Analizando la información...</p></div>
+          )}
+        </div>
+        <div className="chatInputRow">
+          <textarea
+            aria-label="Mensaje para el asistente interno"
+            placeholder="Describa la denuncia recibida..."
+            value={currentMessage}
+            disabled={!sessionId || isStarting}
+            onChange={(event) => setCurrentMessage(event.target.value)}
+          />
+          <button type="button" disabled={!sessionId || isChatLoading} onClick={handleSendMessage}>
+            {isChatLoading ? 'Enviando...' : 'Enviar'}
+          </button>
+        </div>
+      </div>
+
+      <section className="internalSummary">
+        <h3>Resumen extraído</h3>
+        {isAiComplete ? (
+          <ul>
+            {buildDetailBullets(extractedData).map((item) => (
+              <li key={`${item.label}-${item.value}`}><strong>{item.label}:</strong> {item.value}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="summaryPlaceholder">El resumen aparecerá cuando el asistente termine de recolectar la información.</p>
+        )}
+        {summaryText && <p className="internalSummaryText">{summaryText}</p>}
+      </section>
+
+      <div className="consentGroup">
+        <label className="checkField">
+          <input
+            type="checkbox"
+            checked={truthConfirmation}
+            onChange={(event) => setTruthConfirmation(event.target.checked)}
+          />
+          <span>Confirmo que la información registrada corresponde a la denuncia recibida.</span>
+        </label>
+        <label className="checkField">
+          <input
+            type="checkbox"
+            checked={dataUsageConsent}
+            onChange={(event) => setDataUsageConsent(event.target.checked)}
+          />
+          <span>Confirmo el uso institucional de los datos para gestionar el incidente.</span>
+        </label>
+      </div>
+
+      <button className="internalSubmitButton" type="submit" disabled={!canSubmit}>
+        {isSubmitting ? 'Guardando...' : 'Guardar incidente interno'}
+      </button>
+      {!enteredByBadge.trim() && <p className="statusMessage warning">El badge del funcionario es obligatorio.</p>}
+      {error && <p className="statusMessage error">{error}</p>}
+      {successMessage && <p className="statusMessage success">{successMessage}</p>}
+    </form>
+  );
+}
+
 function AdminDashboard() {
   const [isMenuOpen, setIsMenuOpen] = useState(true);
-  const [activeItem, setActiveItem] = useState('Inicio');
+  const [activeItem, setActiveItem] = useState(
+    window.location.pathname.includes('/registrar-incidente')
+      ? 'Registrar incidente'
+      : 'Inicio',
+  );
   const [complaints, setComplaints] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -469,7 +683,22 @@ function AdminDashboard() {
           </section>
         )}
 
-        {activeItem !== 'Inicio' && activeItem !== 'Agrupación recurrente' && (
+        {activeItem === 'Registrar incidente' && (
+          <section className="adminPanel internalIncidentPanel">
+            <div className="adminPanelHeader">
+              <div>
+                <h2>Registrar incidente interno</h2>
+                <p>Utilice este formulario para denuncias recibidas presencialmente o por vía verbal.</p>
+              </div>
+              <span>Registro administrativo</span>
+            </div>
+            <InternalIncidentForm />
+          </section>
+        )}
+
+        {activeItem !== 'Inicio' &&
+          activeItem !== 'Agrupación recurrente' &&
+          activeItem !== 'Registrar incidente' && (
           <p className="adminNotice">
             {activeItem} ya está disponible en el menú. La pantalla individual se implementará después.
           </p>
@@ -513,6 +742,7 @@ function AdminDashboard() {
                   <th>Categoría</th>
                   <th>Relación</th>
                   <th>Dirección</th>
+                  <th>Origen</th>
                 </tr>
               </thead>
               <tbody>
@@ -534,12 +764,17 @@ function AdminDashboard() {
                     </td>
                     <td>{normalizeValue(complaint.ai_extracted_data?.relacion_incidente)}</td>
                     <td>{normalizeValue(complaint.ai_extracted_data?.direccion_exacta)}</td>
+                    <td>
+                      {complaint.police_input
+                        ? `Personal · ${complaint.entered_by_badge || 'Badge no disponible'}`
+                        : 'Ciudadano'}
+                    </td>
                   </tr>
                 ))}
 
                 {!isLoading && filteredComplaints.length === 0 && (
                   <tr>
-                    <td colSpan="6" className="adminEmptyTable">
+                    <td colSpan="7" className="adminEmptyTable">
                       No hay incidentes que coincidan con los filtros.
                     </td>
                   </tr>

@@ -12,6 +12,8 @@ conserva como prototipo, pero no es el foco de esta etapa.
 
 - Sesiones persistentes de intake ciudadano con correcciones acumulativas y razonamiento
   de alta precisión mediante OpenAI.
+- Registro interno de incidentes por oficiales o personal administrativo mediante un flujo
+  conversacional protegido por el rol administrativo, con identificación manual por badge.
 - Registro previo por CLI de nombre, identificación y contacto antes del relato.
 - Clasificación, resumen, entidades, urgencia, evidencia y confianza por campo.
 - Follow-ups priorizados según valor operativo, con cierre parcial cuando la persona no
@@ -69,6 +71,22 @@ También se puede seleccionar el rol directamente:
 .venv/bin/python -m app.cli --role admin --transport local
 .venv/bin/python -m app.cli --role admin --transport mcp
 ```
+
+### Registro interno desde el panel
+
+En `http://localhost:5173/admin` seleccione **Registrar incidente**. El funcionario introduce
+manualmente su badge, conversa con el mismo asistente de intake, revisa el resumen y confirma
+la veracidad y el uso institucional de la información. El incidente se guarda en
+`complaint_submissions` con `police_input=true`, conserva el badge del funcionario y aparece
+junto con las denuncias ciudadanas. La acción también queda registrada en `audit_events`.
+
+Endpoints administrativos del flujo interno:
+
+- `POST /v1/internal-intake/sessions`
+- `POST /v1/internal-intake/sessions/{session_id}/messages`
+- `POST /v1/internal-intake/sessions/{session_id}/submit`
+
+El badge se valida como identificador, pero no constituye autenticación en este MVP.
 
 El flujo ciudadano solicita primero el nombre completo. La identificación, el correo y el
 teléfono son opcionales; estos datos se persisten con la denuncia, pero se excluyen de
