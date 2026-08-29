@@ -59,3 +59,8 @@ def test_internal_intake_api_marks_source_and_badge():
     assert submitted.status_code == 201
     assert submitted.json()["police_input"] is True
     assert submitted.json()["entered_by_badge"] == "POL-042"
+
+    common_list = client.get("/complaints")
+    assert common_list.status_code == 200
+    assert common_list.json()[0]["id"] == submitted.json()["id"]
+    assert common_list.json()[0]["police_input"] is True

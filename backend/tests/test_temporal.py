@@ -3,7 +3,6 @@ from datetime import datetime
 from app.ai.temporal import classify_temporal_context, normalize_temporal_data
 from app.schemas import ComplaintExtractedData
 
-
 REFERENCE = datetime.fromisoformat("2026-07-28T12:00:00-06:00")
 
 
