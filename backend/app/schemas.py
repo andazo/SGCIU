@@ -575,6 +575,12 @@ class WorkflowTransitionRequest(StrictModel):
     notes: str = Field(min_length=3, max_length=2_000)
 
 
+class ReviewAssessmentResponse(StrictModel):
+    pending: int
+    completed: int
+    failed: int
+
+
 class AssistantFeedbackRequest(StrictModel):
     trace_id: str
     rating: int = Field(ge=1, le=5)

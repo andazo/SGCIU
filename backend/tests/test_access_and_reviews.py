@@ -41,6 +41,18 @@ def test_admin_endpoint_rejects_missing_key(monkeypatch):
     assert client.get("/v1/incidents", headers={"X-Admin-Key": "test-secret"}).status_code == 200
 
 
+def test_pending_assessment_endpoint_returns_batch_result(monkeypatch):
+    monkeypatch.setattr(
+        "app.api.routes.reviews.ReviewService.assess_pending_incidents",
+        lambda _service: (4, 3, 1),
+    )
+
+    response = TestClient(app).post("/v1/reviews/assess-pending")
+
+    assert response.status_code == 200
+    assert response.json() == {"pending": 4, "completed": 3, "failed": 1}
+
+
 def test_review_resolution_updates_incident_state(db_session):
     incident = IncidentService(db_session).create(
         ComplaintSubmissionCreate(
