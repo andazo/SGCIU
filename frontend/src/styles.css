@@ -1073,7 +1073,8 @@ pre {
 }
 
 .candidateClusterCard,
-.reviewCard {
+.reviewCard,
+.highlightCard {
   display: grid;
   gap: 10px;
   border: 1px solid #d8e5dc;
@@ -1120,6 +1121,13 @@ pre {
 .reviewCard ul {
   margin: 0;
   color: #52616f;
+}
+
+.highlightSection {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid #d8e5dc;
+  padding-top: 18px;
 }
 
 .policyQuery textarea {

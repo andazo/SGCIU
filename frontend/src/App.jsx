@@ -332,7 +332,9 @@ function CandidateClustersPanel({ clusters, isLoading, error }) {
 
 function ReviewsPanel({ onRefresh }) {
   const [reviews, setReviews] = useState([]);
+  const [highlights, setHighlights] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isHighlightsLoading, setIsHighlightsLoading] = useState(true);
   const [error, setError] = useState('');
   const [workingId, setWorkingId] = useState(null);
 
@@ -348,8 +350,20 @@ function ReviewsPanel({ onRefresh }) {
     }
   }
 
+  async function loadHighlights() {
+    setIsHighlightsLoading(true);
+    try {
+      setHighlights(await apiRequest('/v1/reviews/highlights?status=pending'));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudieron cargar los resaltados.');
+    } finally {
+      setIsHighlightsLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadReviews();
+    loadHighlights();
   }, []);
 
   async function transition(review, action) {
@@ -369,9 +383,31 @@ function ReviewsPanel({ onRefresh }) {
         ),
       });
       await loadReviews();
+      await loadHighlights();
       await onRefresh();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No se pudo actualizar la revisión.');
+    } finally {
+      setWorkingId(null);
+    }
+  }
+
+  async function transitionHighlight(highlight, action) {
+    setWorkingId('highlight-' + highlight.id);
+    setError('');
+    try {
+      await apiRequest('/v1/reviews/highlights/' + highlight.id + '/transition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          notes: 'Gestionado desde el panel administrativo.',
+          action,
+        }),
+      });
+      await loadHighlights();
+      await onRefresh();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo actualizar el resaltado.');
     } finally {
       setWorkingId(null);
     }
@@ -388,6 +424,41 @@ function ReviewsPanel({ onRefresh }) {
         <button className="secondaryButton" type="button" onClick={loadReviews}>↻ Actualizar</button>
       </div>
       {error && <p className="statusMessage error">{error}</p>}
+      {!isHighlightsLoading && highlights.length > 0 && (
+        <section className="highlightSection">
+          <div className="subPanelHeader">
+            <span className="eyebrow">Atención prioritaria</span>
+            <h3>Resaltados operativos</h3>
+            <p>Señales que requieren una revisión rápida por su relevancia operacional.</p>
+          </div>
+          <div className="reviewList">
+            {highlights.map((highlight) => (
+              <article className="highlightCard" key={highlight.id}>
+                <div className="reviewHeader">
+                  <div>
+                    <span className="eyebrow">Resaltado #{highlight.id} · incidente #{highlight.incident_id}</span>
+                    <h3>{highlight.attention_level === 'priority' ? 'Atención prioritaria' : 'Revisar incidente'}</h3>
+                  </div>
+                  <span className="sourceBadge">{highlight.status}</span>
+                </div>
+                <p>{highlight.ai_summary}</p>
+                {highlight.reasons?.length > 0 && <ul>{highlight.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
+                <div className="panelActions">
+                  <button className="secondaryButton" type="button" disabled={workingId === 'highlight-' + highlight.id} onClick={() => transitionHighlight(highlight, 'start')}>
+                    Iniciar
+                  </button>
+                  <button className="primaryButton" type="button" disabled={workingId === 'highlight-' + highlight.id} onClick={() => transitionHighlight(highlight, 'resolve')}>
+                    Resolver
+                  </button>
+                  <button className="ghostButton" type="button" disabled={workingId === 'highlight-' + highlight.id} onClick={() => transitionHighlight(highlight, 'escalate')}>
+                    Escalar
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
       {isLoading ? (
         <p className="adminEmpty">Cargando revisiones...</p>
       ) : reviews.length === 0 ? (
@@ -415,6 +486,9 @@ function ReviewsPanel({ onRefresh }) {
                 </button>
                 <button className="primaryButton" type="button" disabled={workingId === review.id} onClick={() => transition(review, 'resolve')}>
                   Resolver
+                </button>
+                <button className="secondaryButton" type="button" disabled={workingId === review.id} onClick={() => transition(review, 'escalate')}>
+                  Escalar
                 </button>
                 <button className="ghostButton" type="button" disabled={workingId === review.id} onClick={() => transition(review, 'dismiss')}>
                   Descartar
