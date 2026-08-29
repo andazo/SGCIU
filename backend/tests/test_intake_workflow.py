@@ -65,7 +65,7 @@ def test_persistent_intake_collects_and_submits_an_incident(db_session):
     assert saved.analysis_metadata["source"] == "persistent_intake"
     assert saved.police_input is False
     assert saved.analysis_metadata["completion_reason"] == "all_fields_resolved"
-    assert saved.prompt_version == "intake-v4"
+    assert saved.prompt_version == "intake-v5"
     assert saved.name == "Ana Prueba"
     assert saved.identification == "1-2345-6789"
     assert saved.email == "ana@example.com"

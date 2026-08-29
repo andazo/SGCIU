@@ -59,7 +59,7 @@ def intake_response(
         review_reason=review_reason,
         emergency_guidance=emergency_guidance,
         model_name="test-intake-double",
-        prompt_version="intake-v4",
+        prompt_version="intake-v5",
     )
 
 

@@ -24,14 +24,14 @@ class GuardrailResult:
     review_reason: str | None = None
 
 
-def evaluate_user_message(content: str) -> GuardrailResult:
+def evaluate_user_message(content: str, *, current_incident: bool = False) -> GuardrailResult:
     normalized = content.casefold()
     if any(re.search(pattern, normalized) for pattern in PROMPT_INJECTION_PATTERNS):
         return GuardrailResult(
             requires_human_review=True,
             review_reason="El mensaje contiene instrucciones dirigidas a manipular el asistente.",
         )
-    if any(re.search(pattern, normalized) for pattern in EMERGENCY_PATTERNS):
+    if current_incident and any(re.search(pattern, normalized) for pattern in EMERGENCY_PATTERNS):
         return GuardrailResult(
             emergency_guidance=True,
         )
@@ -48,7 +48,9 @@ def evaluate_analysis(data: ComplaintExtractedData) -> GuardrailResult:
                 "La extracción presenta baja confianza en: " + ", ".join(low_confidence)
             ),
         )
-    if data.urgency == "inmediata":
+    if data.urgency == "inmediata" and (
+        data.is_currently_occurring or data.temporal_relation in {"en_curso", "desconocido"}
+    ):
         return GuardrailResult(
             emergency_guidance=True,
         )

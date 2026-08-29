@@ -28,6 +28,7 @@ CategoriaPreliminar = Literal[
 Distrito = Literal["San Joaquin", "Barrantes", "Llorente"]
 TipoLugar = Literal["establecimiento", "casa", "parque", "escuela", "otro"]
 Urgencia = Literal["baja", "media", "alta", "inmediata"]
+TemporalRelation = Literal["pasado", "en_curso", "futuro", "desconocido"]
 IntakeFieldStatus = Literal["known", "missing", "ambiguous", "unknown", "declined"]
 IntakeCompletionReason = Literal[
     "needs_follow_up",
@@ -171,6 +172,10 @@ class ComplaintExtractedData(StrictModel):
     direccion_exacta: str | None = None
     tipo_lugar: TipoLugar | None = None
     fecha_hora_aproximada: str | None = None
+    incident_datetime: str | None = None
+    reference_datetime: str | None = None
+    temporal_relation: TemporalRelation = "desconocido"
+    is_currently_occurring: bool = False
     entities: IncidentEntities = Field(default_factory=IncidentEntities)
     urgency: Urgencia = "media"
     confidence_by_field: FieldConfidence = Field(default_factory=FieldConfidence)
@@ -207,7 +212,7 @@ class ComplaintIntakeChatResponse(StrictModel):
     user_wants_to_finish: bool = False
     completion_reason: IntakeCompletionReason = "needs_follow_up"
     model_name: str | None = None
-    prompt_version: str = "intake-v4"
+    prompt_version: str = "intake-v5"
 
 
 class IntakeSessionCreateResponse(StrictModel):
