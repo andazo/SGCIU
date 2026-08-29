@@ -246,11 +246,13 @@ class IntakeSessionResponse(StrictModel):
 class ComplaintSubmissionCreate(BaseModel):
     name: str | None = None
     identification: str | None = Field(default=None, max_length=64)
+    entered_by_badge: str | None = Field(default=None, max_length=64)
     email: EmailStr | None = None
     phone: str | None = None
     ai_extracted_data: ComplaintExtractedData
     ai_summary_text: str | None = None
     analysis_metadata: dict[str, object] = Field(default_factory=dict)
+    police_input: bool = False
     requires_human_review: bool = False
     review_reason: str | None = None
     model_name: str | None = None
@@ -259,7 +261,13 @@ class ComplaintSubmissionCreate(BaseModel):
     data_usage_consent: bool
 
     @field_validator(
-        "name", "identification", "phone", "ai_summary_text", "review_reason", mode="before"
+        "name",
+        "identification",
+        "entered_by_badge",
+        "phone",
+        "ai_summary_text",
+        "review_reason",
+        mode="before",
     )
     @classmethod
     def empty_strings_to_none(cls, value):
@@ -282,6 +290,10 @@ class ComplaintSubmissionCreate(BaseModel):
             raise ValueError("Debe aceptar el uso institucional de los datos.")
         if not self.ai_extracted_data.descripcion_detallada:
             raise ValueError("La descripción detallada de la denuncia es obligatoria.")
+        if self.police_input and not self.entered_by_badge:
+            raise ValueError("El registro interno requiere el badge del funcionario.")
+        if not self.police_input and self.entered_by_badge:
+            raise ValueError("El badge solo puede utilizarse en registros internos.")
         return self
 
 
@@ -294,17 +306,35 @@ class IntakeSubmissionRequest(StrictModel):
     data_usage_consent: bool
 
 
+class InternalIntakeSubmissionRequest(StrictModel):
+    entered_by_badge: str = Field(min_length=2, max_length=64)
+    truth_confirmation: bool
+    data_usage_consent: bool
+
+    @field_validator("entered_by_badge")
+    @classmethod
+    def validate_badge(cls, value: str):
+        value = value.strip()
+        if not value or not all(character.isalnum() or character in "-_." for character in value):
+            raise ValueError(
+                "El badge debe contener solo letras, números, guiones, puntos o guiones bajos."
+            )
+        return value
+
+
 class ComplaintSubmissionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     name: str | None
     identification: str | None
+    entered_by_badge: str | None
     email: str | None
     phone: str | None
     ai_extracted_data: ComplaintExtractedData
     ai_summary_text: str | None
     analysis_metadata: dict[str, object] = Field(default_factory=dict)
+    police_input: bool = False
     status: str = "submitted"
     requires_human_review: bool = False
     review_reason: str | None = None

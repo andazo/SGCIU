@@ -12,13 +12,14 @@ from app.ai.intake import (
     reconcile_field_states,
     unresolved_fields,
 )
-from app.models import IntakeSession
+from app.models import AuditEvent, IntakeSession
 from app.schemas import (
     ChatMessage,
     ComplaintExtractedData,
     ComplaintSubmissionCreate,
     IntakeSessionResponse,
     IntakeSubmissionRequest,
+    InternalIntakeSubmissionRequest,
 )
 from app.services.incidents import IncidentService
 
@@ -110,6 +111,57 @@ class IntakeService:
         return self.to_response(session)
 
     def submit(self, session_id: str, payload: IntakeSubmissionRequest):
+        return self._submit(
+            session_id,
+            name=payload.name,
+            identification=payload.identification,
+            email=payload.email,
+            phone=payload.phone,
+            truth_confirmation=payload.truth_confirmation,
+            data_usage_consent=payload.data_usage_consent,
+            source="persistent_intake",
+        )
+
+    def submit_internal(self, session_id: str, payload: InternalIntakeSubmissionRequest):
+        incident = self._submit(
+            session_id,
+            truth_confirmation=payload.truth_confirmation,
+            data_usage_consent=payload.data_usage_consent,
+            police_input=True,
+            entered_by_badge=payload.entered_by_badge,
+            source="internal_intake",
+        )
+        self.db.add(
+            AuditEvent(
+                trace_id=str(uuid.uuid4()),
+                actor_role="admin",
+                action="incident:internal_create",
+                resource_type="incident",
+                resource_id=str(incident.id),
+                details={
+                    "police_input": True,
+                    "entered_by_badge": payload.entered_by_badge,
+                },
+            )
+        )
+        self.db.commit()
+        self.db.refresh(incident)
+        return incident
+
+    def _submit(
+        self,
+        session_id: str,
+        *,
+        truth_confirmation: bool,
+        data_usage_consent: bool,
+        name: str | None = None,
+        identification: str | None = None,
+        email: str | None = None,
+        phone: str | None = None,
+        police_input: bool = False,
+        entered_by_badge: str | None = None,
+        source: str = "persistent_intake",
+    ):
         session = self.get(session_id)
         response = self.to_response(session)
         if not session.is_complete:
@@ -121,14 +173,15 @@ class IntakeService:
         extracted = dict(session.extracted_data)
         extracted.pop("_workflow", None)
         incident_payload = ComplaintSubmissionCreate(
-            name=payload.name,
-            identification=payload.identification,
-            email=payload.email,
-            phone=payload.phone,
+            name=name,
+            identification=identification,
+            email=email,
+            phone=phone,
+            entered_by_badge=entered_by_badge,
             ai_extracted_data=ComplaintExtractedData.model_validate(extracted),
             ai_summary_text=session.summary_text,
             analysis_metadata={
-                "source": "persistent_intake",
+                "source": source,
                 "session_id": session.id,
                 "confidence_by_field": (
                     response.extracted_data.confidence_by_field.model_dump(exclude_none=True)
@@ -143,8 +196,9 @@ class IntakeService:
             review_reason=workflow.get("review_reason"),
             model_name=session.model_name,
             prompt_version=session.prompt_version,
-            truth_confirmation=payload.truth_confirmation,
-            data_usage_consent=payload.data_usage_consent,
+            truth_confirmation=truth_confirmation,
+            data_usage_consent=data_usage_consent,
+            police_input=police_input,
         )
         return IncidentService(self.db).create(incident_payload)
 

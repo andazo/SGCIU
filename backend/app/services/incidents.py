@@ -23,11 +23,13 @@ class IncidentService:
         incident = ComplaintSubmission(
             name=payload.name,
             identification=payload.identification,
+            entered_by_badge=payload.entered_by_badge,
             email=str(payload.email) if payload.email else None,
             phone=payload.phone,
             ai_extracted_data=payload.ai_extracted_data.model_dump(),
             ai_summary_text=payload.ai_summary_text,
             analysis_metadata=payload.analysis_metadata,
+            police_input=payload.police_input,
             requires_human_review=payload.requires_human_review,
             review_reason=payload.review_reason,
             model_name=payload.model_name,
