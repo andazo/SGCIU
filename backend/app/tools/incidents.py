@@ -67,6 +67,7 @@ def _safe_incident(incident: ComplaintSubmission) -> dict[str, object]:
         "event_datetime": data.get("fecha_hora_aproximada"),
         "summary": incident.ai_summary_text,
         "requires_human_review": incident.requires_human_review,
+        "source": "police" if incident.police_input else "citizen",
         "synthetic": bool((incident.analysis_metadata or {}).get("synthetic")),
         "synthetic_case_id": (incident.analysis_metadata or {}).get("synthetic_case_id"),
     }
