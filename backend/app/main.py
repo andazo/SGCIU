@@ -3,7 +3,7 @@ import time
 import uuid
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -113,6 +113,11 @@ def complaint_intake_chat(payload: ComplaintIntakeChatRequest):
 
 @app.post("/complaints", response_model=ComplaintSubmissionResponse)
 def create_complaint(payload: ComplaintSubmissionCreate, db: DbSession):
+    if payload.police_input:
+        raise HTTPException(
+            status_code=403,
+            detail="Los registros de personal deben utilizar el flujo interno administrativo.",
+        )
     return create_complaint_submission(db, payload)
 
 

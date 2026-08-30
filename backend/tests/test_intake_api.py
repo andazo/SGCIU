@@ -64,3 +64,27 @@ def test_internal_intake_api_marks_source_and_badge():
     assert common_list.status_code == 200
     assert common_list.json()[0]["id"] == submitted.json()["id"]
     assert common_list.json()[0]["police_input"] is True
+
+
+def test_public_legacy_complaints_cannot_claim_staff_input():
+    response = client.post(
+        "/complaints",
+        json={
+            "ai_extracted_data": {
+                "descripcion_detallada": "Registro de prueba.",
+                "relacion_incidente": "testigo",
+                "categoria_preliminar": "otro",
+                "distrito": "Llorente",
+                "direccion_exacta": "Parque central",
+                "tipo_lugar": "parque",
+                "fecha_hora_aproximada": "hoy",
+            },
+            "entered_by_badge": "POL-999",
+            "police_input": True,
+            "truth_confirmation": True,
+            "data_usage_consent": True,
+        },
+    )
+
+    assert response.status_code == 403
+    assert "flujo interno" in response.json()["detail"]
