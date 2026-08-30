@@ -1,14 +1,16 @@
-name: Backend CI
+name: Backend and frontend CI
 
 on:
   pull_request:
     paths:
       - "backend/**"
+      - "frontend/**"
       - ".github/workflows/backend-ci.yml"
   push:
     branches: [main]
     paths:
       - "backend/**"
+      - "frontend/**"
       - ".github/workflows/backend-ci.yml"
 
 permissions:
@@ -38,3 +40,20 @@ jobs:
         run: alembic -c alembic.ini upgrade head
       - name: Run tests with coverage
         run: pytest --cov=app --cov-report=term-missing --cov-fail-under=70
+
+  verify-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Build production bundle
+        run: npm run build
