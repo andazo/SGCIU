@@ -79,6 +79,19 @@ class Settings:
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    app_env = os.getenv("APP_ENV", "development").strip().lower()
+    admin_api_key = os.getenv("ADMIN_API_KEY") or None
+    require_admin_auth = _as_bool(
+        os.getenv("REQUIRE_ADMIN_AUTH"),
+        default=app_env == "production",
+    )
+    if app_env == "production" and not require_admin_auth:
+        raise ValueError("La autenticación administrativa debe estar activa en producción.")
+    if require_admin_auth and not admin_api_key:
+        raise ValueError(
+            "ADMIN_API_KEY es obligatorio cuando la autenticación administrativa está activa."
+        )
+
     default_origins = (
         "http://localhost:3000",
         "http://127.0.0.1:3000",
@@ -87,7 +100,7 @@ def get_settings() -> Settings:
     )
     return Settings(
         app_name=os.getenv("APP_NAME", "SGCIU API"),
-        app_env=os.getenv("APP_ENV", "development"),
+        app_env=app_env,
         database_url=_normalize_database_url(
             os.getenv(
                 "DATABASE_URL",
@@ -139,6 +152,6 @@ def get_settings() -> Settings:
         tool_transport=os.getenv("TOOL_TRANSPORT", "local").lower(),
         similarity_threshold=float(os.getenv("SIMILARITY_THRESHOLD", "0.78")),
         cluster_time_window_days=int(os.getenv("CLUSTER_TIME_WINDOW_DAYS", "30")),
-        admin_api_key=os.getenv("ADMIN_API_KEY"),
-        require_admin_auth=_as_bool(os.getenv("REQUIRE_ADMIN_AUTH"), default=False),
+        admin_api_key=admin_api_key,
+        require_admin_auth=require_admin_auth,
     )

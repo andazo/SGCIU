@@ -1,5 +1,6 @@
 from dataclasses import replace
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -26,6 +27,33 @@ def test_admin_key_validation_is_constant_policy():
     assert validate_admin_key("wrong", protected) is False
     assert validate_admin_key(None, protected) is False
     assert validate_admin_key(None, development) is True
+
+
+def test_production_authentication_is_secure_by_default(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("REQUIRE_ADMIN_AUTH", raising=False)
+    monkeypatch.setenv("ADMIN_API_KEY", "production-secret")
+    get_settings.cache_clear()
+
+    try:
+        settings = get_settings()
+    finally:
+        get_settings.cache_clear()
+
+    assert settings.require_admin_auth is True
+
+
+def test_production_without_admin_key_fails_fast(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("REQUIRE_ADMIN_AUTH", raising=False)
+    monkeypatch.delenv("ADMIN_API_KEY", raising=False)
+    get_settings.cache_clear()
+
+    try:
+        with pytest.raises(ValueError, match="ADMIN_API_KEY"):
+            get_settings()
+    finally:
+        get_settings.cache_clear()
 
 
 def test_admin_endpoint_rejects_missing_key(monkeypatch):
