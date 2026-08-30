@@ -5,8 +5,7 @@ análisis y consulta de denuncias de la Policía Municipal de Flores, Costa Rica
 
 El MVP prioriza el backend Python y la arquitectura de IA generativa. Incluye intake
 conversacional, extracción estructurada, guardrails, embeddings, agrupación semántica,
-un agente operativo ReAct con tools tipados y un servidor MCP. El frontend existente se
-conserva como prototipo, pero no es el foco de esta etapa.
+un agente operativo ReAct con tools tipados, un servidor MCP y un panel administrativo web.
 
 ## Funcionalidades implementadas
 
@@ -26,7 +25,8 @@ conserva como prototipo, pero no es el foco de esta etapa.
 - Servidor MCP `sgciu-incident-intelligence` sin acceso a SQL arbitrario.
 - RAG normativo con corpus versionado, extracción por página, recuperación híbrida,
   abstención y citas verificables de documento, página PDF y artículo detectado.
-- Control opcional de endpoints administrativos mediante `X-Admin-Key`.
+- Control de endpoints administrativos mediante `X-Admin-Key` en producción; es opcional
+  únicamente en desarrollo local.
 - CLI para ciudadanos y administradores.
 - Dataset sintético y métricas reproducibles para regresión del workflow.
 - Logs JSON con correlation IDs, latencia, tokens y auditoría de tools.
@@ -86,7 +86,9 @@ Endpoints administrativos del flujo interno:
 - `POST /v1/internal-intake/sessions/{session_id}/messages`
 - `POST /v1/internal-intake/sessions/{session_id}/submit`
 
-El badge se valida como identificador, pero no constituye autenticación en este MVP.
+El badge se valida como identificador de procedencia, pero no constituye autenticación. En
+producción, los endpoints administrativos exigen además `X-Admin-Key`; para una implantación
+institucional posterior se recomienda sustituirlo por IAM, SSO o Identity-Aware Proxy.
 
 El flujo ciudadano solicita primero el nombre completo. La identificación, el correo y el
 teléfono son opcionales; estos datos se persisten con la denuncia, pero se excluyen de
@@ -205,7 +207,8 @@ cd backend
 
 Documentación OpenAPI: `http://localhost:8000/docs`.
 
-Cuando `REQUIRE_ADMIN_AUTH=true`, los endpoints administrativos requieren:
+En producción la autenticación administrativa se activa automáticamente y los endpoints
+administrativos requieren:
 
 ```text
 X-Admin-Key: <ADMIN_API_KEY>
