@@ -1,7 +1,11 @@
 from sqlalchemy import select
 
-from app.models import ComplaintSubmission, HumanReview
-from app.schemas import IntakeFieldObservation, IntakeSubmissionRequest
+from app.models import AuditEvent, ComplaintSubmission, HumanReview
+from app.schemas import (
+    IntakeFieldObservation,
+    IntakeSubmissionRequest,
+    InternalIntakeSubmissionRequest,
+)
 from app.services.intake import IntakeService
 from tests.fakes import QueueIntakeProvider, extracted_data, intake_response
 
@@ -59,12 +63,40 @@ def test_persistent_intake_collects_and_submits_an_incident(db_session):
         select(ComplaintSubmission).where(ComplaintSubmission.id == incident.id)
     )
     assert saved.analysis_metadata["source"] == "persistent_intake"
+    assert saved.police_input is False
     assert saved.analysis_metadata["completion_reason"] == "all_fields_resolved"
-    assert saved.prompt_version == "intake-v4"
+    assert saved.prompt_version == "intake-v5"
     assert saved.name == "Ana Prueba"
     assert saved.identification == "1-2345-6789"
     assert saved.email == "ana@example.com"
     assert saved.phone == "8888-9999"
+
+
+def test_internal_intake_marks_incident_and_audits_badge(db_session):
+    provider = QueueIntakeProvider(intake_response(complete_data()))
+    service = IntakeService(db_session, provider=provider)
+    session = service.start()
+    service.add_user_message(session.id, COMPLETE_REPORT)
+
+    incident = service.submit_internal(
+        session.id,
+        InternalIntakeSubmissionRequest(
+            entered_by_badge="ADM-042",
+            truth_confirmation=True,
+            data_usage_consent=True,
+        ),
+    )
+
+    assert incident.police_input is True
+    assert incident.entered_by_badge == "ADM-042"
+    audit = db_session.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "incident:internal_create",
+            AuditEvent.resource_id == str(incident.id),
+        )
+    )
+    assert audit is not None
+    assert audit.details == {"police_input": True, "entered_by_badge": "ADM-042"}
 
 
 def test_emergency_signal_is_recorded_without_creating_quality_review(db_session):

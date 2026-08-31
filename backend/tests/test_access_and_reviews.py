@@ -1,5 +1,6 @@
 from dataclasses import replace
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -28,6 +29,33 @@ def test_admin_key_validation_is_constant_policy():
     assert validate_admin_key(None, development) is True
 
 
+def test_production_authentication_is_secure_by_default(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("REQUIRE_ADMIN_AUTH", raising=False)
+    monkeypatch.setenv("ADMIN_API_KEY", "production-secret")
+    get_settings.cache_clear()
+
+    try:
+        settings = get_settings()
+    finally:
+        get_settings.cache_clear()
+
+    assert settings.require_admin_auth is True
+
+
+def test_production_without_admin_key_fails_fast(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("REQUIRE_ADMIN_AUTH", raising=False)
+    monkeypatch.delenv("ADMIN_API_KEY", raising=False)
+    get_settings.cache_clear()
+
+    try:
+        with pytest.raises(ValueError, match="ADMIN_API_KEY"):
+            get_settings()
+    finally:
+        get_settings.cache_clear()
+
+
 def test_admin_endpoint_rejects_missing_key(monkeypatch):
     protected = replace(
         get_settings(),
@@ -39,6 +67,18 @@ def test_admin_endpoint_rejects_missing_key(monkeypatch):
 
     assert client.get("/v1/incidents").status_code == 401
     assert client.get("/v1/incidents", headers={"X-Admin-Key": "test-secret"}).status_code == 200
+
+
+def test_pending_assessment_endpoint_returns_batch_result(monkeypatch):
+    monkeypatch.setattr(
+        "app.api.routes.reviews.ReviewService.assess_pending_incidents",
+        lambda _service: (4, 3, 1),
+    )
+
+    response = TestClient(app).post("/v1/reviews/assess-pending")
+
+    assert response.status_code == 200
+    assert response.json() == {"pending": 4, "completed": 3, "failed": 1}
 
 
 def test_review_resolution_updates_incident_state(db_session):

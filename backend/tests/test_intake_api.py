@@ -28,8 +28,93 @@ def test_versioned_intake_api_flow():
         json={"truth_confirmation": True, "data_usage_consent": True},
     )
     assert submitted.status_code == 201
-    assert submitted.json()["prompt_version"] == "intake-v4"
+    assert submitted.json()["prompt_version"] == "intake-v5"
 
     incidents = client.get("/v1/incidents")
     assert incidents.status_code == 200
     assert incidents.json()["total"] == 1
+
+
+def test_internal_intake_api_marks_source_and_badge():
+    start = client.post("/v1/internal-intake/sessions")
+    assert start.status_code == 201
+    session_id = start.json()["session_id"]
+
+    analyzed = client.post(
+        f"/v1/internal-intake/sessions/{session_id}/messages",
+        json={"content": "Se recibió una denuncia verbal por ruido frente a una escuela."},
+    )
+    assert analyzed.status_code == 200
+    assert analyzed.json()["is_complete"] is True
+
+    submitted = client.post(
+        f"/v1/internal-intake/sessions/{session_id}/submit",
+        json={
+            "entered_by_badge": "POL-042",
+            "truth_confirmation": True,
+            "data_usage_consent": True,
+        },
+    )
+
+    assert submitted.status_code == 201
+    assert submitted.json()["police_input"] is True
+    assert submitted.json()["entered_by_badge"] == "POL-042"
+
+    common_list = client.get("/complaints")
+    assert common_list.status_code == 200
+    assert common_list.json()[0]["id"] == submitted.json()["id"]
+    assert common_list.json()[0]["police_input"] is True
+
+
+def test_anonymous_intake_session_never_persists_contact_fields():
+    start = client.post("/v1/intake/sessions", json={"registration_mode": "anonymous"})
+    assert start.status_code == 201
+    assert start.json()["registration_mode"] == "anonymous"
+    session_id = start.json()["session_id"]
+
+    analyzed = client.post(
+        f"/v1/intake/sessions/{session_id}/messages",
+        json={"content": "Vi un incidente de ruido en Llorente."},
+    )
+    assert analyzed.status_code == 200
+
+    submitted = client.post(
+        f"/v1/intake/sessions/{session_id}/submit",
+        json={
+            "name": "No debe persistir",
+            "email": "no-debe@example.com",
+            "phone": "8888-8888",
+            "truth_confirmation": True,
+            "data_usage_consent": True,
+        },
+    )
+
+    assert submitted.status_code == 201
+    assert submitted.json()["name"] is None
+    assert submitted.json()["email"] is None
+    assert submitted.json()["phone"] is None
+    assert submitted.json()["analysis_metadata"]["anonymous"] is True
+
+
+def test_public_legacy_complaints_cannot_claim_staff_input():
+    response = client.post(
+        "/complaints",
+        json={
+            "ai_extracted_data": {
+                "descripcion_detallada": "Registro de prueba.",
+                "relacion_incidente": "testigo",
+                "categoria_preliminar": "otro",
+                "distrito": "Llorente",
+                "direccion_exacta": "Parque central",
+                "tipo_lugar": "parque",
+                "fecha_hora_aproximada": "hoy",
+            },
+            "entered_by_badge": "POL-999",
+            "police_input": True,
+            "truth_confirmation": True,
+            "data_usage_consent": True,
+        },
+    )
+
+    assert response.status_code == 403
+    assert "flujo interno" in response.json()["detail"]

@@ -57,11 +57,13 @@ class ComplaintSubmission(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(120), nullable=True)
     identification = Column(String(64), nullable=True)
+    entered_by_badge = Column(String(64), nullable=True)
     email = Column(String(120), nullable=True, index=True)
     phone = Column(String(40), nullable=True)
     ai_extracted_data = Column(JSON_TYPE, nullable=False)
     ai_summary_text = Column(Text, nullable=True)
     analysis_metadata = Column(JSON_TYPE, nullable=False, default=dict)
+    police_input = Column(Boolean, nullable=False, default=False, server_default="false")
     status = Column(String(32), nullable=False, default="submitted", index=True)
     requires_human_review = Column(Boolean, nullable=False, default=False)
     review_reason = Column(Text, nullable=True)
@@ -86,12 +88,27 @@ class IntakeSession(Base):
     __tablename__ = "intake_sessions"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    registration_mode = Column(
+        String(16), nullable=False, default="complete", server_default="complete"
+    )
     messages = Column(JSON_TYPE, nullable=False, default=list)
     extracted_data = Column(JSON_TYPE, nullable=False, default=dict)
     summary_text = Column(Text, nullable=True)
     is_complete = Column(Boolean, nullable=False, default=False)
     model_name = Column(String(120), nullable=True)
     prompt_version = Column(String(40), nullable=False, default="intake-v1")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class OperationalSession(Base):
+    __tablename__ = "operational_sessions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    messages = Column(JSON_TYPE, nullable=False, default=list)
+    model_name = Column(String(120), nullable=True)
+    prompt_version = Column(String(40), nullable=False, default="operational-react-v5")
+    last_trace_id = Column(String(36), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -105,6 +122,7 @@ class IncidentEmbedding(Base):
     )
     canonical_text = Column(Text, nullable=False)
     embedding = Column(_vector_type(), nullable=False)
+    location_embedding = Column(_vector_type(), nullable=True)
     embedding_model = Column(String(120), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

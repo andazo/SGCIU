@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,12 +12,14 @@ from app.schemas import (
     ComplaintSubmissionResponse,
     IncidentClusterResponse,
     IncidentListResponse,
+    RecurrentPatternMemberResponse,
+    RecurrentPatternResponse,
     RelatedIncident,
     RelatedIncidentList,
     SemanticRecalculationResponse,
 )
 from app.services.incidents import IncidentNotFoundError, IncidentService
-from app.services.semantic import SemanticIncidentService
+from app.services.semantic import SemanticIncidentService, _is_recent
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 DbSession = Annotated[Session, Depends(get_db)]
@@ -107,6 +110,70 @@ def list_candidate_clusters(db: DbSession, _actor: AdminRole):
         )
         for cluster in SemanticIncidentService(db).list_clusters()
     ]
+
+
+@router.get("/clusters/recurrent", response_model=list[RecurrentPatternResponse])
+def list_recurrent_patterns(db: DbSession, _actor: AdminRole):
+    cutoff_service = SemanticIncidentService(db)
+    cutoff = cutoff_service.settings.cluster_time_window_days
+    patterns = []
+    for cluster in cutoff_service.list_recurrent_patterns():
+        threshold = datetime.now(UTC) - timedelta(days=cutoff)
+        members = sorted(
+            [
+                member
+                for member in cluster.members
+                if member.incident
+                and _is_recent(member.incident.created_at, threshold)
+            ],
+            key=lambda member: member.incident.created_at,
+        )
+        incidents = [member.incident for member in members]
+        data = [incident.ai_extracted_data or {} for incident in incidents]
+        districts = [item.get("distrito") for item in data if item.get("distrito")]
+        categories = [
+            item.get("categoria_preliminar")
+            for item in data
+            if item.get("categoria_preliminar")
+        ]
+        signals = sorted(
+            {
+                reason.strip()
+                for member in members
+                for reason in member.match_reason.split(",")
+                if reason.strip()
+            }
+        )
+        patterns.append(
+            RecurrentPatternResponse(
+                id=cluster.id,
+                title=cluster.label,
+                incident_count=len(members),
+                first_seen=members[0].incident.created_at,
+                last_seen=members[-1].incident.created_at,
+                district=max(set(districts), key=districts.count) if districts else None,
+                category=max(set(categories), key=categories.count) if categories else None,
+                average_similarity=round(
+                    sum(member.similarity_score for member in members) / len(members), 4
+                ),
+                signals=signals,
+                members=[
+                    RecurrentPatternMemberResponse(
+                        incident_id=member.incident_id,
+                        created_at=member.incident.created_at,
+                        category=(member.incident.ai_extracted_data or {}).get(
+                            "categoria_preliminar"
+                        ),
+                        district=(member.incident.ai_extracted_data or {}).get("distrito"),
+                        address=(member.incident.ai_extracted_data or {}).get("direccion_exacta"),
+                        similarity_score=member.similarity_score,
+                        match_reason=member.match_reason,
+                    )
+                    for member in members
+                ],
+            )
+        )
+    return patterns
 
 
 @router.post("/clusters/recalculate", response_model=SemanticRecalculationResponse)

@@ -7,8 +7,9 @@ from sqlalchemy import select
 from app.agents.gateway import LocalToolGateway, MCPToolGateway, connect_mcp_gateway
 from app.agents.operational import OperationalAgent, _append_legal_source_details
 from app.models import AuditEvent
-from app.schemas import ComplaintExtractedData, ComplaintSubmissionCreate
+from app.schemas import ComplaintExtractedData, ComplaintSubmissionCreate, OperationalQueryResponse
 from app.services.incidents import IncidentService
+from app.services.operational import OperationalSessionService
 from app.tools.incidents import build_incident_tool_registry
 from app.tools.registry import ToolAuthorizationError, ToolNotFoundError
 
@@ -116,6 +117,80 @@ def test_registry_does_not_expose_contact_data_or_unknown_tools(db_session):
         )
     with pytest.raises(ToolNotFoundError):
         registry.call(db_session, "execute_sql", {}, actor_role="admin")
+
+
+def test_recurrent_patterns_tool_returns_recent_sanitized_patterns(db_session):
+    create_incident(db_session)
+    create_incident(db_session)
+    create_incident(db_session)
+
+    result = build_incident_tool_registry().call(
+        db_session,
+        "get_recurrent_patterns",
+        {},
+        actor_role="admin",
+    )
+
+    assert result["window_days"] == 30
+    assert result["minimum_incidents"] == 3
+    assert result["total_patterns"] == 1
+    assert result["patterns"][0]["incident_count"] == 3
+    assert "private@example.com" not in str(result)
+
+
+def test_aggregate_normalizes_district_accents_and_category_plurals(db_session):
+    for _ in range(3):
+        incident = create_incident(db_session, "robo")
+        incident.ai_extracted_data = {
+            **incident.ai_extracted_data,
+            "distrito": "San Joaquin",
+            "categoria_preliminar": "robo",
+        }
+    db_session.commit()
+    result = build_incident_tool_registry().call(
+        db_session,
+        "aggregate_incidents",
+        {
+            "group_by": "categoria_preliminar",
+            "district": "San Joaquín",
+            "category": "robos",
+            "synthetic_only": None,
+        },
+        actor_role="admin",
+    )
+
+    assert result["total"] == 3
+    assert result["groups"] == [{"value": "robo", "count": 3}]
+
+
+@pytest.mark.asyncio
+async def test_operational_session_persists_turns_and_reuses_history(db_session):
+    class FakeAgent:
+        def __init__(self):
+            self.histories = []
+
+        async def run(self, query, *, history=None):
+            self.histories.append(history or [])
+            return OperationalQueryResponse(
+                answer=f"Respuesta para {query}",
+                incident_citations=[],
+                trace_id=f"trace-{len(self.histories)}",
+                steps=[],
+                model_name="test-operational",
+                prompt_version="operational-react-v5",
+            )
+
+    service = OperationalSessionService(db_session)
+    session = service.start(model_name="test-operational")
+    agent = FakeAgent()
+
+    await service.ask(session.id, "¿Cuántos robos hubo?", agent)
+    await service.ask(session.id, "¿Y en San Joaquín?", agent)
+
+    saved = service.to_response(service.get(session.id))
+    assert len(saved.messages) == 4
+    assert len(agent.histories[0]) == 0
+    assert [message.role for message in agent.histories[1]] == ["user", "assistant"]
 
 
 @pytest.mark.asyncio

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 
 from pydantic import ValidationError
 
@@ -15,7 +16,7 @@ from app.services.incidents import IncidentNotFoundError, IncidentService
 from app.services.intake import EMERGENCY_NOTICE, IntakeService
 from app.services.legal_rag import LegalRAGService
 from app.services.reviews import HighlightNotFoundError, ReviewNotFoundError, ReviewService
-from app.services.semantic import SemanticIncidentService
+from app.services.semantic import SemanticIncidentService, _is_recent
 
 
 def _yes(prompt: str) -> bool:
@@ -169,17 +170,59 @@ def _print_clusters(db) -> None:
         print(f"Cluster {cluster.id}: {cluster.label} [{cluster.status}] -> {members}")
 
 
+def _print_recurrent_patterns(db) -> None:
+    service = SemanticIncidentService(db)
+    patterns = service.list_recurrent_patterns()
+    if not patterns:
+        print(
+            "No se detectaron patrones recurrentes en los últimos "
+            f"{service.settings.cluster_time_window_days} días."
+        )
+        return
+
+    threshold = datetime.now(UTC) - timedelta(days=service.settings.cluster_time_window_days)
+    print(
+        f"\nPatrones recurrentes de los últimos {service.settings.cluster_time_window_days} días"
+    )
+    for pattern in patterns:
+        members = [
+            member
+            for member in pattern.members
+            if member.incident and _is_recent(member.incident.created_at, threshold)
+        ]
+        if not members:
+            continue
+        scores = [member.similarity_score for member in members]
+        print(f"\nPatrón #{pattern.id}: {pattern.label}")
+        print(f"Incidentes relacionados: {len(members)}")
+        print(f"Similitud promedio: {sum(scores) / len(scores):.3f}")
+        print("Incidentes:")
+        for member in sorted(members, key=lambda item: item.incident.created_at):
+            incident = member.incident
+            data = incident.ai_extracted_data or {}
+            print(
+                f"  #{incident.id} | {incident.created_at} | "
+                f"{data.get('categoria_preliminar')} | "
+                f"{data.get('distrito')} | {data.get('direccion_exacta')} | "
+                f"score={member.similarity_score:.3f} | {member.match_reason}"
+            )
+
+
 def _manage_clusters(db) -> None:
     while True:
-        print("\nClusters y embeddings")
+        print("\nAgrupación semántica y recurrente")
         print("1. Ver clusters candidatos")
         print("2. Recalcular embeddings y clusters")
+        print("3. Ver agrupaciones recurrentes")
         print("0. Volver")
         selection = input("Seleccione una opción: ").strip()
         if selection == "0":
             return
         if selection == "1":
             _print_clusters(db)
+            continue
+        if selection == "3":
+            _print_recurrent_patterns(db)
             continue
         if selection != "2":
             print("Opción inválida.")
@@ -438,7 +481,7 @@ def run_admin(transport: str) -> None:
         "1": "Listar incidentes",
         "2": "Consultar detalle",
         "3": "Buscar relacionados",
-        "4": "Clusters y recálculo de embeddings",
+        "4": "Agrupación semántica y recurrente",
         "5": "Preguntar al agente operativo",
         "6": "Gestionar resaltados y revisiones de calidad",
         "7": "Consultar normativa (RAG)",

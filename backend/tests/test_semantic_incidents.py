@@ -81,3 +81,25 @@ def test_manual_recalculation_rebuilds_embeddings_and_clusters(db_session):
     assert result.embeddings_failed == 0
     assert result.clusters_rebuilt == 1
     assert result.cluster_members == 2
+
+
+def test_recurrent_patterns_require_three_recent_similar_incidents(db_session):
+    for description in (
+        "Fiesta con música alta frente a la escuela.",
+        "Ruido fuerte de una fiesta cerca de la escuela.",
+        "Música a alto volumen en las cercanías de la escuela.",
+    ):
+        IncidentService(db_session).create(
+            incident_payload(description, "100 metros norte de la escuela")
+        )
+
+    patterns = SemanticIncidentService(
+        db_session,
+        provider=LocalEmbeddingDouble(),
+    ).list_recurrent_patterns()
+
+    assert len(patterns) == 1
+    assert len(patterns[0].members) == 3
+    assert all(
+        member.incident.embedding_record.location_embedding for member in patterns[0].members
+    )

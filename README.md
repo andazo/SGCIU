@@ -5,25 +5,28 @@ análisis y consulta de denuncias de la Policía Municipal de Flores, Costa Rica
 
 El MVP prioriza el backend Python y la arquitectura de IA generativa. Incluye intake
 conversacional, extracción estructurada, guardrails, embeddings, agrupación semántica,
-un agente operativo ReAct con tools tipados y un servidor MCP. El frontend existente se
-conserva como prototipo, pero no es el foco de esta etapa.
+un agente operativo ReAct con tools tipados, un servidor MCP y un panel administrativo web.
 
 ## Funcionalidades implementadas
 
 - Sesiones persistentes de intake ciudadano con correcciones acumulativas y razonamiento
   de alta precisión mediante OpenAI.
+- Registro interno de incidentes por oficiales o personal administrativo mediante un flujo
+  conversacional protegido por el rol administrativo, con identificación manual por badge.
 - Registro previo por CLI de nombre, identificación y contacto antes del relato.
 - Clasificación, resumen, entidades, urgencia, evidencia y confianza por campo.
 - Follow-ups priorizados según valor operativo, con cierre parcial cuando la persona no
   sabe o no desea aportar más información.
 - Revisión humana ante baja confianza, riesgo inmediato o prompt injection.
 - Embeddings de incidentes con PostgreSQL y `pgvector`.
-- Detección híbrida de incidentes relacionados y clusters candidatos.
+- Agrupación recurrente proactiva de incidentes similares en los últimos 30 días, con
+  similitud semántica de ubicación, relato, categoría y refuerzo por distrito.
 - Agente operativo ReAct con límite de pasos, tools y trazas sanitizadas.
 - Servidor MCP `sgciu-incident-intelligence` sin acceso a SQL arbitrario.
 - RAG normativo con corpus versionado, extracción por página, recuperación híbrida,
   abstención y citas verificables de documento, página PDF y artículo detectado.
-- Control opcional de endpoints administrativos mediante `X-Admin-Key`.
+- Control de endpoints administrativos mediante `X-Admin-Key` en producción; es opcional
+  únicamente en desarrollo local.
 - CLI para ciudadanos y administradores.
 - Dataset sintético y métricas reproducibles para regresión del workflow.
 - Logs JSON con correlation IDs, latencia, tokens y auditoría de tools.
@@ -69,11 +72,40 @@ También se puede seleccionar el rol directamente:
 .venv/bin/python -m app.cli --role admin --transport mcp
 ```
 
-El flujo ciudadano solicita primero el nombre completo. La identificación, el correo y el
-teléfono son opcionales; estos datos se persisten con la denuncia, pero se excluyen de
-embeddings, tools del agente y trazas. El agente entiende referencias locales de Costa Rica,
-registra evidencia por campo y permite terminar con frases como `eso es todo` o
-`no tengo más información`; en ese caso guarda el reporte con los datos disponibles.
+### Registro interno desde el panel
+
+En `http://localhost:5173/admin` seleccione **Registrar incidente**. El funcionario introduce
+manualmente su badge, conversa con el mismo asistente de intake, revisa el resumen y confirma
+la veracidad y el uso institucional de la información. El incidente se guarda en
+`complaint_submissions` con `police_input=true`, conserva el badge del funcionario y aparece
+junto con las denuncias ciudadanas. La acción también queda registrada en `audit_events`.
+
+Endpoints administrativos del flujo interno:
+
+- `POST /v1/internal-intake/sessions`
+- `POST /v1/internal-intake/sessions/{session_id}/messages`
+- `POST /v1/internal-intake/sessions/{session_id}/submit`
+
+El asistente operacional usa sesiones persistentes para conservar el contexto entre
+preguntas:
+
+- `POST /v1/operational/sessions`
+- `GET /v1/operational/sessions/{session_id}`
+- `POST /v1/operational/sessions/{session_id}/messages`
+
+El badge se valida como identificador de procedencia, pero no constituye autenticación. En
+producción, los endpoints administrativos exigen además `X-Admin-Key`; para una implantación
+institucional posterior se recomienda sustituirlo por IAM, SSO o Identity-Aware Proxy.
+
+El flujo ciudadano permite elegir entre registro con datos de contacto y registro anónimo.
+En ambos casos la conversación usa una sesión persistente; en el modo anónimo el backend
+descarta cualquier dato de contacto enviado por el cliente. En el modo completo, la
+identificación, el correo y el teléfono son opcionales; estos datos se persisten con la
+denuncia, pero se excluyen de embeddings, tools del agente y trazas. El agente entiende
+referencias locales de Costa Rica, jerga y abreviaturas, registra evidencia por campo y
+permite terminar con frases como `eso es todo`, `no tengo más información` o `llamaré al
+911`; en ese caso guarda el reporte con los datos disponibles. La orientación al 9-1-1 se
+muestra una sola vez por sesión y no sustituye la extracción del incidente.
 
 ### Datos sintéticos para el panel administrativo
 
@@ -111,10 +143,22 @@ como denuncias reales.
 
 ### Clusters, resaltados y revisiones de calidad
 
+La sección administrativa **Agrupación recurrente** muestra de forma independiente los
+patrones que reúnen al menos tres incidentes similares dentro de una ventana móvil de 30 días.
+La puntuación combina el embedding general del incidente con un embedding específico de la
+ubicación, y aumenta cuando coinciden el distrito, la categoría o las referencias del lugar.
+Estos patrones son informativos y proactivos: no sustituyen las denuncias originales ni
+requieren confirmación o rechazo por parte del personal policial.
+
 La opción administrativa `4. Clusters y recálculo de embeddings` permite consultar los
 clusters candidatos existentes o regenerar manualmente todos los embeddings con OpenAI y
 reconstruir las agrupaciones. El recálculo solicita confirmación porque consume tokens y puede
 tardar según la cantidad de incidentes.
+
+Dentro de la opción `4. Agrupación semántica y recurrente`, la opción `3. Ver agrupaciones
+recurrentes` muestra en la terminal los patrones que cumplen el mínimo de tres incidentes
+recientes, incluyendo sus puntuaciones, ubicación, categoría y motivos de coincidencia. Esta
+consulta no modifica los datos ni requiere confirmación policial.
 
 La opción `6. Gestionar resaltados y revisiones de calidad` separa dos decisiones independientes:
 
@@ -130,8 +174,8 @@ Un incidente puede aparecer en ambos apartados. Para analizar datos anteriores a
 utilice `3. Analizar con IA incidentes pendientes` dentro de la opción 6.
 
 El inicio ciudadano muestra siempre que SGCIU no sustituye al 9-1-1. Si durante la conversación
-se detecta peligro inmediato, el agente repite esa orientación, pero no la confunde con una
-revisión de calidad administrativa.
+se detecta peligro inmediato, el agente muestra esa orientación una sola vez y continúa con
+la extracción, sin confundir la emergencia con una revisión de calidad administrativa.
 
 ### Consulta normativa RAG
 
@@ -160,6 +204,11 @@ Luego use `3. Consultar normativa`. Cada respuesta informa:
   recomendado, validada contra el alcance y fuerza jurídica de la fuente;
 - trace ID, advertencias y abstención cuando la evidencia no es suficiente.
 
+La consulta puede incluir el perfil (`administrative` o `police`) y una situación operativa.
+La generación sintetiza la fuente para el flujo SGCIU y devuelve recomendaciones explícitas
+para registrar, clasificar, derivar o revisar el incidente; no se limita a copiar el texto
+del PDF.
+
 El corpus contiene 27 documentos. El manifiesto registra como vacíos conocidos la
 Constitución Política y el Código Procesal Penal;
 el asistente no debe inferir su contenido. Consulte la [guía del RAG](docs/legal-rag.md) para
@@ -174,7 +223,8 @@ cd backend
 
 Documentación OpenAPI: `http://localhost:8000/docs`.
 
-Cuando `REQUIRE_ADMIN_AUTH=true`, los endpoints administrativos requieren:
+En producción la autenticación administrativa se activa automáticamente y los endpoints
+administrativos requieren:
 
 ```text
 X-Admin-Key: <ADMIN_API_KEY>
@@ -194,6 +244,7 @@ Tools disponibles:
 - `aggregate_incidents`
 - `find_related_incidents`
 - `get_incident_cluster`
+- `get_recurrent_patterns`
 - `request_human_review`
 - `search_legal_sources`
 - `get_legal_corpus_status`

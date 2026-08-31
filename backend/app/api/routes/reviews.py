@@ -11,6 +11,7 @@ from app.schemas import (
     HumanReviewResponse,
     IncidentHighlightResponse,
     ResolveReviewRequest,
+    ReviewAssessmentResponse,
     WorkflowTransitionRequest,
 )
 from app.services.reviews import HighlightNotFoundError, ReviewNotFoundError, ReviewService
@@ -35,6 +36,16 @@ def list_highlights(
     highlight_status: Annotated[str | None, Query(alias="status")] = None,
 ):
     return ReviewService(db).list_highlights(highlight_status)
+
+
+@router.post("/assess-pending", response_model=ReviewAssessmentResponse)
+def assess_pending_reviews(db: DbSession, _actor: AdminRole):
+    pending, completed, failed = ReviewService(db).assess_pending_incidents()
+    return ReviewAssessmentResponse(
+        pending=pending,
+        completed=completed,
+        failed=failed,
+    )
 
 
 @router.post(

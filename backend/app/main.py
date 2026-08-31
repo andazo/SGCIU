@@ -3,7 +3,7 @@ import time
 import uuid
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -13,16 +13,12 @@ from .ai_service import run_complaint_intake_chat
 from .api.dependencies import AdminRole
 from .api.routes.incidents import router as incidents_router
 from .api.routes.intake import router as intake_router
+from .api.routes.internal_intake import router as internal_intake_router
 from .api.routes.legal_rag import router as legal_rag_router
 from .api.routes.operational import router as operational_router
 from .api.routes.reviews import router as reviews_router
 from .config import get_settings
-from .crud import (
-    create_complaint_submission,
-    create_form_submission,
-    list_complaint_submissions,
-    list_form_submissions,
-)
+from .crud import create_form_submission, list_complaint_submissions, list_form_submissions
 from .db import get_db
 from .logging_config import configure_logging, correlation_id_context
 from .schemas import (
@@ -33,6 +29,7 @@ from .schemas import (
     FormSubmissionCreate,
     FormSubmissionResponse,
 )
+from .services.incidents import IncidentService
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -42,6 +39,7 @@ DbSession = Annotated[Session, Depends(get_db)]
 app = FastAPI(title=settings.app_name, version="0.3.0")
 app.include_router(intake_router, prefix="/v1")
 app.include_router(incidents_router, prefix="/v1")
+app.include_router(internal_intake_router, prefix="/v1")
 app.include_router(operational_router, prefix="/v1")
 app.include_router(reviews_router, prefix="/v1")
 app.include_router(legal_rag_router, prefix="/v1")
@@ -111,7 +109,14 @@ def complaint_intake_chat(payload: ComplaintIntakeChatRequest):
 
 @app.post("/complaints", response_model=ComplaintSubmissionResponse)
 def create_complaint(payload: ComplaintSubmissionCreate, db: DbSession):
-    return create_complaint_submission(db, payload)
+    if payload.police_input:
+        raise HTTPException(
+            status_code=403,
+            detail="Los registros de personal deben utilizar el flujo interno administrativo.",
+        )
+    # Keep the legacy route compatible, but send it through the same domain service
+    # as persistent intake so embeddings and administrative assessment are not skipped.
+    return IncidentService(db).create(payload)
 
 
 @app.get("/complaints", response_model=list[ComplaintSubmissionResponse])

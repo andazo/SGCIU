@@ -12,13 +12,15 @@ from app.ai.intake import (
     reconcile_field_states,
     unresolved_fields,
 )
-from app.models import IntakeSession
+from app.models import AuditEvent, IntakeSession
 from app.schemas import (
     ChatMessage,
     ComplaintExtractedData,
     ComplaintSubmissionCreate,
     IntakeSessionResponse,
     IntakeSubmissionRequest,
+    InternalIntakeSubmissionRequest,
+    RegistrationMode,
 )
 from app.services.incidents import IncidentService
 
@@ -48,9 +50,10 @@ class IntakeService:
         self.db = db
         self.provider = provider or get_intake_provider()
 
-    def start(self) -> IntakeSession:
+    def start(self, registration_mode: RegistrationMode = "complete") -> IntakeSession:
         session = IntakeSession(
             id=str(uuid.uuid4()),
+            registration_mode=registration_mode,
             messages=[{"role": "assistant", "content": INITIAL_MESSAGE}],
             extracted_data=ComplaintExtractedData().model_dump(),
             prompt_version=PROMPT_VERSION,
@@ -79,6 +82,9 @@ class IntakeService:
             messages,
             current_data,
             follow_up_count=previous_follow_ups,
+            emergency_guidance_already_shown=bool(
+                previous_workflow.get("emergency_guidance_shown")
+            ),
         )
         messages.append(ChatMessage(role="assistant", content=result.assistant_message))
 
@@ -110,6 +116,57 @@ class IntakeService:
         return self.to_response(session)
 
     def submit(self, session_id: str, payload: IntakeSubmissionRequest):
+        return self._submit(
+            session_id,
+            name=payload.name,
+            identification=payload.identification,
+            email=payload.email,
+            phone=payload.phone,
+            truth_confirmation=payload.truth_confirmation,
+            data_usage_consent=payload.data_usage_consent,
+            source="persistent_intake",
+        )
+
+    def submit_internal(self, session_id: str, payload: InternalIntakeSubmissionRequest):
+        incident = self._submit(
+            session_id,
+            truth_confirmation=payload.truth_confirmation,
+            data_usage_consent=payload.data_usage_consent,
+            police_input=True,
+            entered_by_badge=payload.entered_by_badge,
+            source="internal_intake",
+        )
+        self.db.add(
+            AuditEvent(
+                trace_id=str(uuid.uuid4()),
+                actor_role="admin",
+                action="incident:internal_create",
+                resource_type="incident",
+                resource_id=str(incident.id),
+                details={
+                    "police_input": True,
+                    "entered_by_badge": payload.entered_by_badge,
+                },
+            )
+        )
+        self.db.commit()
+        self.db.refresh(incident)
+        return incident
+
+    def _submit(
+        self,
+        session_id: str,
+        *,
+        truth_confirmation: bool,
+        data_usage_consent: bool,
+        name: str | None = None,
+        identification: str | None = None,
+        email: str | None = None,
+        phone: str | None = None,
+        police_input: bool = False,
+        entered_by_badge: str | None = None,
+        source: str = "persistent_intake",
+    ):
         session = self.get(session_id)
         response = self.to_response(session)
         if not session.is_complete:
@@ -118,18 +175,22 @@ class IntakeService:
                 "explícitamente que desea enviarla con la información disponible."
             )
         workflow = session.extracted_data.get("_workflow", {})
+        is_anonymous = session.registration_mode == "anonymous"
         extracted = dict(session.extracted_data)
         extracted.pop("_workflow", None)
         incident_payload = ComplaintSubmissionCreate(
-            name=payload.name,
-            identification=payload.identification,
-            email=payload.email,
-            phone=payload.phone,
+            name=None if is_anonymous else name,
+            identification=None if is_anonymous else identification,
+            email=None if is_anonymous else email,
+            phone=None if is_anonymous else phone,
+            entered_by_badge=entered_by_badge,
             ai_extracted_data=ComplaintExtractedData.model_validate(extracted),
             ai_summary_text=session.summary_text,
             analysis_metadata={
-                "source": "persistent_intake",
+                "source": source,
                 "session_id": session.id,
+                "registration_mode": session.registration_mode,
+                "anonymous": is_anonymous,
                 "confidence_by_field": (
                     response.extracted_data.confidence_by_field.model_dump(exclude_none=True)
                 ),
@@ -143,8 +204,9 @@ class IntakeService:
             review_reason=workflow.get("review_reason"),
             model_name=session.model_name,
             prompt_version=session.prompt_version,
-            truth_confirmation=payload.truth_confirmation,
-            data_usage_consent=payload.data_usage_consent,
+            truth_confirmation=truth_confirmation,
+            data_usage_consent=data_usage_consent,
+            police_input=police_input,
         )
         return IncidentService(self.db).create(incident_payload)
 
@@ -155,6 +217,7 @@ class IntakeService:
         missing = actionable_missing_fields(data)
         return IntakeSessionResponse(
             session_id=session.id,
+            registration_mode=session.registration_mode,
             messages=[ChatMessage.model_validate(message) for message in session.messages],
             is_complete=session.is_complete,
             missing_fields=missing,

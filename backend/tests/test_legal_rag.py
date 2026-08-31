@@ -81,6 +81,34 @@ class ClassifiedAnswerDouble(LegalAnswerProvider):
         )
 
 
+class ContextAwareAnswerDouble(LegalAnswerProvider):
+    model_name = "test-context-aware-answer"
+
+    def __init__(self):
+        self.received_query = ""
+
+    def generate(self, query, sources):
+        self.received_query = query
+        return (
+            GroundedLegalAnswer(
+                summary="La fuente debe traducirse al flujo de gestión del incidente.",
+                findings=[
+                    GroundedLegalFinding(
+                        classification="recommended_procedure",
+                        statement=(
+                            "Registre la actuación y derive lo que exceda el alcance municipal."
+                        ),
+                        source_ids=["F1"],
+                    )
+                ],
+                operational_guidance=[
+                    "Conserve la categoría preliminar y documente la derivación en SGCIU."
+                ],
+            ),
+            ModelUsage(),
+        )
+
+
 def _add_legal_chunk(
     db_session,
     provider,
@@ -367,6 +395,39 @@ def test_answer_accepts_classification_authorized_by_source_profile(
     assert response.insufficient_evidence is False
     assert response.findings[0].classification == classification
     assert label in response.answer
+
+
+def test_rag_generation_receives_operational_context_and_returns_guidance(db_session):
+    provider = LocalEmbeddingDouble()
+    _add_legal_chunk(
+        db_session,
+        provider,
+        key="protocolo-sgciu",
+        title="Protocolo operativo de prueba",
+        page=3,
+        content="El protocolo recomienda documentar y derivar la actuación correspondiente.",
+        source_category="operational_protocol",
+        allowed_classifications=["recommended_procedure"],
+    )
+    answer_provider = ContextAwareAnswerDouble()
+    service = LegalRAGService(
+        db_session,
+        retriever=HybridLegalRetriever(db_session, embedding_provider=provider),
+        answer_provider=answer_provider,
+    )
+
+    response = service.answer(
+        "¿Qué procedimiento permite documentar y derivar esta situación?",
+        audience="police",
+        operational_context="Pelea reportada en San Joaquín.",
+    )
+
+    assert "flujo sgciu" in answer_provider.received_query.casefold()
+    assert "Pelea reportada en San Joaquín." in answer_provider.received_query
+    assert response.operational_guidance == [
+        "Conserve la categoría preliminar y documente la derivación en SGCIU."
+    ]
+    assert "Aplicación en SGCIU" in response.answer
 
 
 class IncompatibleMunicipalAuthorityDouble(LegalAnswerProvider):

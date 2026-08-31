@@ -161,7 +161,113 @@ h2 {
   line-height: 1.5;
 }
 
+.recurrentPatternsPanel {
+  display: grid;
+  gap: 20px;
+}
+
+.recurrentPatternList {
+  display: grid;
+  gap: 18px;
+}
+
+.recurrentPatternCard {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid #d8e5dc;
+  border-radius: 12px;
+  background: #fbfdfb;
+}
+
+.recurrentPatternHeader {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.recurrentPatternHeader h2 {
+  margin: 5px 0 0;
+  color: #184f34;
+}
+
+.recurrentPatternHeader > strong {
+  color: #184f34;
+  white-space: nowrap;
+}
+
+.recurrentPatternSummary {
+  margin: 0;
+  color: #52636f;
+}
+
+.internalIncidentPanel {
+  display: grid;
+  gap: 20px;
+}
+
+.internalIncidentForm {
+  display: grid;
+  gap: 20px;
+}
+
+.internalBadgeField {
+  max-width: 440px;
+}
+
+.internalBadgeField small {
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.internalSummary {
+  padding: 18px;
+  border: 1px solid #d8e5dc;
+  border-radius: 10px;
+  background: #fbfdfb;
+}
+
+.internalSummary h3 {
+  margin-top: 0;
+  color: #184f34;
+}
+
+.internalSummary ul {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.internalSummaryText {
+  margin-bottom: 0;
+  color: #52636f;
+}
+
+.internalSubmitButton {
+  justify-self: start;
+}
+
+.recurrentPatternBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.patternSignal {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #e7f3eb;
+  color: #24633f;
+  font-size: 0.82rem;
+}
+
 input,
+select,
 textarea {
   width: 100%;
   border: 1px solid #b7c9bd;
@@ -171,7 +277,8 @@ textarea {
   outline: none;
 }
 
-input {
+input,
+select {
   height: 44px;
   padding: 0 12px;
 }
@@ -184,6 +291,7 @@ textarea {
 }
 
 input:focus,
+select:focus,
 textarea:focus {
   border-color: #226641;
   box-shadow: 0 0 0 3px rgba(34, 102, 65, 0.16);
@@ -201,9 +309,11 @@ textarea:focus {
 .chatMessages {
   display: grid;
   max-height: 430px;
+  min-height: 160px;
   overflow-y: auto;
   gap: 12px;
   padding-right: 4px;
+  scroll-behavior: smooth;
 }
 
 .chatBubble {
@@ -224,6 +334,106 @@ textarea:focus {
   margin: 0;
   color: #334e68;
   line-height: 1.5;
+}
+
+.chatProcessing {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  border-style: dashed;
+  background: #f4f8f2;
+}
+
+.chatTypingDots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.chatTypingDots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #226641;
+  animation: chatDotPulse 1.2s infinite ease-in-out;
+}
+
+.chatTypingDots i:nth-child(2) { animation-delay: 0.15s; }
+.chatTypingDots i:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes chatDotPulse {
+  0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+.modeField {
+  max-width: 560px;
+}
+
+.field small {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.anonymousNotice,
+.assistantSessionMeta,
+.queryHint {
+  margin: 0;
+  color: #52616f;
+  line-height: 1.45;
+}
+
+.citizenEmergencyNotice {
+  margin: 0 0 18px;
+  border: 1px solid #f2c94c;
+  border-radius: 8px;
+  background: #fff8d7;
+  color: #6b4b00;
+  font-weight: 700;
+  line-height: 1.45;
+  padding: 12px 14px;
+}
+
+.anonymousNotice {
+  border-left: 4px solid #f2c94c;
+  border-radius: 0 8px 8px 0;
+  background: #fffdf2;
+  padding: 12px 14px;
+}
+
+.assistantSessionMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.queryHint {
+  font-size: 0.86rem;
+}
+
+.policyContextGrid {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.6fr) minmax(0, 1.4fr);
+  gap: 12px;
+}
+
+.operationalGuidance {
+  border-left: 4px solid #226641;
+  border-radius: 0 8px 8px 0;
+  background: #edf9ef;
+  color: #184f34;
+  padding: 12px 14px;
+}
+
+.operationalGuidance ul {
+  display: grid;
+  gap: 6px;
+  margin: 7px 0 0;
+  padding-left: 20px;
+  color: #334e68;
 }
 
 .chatInputRow {
@@ -524,10 +734,47 @@ pre {
   font-size: clamp(1.35rem, 3vw, 2rem);
 }
 
+.filterSection {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+
+.filterToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #b7cbb6;
+  border-radius: 9px;
+  padding: 9px 13px;
+  color: #184f34;
+  background: #f8fbf4;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+.filterToggle:hover,
+.filterToggle:focus-visible {
+  border-color: #184f34;
+  background: #edf9ef;
+}
+
+.filterToggleState {
+  color: #52616f;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
 .adminFilters {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+  width: min(100%, 720px);
+  padding: 14px;
+  border: 1px solid #dce8d9;
+  border-radius: 10px;
+  background: #ffffff;
 }
 
 .adminFilters label {
@@ -557,6 +804,466 @@ pre {
 .adminFilters select:focus {
   border-color: #226641;
   box-shadow: 0 0 0 3px rgba(34, 102, 65, 0.16);
+}
+
+.clearFiltersButton {
+  align-self: end;
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #184f34;
+  background: #edf9ef;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.adminTopHeading {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.adminTopHeading h1 {
+  margin: 0;
+}
+
+.adminTopHeading p {
+  margin: 0;
+  color: #52616f;
+}
+
+.workspacePanel {
+  min-width: 0;
+}
+
+.sectionIntro {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.sectionIntro h2 {
+  color: #184f34;
+}
+
+.sectionIntro p {
+  margin: 0;
+  color: #52616f;
+}
+
+.panelActions,
+.detailActions,
+.corpusStatus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.primaryButton,
+.secondaryButton,
+.ghostButton {
+  min-height: 40px;
+  border-radius: 8px;
+  padding: 0 13px;
+}
+
+.secondaryButton {
+  border: 1px solid #226641;
+  background: #edf9ef;
+  color: #184f34;
+}
+
+.secondaryButton:hover {
+  background: #d9f0df;
+}
+
+.ghostButton {
+  border: 1px solid #d4e1d4;
+  background: transparent;
+  color: #52616f;
+}
+
+.ghostButton:hover {
+  background: #f4f8f2;
+  color: #184f34;
+}
+
+.incidentWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(290px, 0.75fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.incidentWorkspace .adminTable {
+  min-width: 780px;
+}
+
+.adminTable tbody tr[tabindex] {
+  cursor: pointer;
+}
+
+.adminTable tbody tr.isSelected,
+.adminTable tbody tr.isSelected:hover {
+  background: #e9f5e9;
+  box-shadow: inset 4px 0 #226641;
+}
+
+.temporalBadge,
+.sourceBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: #edf1f5;
+  color: #52616f;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.temporalBadge.pasado {
+  background: #edf1f5;
+  color: #52616f;
+}
+
+.temporalBadge.en_curso {
+  background: #fff0ed;
+  color: #a33a29;
+}
+
+.temporalBadge.futuro {
+  background: #fff8d7;
+  color: #6b4b00;
+}
+
+.detailEmpty,
+.incidentDetail,
+.insightCard,
+.agentAnswer,
+.policyAnswer {
+  border: 1px solid #d8e5dc;
+  border-radius: 12px;
+  background: #fbfdfb;
+  padding: 18px;
+}
+
+.detailEmpty {
+  min-height: 230px;
+  text-align: center;
+}
+
+.detailIcon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 12px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff8d7;
+  color: #6b4b00;
+  font-size: 1.4rem;
+  font-weight: 900;
+}
+
+.detailEmpty h3,
+.incidentDetail h3,
+.insightCard h3,
+.agentAnswer h3,
+.policyAnswer h3 {
+  margin: 0;
+  color: #184f34;
+}
+
+.detailEmpty p,
+.detailSummary {
+  color: #52616f;
+  line-height: 1.5;
+}
+
+.detailHeader,
+.answerHeader {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sourceBadge {
+  background: #fff8d7;
+  color: #6b4b00;
+}
+
+.sourceBadge.staff {
+  background: #e7f3eb;
+  color: #226641;
+}
+
+.detailGrid {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.detailGrid div {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e4ece3;
+}
+
+.detailGrid dt {
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.detailGrid dd {
+  margin: 0;
+  color: #334e68;
+  font-size: 0.88rem;
+  text-align: right;
+}
+
+.relatedResults {
+  margin-top: 16px;
+  border-top: 1px solid #d8e5dc;
+  padding-top: 14px;
+}
+
+.relatedResults h4 {
+  margin: 0 0 10px;
+  color: #184f34;
+}
+
+.relatedResults ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.relatedResults li {
+  display: grid;
+  gap: 3px;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 9px 10px;
+}
+
+.relatedResults li span,
+.citationLine {
+  color: #52616f;
+  font-size: 0.82rem;
+}
+
+.analyticsKpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.analyticsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.insightCard {
+  display: grid;
+  gap: 10px;
+}
+
+.insightRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #e4ece3;
+  padding: 8px 0;
+  color: #52616f;
+}
+
+.insightRow strong {
+  color: #184f34;
+}
+
+.agentQueryBox,
+.policyQuery {
+  display: grid;
+  gap: 10px;
+  border-radius: 12px;
+  background: #f4f8f2;
+  padding: 16px;
+}
+
+.queryRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+.agentAnswer,
+.policyAnswer {
+  display: grid;
+  gap: 10px;
+}
+
+.agentAnswer p,
+.policyAnswerText {
+  margin: 0;
+  color: #334e68;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+.answerHeader span {
+  border-radius: 999px;
+  background: #edf9ef;
+  padding: 5px 9px;
+  color: #226641;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.corpusStatus {
+  color: #52616f;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.statusDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #f2c94c;
+}
+
+.statusDot.ready {
+  background: #37a169;
+}
+
+.policyWorkspace {
+  gap: 18px;
+}
+
+.subPanel {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid #d8e5dc;
+  padding-top: 18px;
+}
+
+.subPanelHeader h3 {
+  margin: 0 0 4px;
+  color: #184f34;
+}
+
+.subPanelHeader p {
+  margin: 0;
+  color: #52616f;
+}
+
+.candidateClusterList,
+.reviewList {
+  display: grid;
+  gap: 12px;
+}
+
+.candidateClusterCard,
+.reviewCard,
+.highlightCard {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #d8e5dc;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.candidateClusterCard h3,
+.reviewCard h3 {
+  margin: 3px 0 0;
+  color: #184f34;
+}
+
+.candidateClusterCard p,
+.reviewCard p {
+  margin: 0;
+  color: #52616f;
+  line-height: 1.5;
+}
+
+.clusterMembers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.clusterMembers span {
+  border-radius: 999px;
+  background: #edf9ef;
+  padding: 5px 9px;
+  color: #226641;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.reviewHeader {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reviewCard ul {
+  margin: 0;
+  color: #52616f;
+}
+
+.highlightSection {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid #d8e5dc;
+  padding-top: 18px;
+}
+
+.policyQuery textarea {
+  min-height: 90px;
+  resize: vertical;
+  padding: 11px 12px;
+}
+
+.citationCards {
+  display: grid;
+  gap: 8px;
+}
+
+.citationCards article {
+  display: grid;
+  gap: 4px;
+  border-left: 3px solid #f2c94c;
+  background: #fffdf2;
+  padding: 10px 12px;
+}
+
+.citationCards article strong {
+  color: #184f34;
+  font-size: 0.88rem;
+}
+
+.citationCards article span,
+.citationCards article p {
+  margin: 0;
+  color: #52616f;
+  font-size: 0.82rem;
 }
 
 .adminNotice {
@@ -815,8 +1522,24 @@ pre {
 
   .adminFilters,
   .adminStats,
-  .adminCharts {
+  .adminCharts,
+  .analyticsKpis,
+  .analyticsGrid,
+  .incidentWorkspace,
+  .policyContextGrid {
     grid-template-columns: 1fr;
+  }
+
+  .sectionIntro,
+  .adminPanelHeader,
+  .reviewHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .panelActions,
+  .corpusStatus {
+    justify-content: flex-start;
   }
 
   .fieldGrid {
@@ -829,6 +1552,10 @@ pre {
 
   .chatInputRow button {
     width: 100%;
+  }
+
+  .queryRow {
+    grid-template-columns: 1fr;
   }
 }
 

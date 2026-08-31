@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -8,7 +9,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models import ComplaintSubmission, IncidentCluster
 from app.services.incidents import IncidentNotFoundError, IncidentService
-from app.services.semantic import SemanticIncidentService
+from app.services.normalization import canonical_category, canonical_district, filter_values
+from app.services.semantic import SemanticIncidentService, _is_recent
 from app.tools.legal import legal_tool_definitions
 from app.tools.registry import ToolDefinition, ToolRegistry
 
@@ -44,6 +46,10 @@ class GetClusterInput(ToolInput):
     cluster_id: int = Field(ge=1)
 
 
+class GetRecurrentPatternsInput(ToolInput):
+    pass
+
+
 class RequestReviewInput(ToolInput):
     incident_id: int = Field(ge=1)
     reason: str = Field(min_length=10, max_length=500)
@@ -62,6 +68,7 @@ def _safe_incident(incident: ComplaintSubmission) -> dict[str, object]:
         "event_datetime": data.get("fecha_hora_aproximada"),
         "summary": incident.ai_summary_text,
         "requires_human_review": incident.requires_human_review,
+        "source": "police" if incident.police_input else "citizen",
         "synthetic": bool((incident.analysis_metadata or {}).get("synthetic")),
         "synthetic_case_id": (incident.analysis_metadata or {}).get("synthetic_case_id"),
     }
@@ -92,14 +99,21 @@ def search_incidents(db: Session, arguments: SearchIncidentsInput) -> dict[str, 
 def aggregate_incidents(db: Session, arguments: AggregateIncidentsInput) -> dict[str, object]:
     group_expression = ComplaintSubmission.ai_extracted_data[arguments.group_by].as_string()
     query = select(group_expression, func.count()).group_by(group_expression)
-    if arguments.district:
-        query = query.where(
-            ComplaintSubmission.ai_extracted_data["distrito"].as_string() == arguments.district
+    normalized_district = canonical_district(arguments.district)
+    normalized_category = canonical_category(arguments.category)
+    if normalized_district:
+        district_values = filter_values(normalized_district, kind="district") or (
+            normalized_district,
         )
-    if arguments.category:
         query = query.where(
-            ComplaintSubmission.ai_extracted_data["categoria_preliminar"].as_string()
-            == arguments.category
+            ComplaintSubmission.ai_extracted_data["distrito"].as_string().in_(district_values)
+        )
+    if normalized_category:
+        category_values = filter_values(normalized_category, kind="category") or (
+            normalized_category,
+        )
+        query = query.where(
+            ComplaintSubmission.ai_extracted_data["categoria_preliminar"].as_string().in_(category_values)
         )
     if arguments.synthetic_only is not None:
         query = query.where(
@@ -107,15 +121,25 @@ def aggregate_incidents(db: Session, arguments: AggregateIncidentsInput) -> dict
             == arguments.synthetic_only
         )
     rows = db.execute(query.order_by(func.count().desc())).all()
+    groups: dict[str, int] = {}
+    for value, count in rows:
+        if arguments.group_by == "distrito":
+            key = canonical_district(value) or "sin_clasificar"
+        else:
+            key = canonical_category(value) or "sin_clasificar"
+        groups[key] = groups.get(key, 0) + count
     return {
         "group_by": arguments.group_by,
         "filters": {
-            "district": arguments.district,
-            "category": arguments.category,
+            "district": normalized_district,
+            "category": normalized_category,
             "synthetic_only": arguments.synthetic_only,
         },
-        "groups": [{"value": value or "sin_clasificar", "count": count} for value, count in rows],
-        "total": sum(count for _, count in rows),
+        "groups": [
+            {"value": value, "count": count}
+            for value, count in sorted(groups.items(), key=lambda item: item[1], reverse=True)
+        ],
+        "total": sum(groups.values()),
     }
 
 
@@ -167,6 +191,60 @@ def get_incident_cluster(db: Session, arguments: GetClusterInput) -> dict[str, o
     }
 
 
+def get_recurrent_patterns(
+    db: Session, arguments: GetRecurrentPatternsInput
+) -> dict[str, object]:
+    service = SemanticIncidentService(db)
+    window_days = service.settings.cluster_time_window_days
+    threshold = datetime.now(UTC) - timedelta(days=window_days)
+    patterns: list[dict[str, object]] = []
+    for cluster in service.list_recurrent_patterns():
+        members = [
+            member
+            for member in cluster.members
+            if member.incident and _is_recent(member.incident.created_at, threshold)
+        ]
+        if not members:
+            continue
+        patterns.append(
+            {
+                "pattern_id": cluster.id,
+                "label": cluster.label,
+                "incident_count": len(members),
+                "average_similarity": round(
+                    sum(member.similarity_score for member in members) / len(members), 4
+                ),
+                "members": [
+                    {
+                        "incident_id": member.incident_id,
+                        "created_at": member.incident.created_at.isoformat()
+                        if member.incident.created_at
+                        else None,
+                        "category": (member.incident.ai_extracted_data or {}).get(
+                            "categoria_preliminar"
+                        ),
+                        "district": (member.incident.ai_extracted_data or {}).get("distrito"),
+                        "address": (member.incident.ai_extracted_data or {}).get(
+                            "direccion_exacta"
+                        ),
+                        "similarity_score": member.similarity_score,
+                        "match_reason": member.match_reason,
+                    }
+                    for member in sorted(
+                        members,
+                        key=lambda item: item.incident.created_at,
+                    )
+                ],
+            }
+        )
+    return {
+        "window_days": window_days,
+        "minimum_incidents": 3,
+        "patterns": patterns,
+        "total_patterns": len(patterns),
+    }
+
+
 def request_human_review(db: Session, arguments: RequestReviewInput) -> dict[str, object]:
     try:
         incident = IncidentService(db).get(arguments.incident_id)
@@ -213,6 +291,15 @@ def build_incident_tool_registry() -> ToolRegistry:
                 description="Consulta un cluster candidato y sus incidentes miembros.",
                 input_model=GetClusterInput,
                 handler=get_incident_cluster,
+            ),
+            ToolDefinition(
+                name="get_recurrent_patterns",
+                description=(
+                    "Obtiene patrones recurrentes proactivos con al menos tres incidentes "
+                    "similares dentro de la ventana temporal configurada."
+                ),
+                input_model=GetRecurrentPatternsInput,
+                handler=get_recurrent_patterns,
             ),
             ToolDefinition(
                 name="request_human_review",

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models import ComplaintSubmission, HumanReview
 from app.schemas import ComplaintSubmissionCreate
+from app.services.normalization import filter_values
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +24,13 @@ class IncidentService:
         incident = ComplaintSubmission(
             name=payload.name,
             identification=payload.identification,
+            entered_by_badge=payload.entered_by_badge,
             email=str(payload.email) if payload.email else None,
             phone=payload.phone,
             ai_extracted_data=payload.ai_extracted_data.model_dump(),
             ai_summary_text=payload.ai_summary_text,
             analysis_metadata=payload.analysis_metadata,
+            police_input=payload.police_input,
             requires_human_review=payload.requires_human_review,
             review_reason=payload.review_reason,
             model_name=payload.model_name,
@@ -122,13 +125,16 @@ class IncidentService:
         query = select(ComplaintSubmission)
         count_query = select(func.count()).select_from(ComplaintSubmission)
         if district:
-            condition = ComplaintSubmission.ai_extracted_data["distrito"].as_string() == district
+            values = filter_values(district, kind="district") or (district,)
+            condition = ComplaintSubmission.ai_extracted_data["distrito"].as_string().in_(values)
             query = query.where(condition)
             count_query = count_query.where(condition)
         if category:
+            values = filter_values(category, kind="category") or (category,)
             condition = (
-                ComplaintSubmission.ai_extracted_data["categoria_preliminar"].as_string()
-                == category
+                ComplaintSubmission.ai_extracted_data["categoria_preliminar"].as_string().in_(
+                    values
+                )
             )
             query = query.where(condition)
             count_query = count_query.where(condition)

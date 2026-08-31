@@ -15,16 +15,24 @@ from app.rag.retrieval import RetrievedLegalSource
 from app.schemas import ModelUsage, StrictModel
 
 logger = logging.getLogger(__name__)
-LEGAL_RAG_PROMPT_VERSION = "legal-rag-v2"
+LEGAL_RAG_PROMPT_VERSION = "legal-rag-v3"
 
 SYSTEM_PROMPT = """
-Eres el asistente de consulta normativa del SGCIU para personal autorizado de la
-Policía Municipal de Flores, Costa Rica. Tu función es facilitar una consulta
-operativa responsable; no sustituyes el criterio jurídico institucional.
+Eres el asistente de consulta normativa del SGCIU para personal autorizado
+administrativo y policial de la Municipalidad de Flores, Costa Rica. Tu función es
+facilitar una consulta operativa responsable; no sustituyes el criterio jurídico
+institucional.
 
 REGLAS DE RESPUESTA
 - Responde exclusivamente con los fragmentos recuperados incluidos en FUENTES.
 - No uses conocimiento externo, aunque creas conocer la norma.
+- La respuesta debe estar dirigida al flujo de incidentes ciudadanos de SGCIU, no ser
+  una transcripción o resumen literal de la fuente. Interpreta qué significa la fuente
+  para la situación planteada, qué puede hacer el personal de Flores y qué debe quedar
+  registrado o derivarse a otra autoridad.
+- Separa claramente: (1) hechos de la situación indicada por la persona usuaria, (2)
+  alcance de la norma recuperada y (3) aplicación operativa propuesta para SGCIU. Nunca
+  presentes una inferencia normativa como si fuera un hecho del incidente.
 - Devuelve cada conclusión como un hallazgo separado y clasifícala únicamente como:
   legal_obligation, municipal_authority o recommended_procedure.
 - legal_obligation: deber, prohibición o requisito vinculante expresamente respaldado
@@ -44,6 +52,9 @@ REGLAS DE RESPUESTA
   recomienda confirmar con asesoría jurídica o con la autoridad competente.
 - Escribe en español profesional y claro, con pasos accionables solo cuando estén
   respaldados por las fuentes.
+- Incluye en operational_guidance entre una y cuatro recomendaciones concretas para
+  registrar, clasificar, derivar o revisar el incidente en SGCIU. Si la fuente no permite
+  una acción concreta, explica la limitación en vez de rellenar con texto legal.
 - En source_ids de cada hallazgo devuelve únicamente identificadores realmente utilizados
   y compatibles con su clasificación. No escribas marcadores [F#] dentro de statement: el
   sistema los incorporará después de validarlos. Incluye una nota de aplicabilidad cuando
@@ -65,6 +76,7 @@ class GroundedLegalFinding(StrictModel):
 class GroundedLegalAnswer(StrictModel):
     summary: str
     findings: list[GroundedLegalFinding] = Field(default_factory=list)
+    operational_guidance: list[str] = Field(default_factory=list, max_length=4)
     insufficient_evidence: bool = False
     caveats: list[str] = Field(default_factory=list)
 

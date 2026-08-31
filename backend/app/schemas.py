@@ -28,6 +28,8 @@ CategoriaPreliminar = Literal[
 Distrito = Literal["San Joaquin", "Barrantes", "Llorente"]
 TipoLugar = Literal["establecimiento", "casa", "parque", "escuela", "otro"]
 Urgencia = Literal["baja", "media", "alta", "inmediata"]
+TemporalRelation = Literal["pasado", "en_curso", "futuro", "desconocido"]
+RegistrationMode = Literal["complete", "anonymous"]
 IntakeFieldStatus = Literal["known", "missing", "ambiguous", "unknown", "declined"]
 IntakeCompletionReason = Literal[
     "needs_follow_up",
@@ -171,6 +173,10 @@ class ComplaintExtractedData(StrictModel):
     direccion_exacta: str | None = None
     tipo_lugar: TipoLugar | None = None
     fecha_hora_aproximada: str | None = None
+    incident_datetime: str | None = None
+    reference_datetime: str | None = None
+    temporal_relation: TemporalRelation = "desconocido"
+    is_currently_occurring: bool = False
     entities: IncidentEntities = Field(default_factory=IncidentEntities)
     urgency: Urgencia = "media"
     confidence_by_field: FieldConfidence = Field(default_factory=FieldConfidence)
@@ -207,7 +213,11 @@ class ComplaintIntakeChatResponse(StrictModel):
     user_wants_to_finish: bool = False
     completion_reason: IntakeCompletionReason = "needs_follow_up"
     model_name: str | None = None
-    prompt_version: str = "intake-v4"
+    prompt_version: str = "intake-v5"
+
+
+class IntakeSessionCreateRequest(StrictModel):
+    registration_mode: RegistrationMode = "complete"
 
 
 class IntakeSessionCreateResponse(StrictModel):
@@ -215,6 +225,7 @@ class IntakeSessionCreateResponse(StrictModel):
     emergency_notice: str
     assistant_message: str
     prompt_version: str
+    registration_mode: RegistrationMode = "complete"
 
 
 class IntakeMessageRequest(StrictModel):
@@ -228,6 +239,7 @@ class IntakeMessageRequest(StrictModel):
 
 class IntakeSessionResponse(StrictModel):
     session_id: str
+    registration_mode: RegistrationMode
     messages: list[ChatMessage]
     is_complete: bool
     missing_fields: list[str]
@@ -246,11 +258,13 @@ class IntakeSessionResponse(StrictModel):
 class ComplaintSubmissionCreate(BaseModel):
     name: str | None = None
     identification: str | None = Field(default=None, max_length=64)
+    entered_by_badge: str | None = Field(default=None, max_length=64)
     email: EmailStr | None = None
     phone: str | None = None
     ai_extracted_data: ComplaintExtractedData
     ai_summary_text: str | None = None
     analysis_metadata: dict[str, object] = Field(default_factory=dict)
+    police_input: bool = False
     requires_human_review: bool = False
     review_reason: str | None = None
     model_name: str | None = None
@@ -259,7 +273,13 @@ class ComplaintSubmissionCreate(BaseModel):
     data_usage_consent: bool
 
     @field_validator(
-        "name", "identification", "phone", "ai_summary_text", "review_reason", mode="before"
+        "name",
+        "identification",
+        "entered_by_badge",
+        "phone",
+        "ai_summary_text",
+        "review_reason",
+        mode="before",
     )
     @classmethod
     def empty_strings_to_none(cls, value):
@@ -282,6 +302,10 @@ class ComplaintSubmissionCreate(BaseModel):
             raise ValueError("Debe aceptar el uso institucional de los datos.")
         if not self.ai_extracted_data.descripcion_detallada:
             raise ValueError("La descripción detallada de la denuncia es obligatoria.")
+        if self.police_input and not self.entered_by_badge:
+            raise ValueError("El registro interno requiere el badge del funcionario.")
+        if not self.police_input and self.entered_by_badge:
+            raise ValueError("El badge solo puede utilizarse en registros internos.")
         return self
 
 
@@ -294,17 +318,35 @@ class IntakeSubmissionRequest(StrictModel):
     data_usage_consent: bool
 
 
+class InternalIntakeSubmissionRequest(StrictModel):
+    entered_by_badge: str = Field(min_length=2, max_length=64)
+    truth_confirmation: bool
+    data_usage_consent: bool
+
+    @field_validator("entered_by_badge")
+    @classmethod
+    def validate_badge(cls, value: str):
+        value = value.strip()
+        if not value or not all(character.isalnum() or character in "-_." for character in value):
+            raise ValueError(
+                "El badge debe contener solo letras, números, guiones, puntos o guiones bajos."
+            )
+        return value
+
+
 class ComplaintSubmissionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     name: str | None
     identification: str | None
+    entered_by_badge: str | None
     email: str | None
     phone: str | None
     ai_extracted_data: ComplaintExtractedData
     ai_summary_text: str | None
     analysis_metadata: dict[str, object] = Field(default_factory=dict)
+    police_input: bool = False
     status: str = "submitted"
     requires_human_review: bool = False
     review_reason: str | None = None
@@ -387,6 +429,29 @@ class IncidentClusterResponse(StrictModel):
     members: list[ClusterMemberResponse]
 
 
+class RecurrentPatternMemberResponse(StrictModel):
+    incident_id: int
+    created_at: datetime
+    category: str | None
+    district: str | None
+    address: str | None
+    similarity_score: float
+    match_reason: str
+
+
+class RecurrentPatternResponse(StrictModel):
+    id: int
+    title: str
+    incident_count: int
+    first_seen: datetime
+    last_seen: datetime
+    district: str | None
+    category: str | None
+    average_similarity: float
+    signals: list[str]
+    members: list[RecurrentPatternMemberResponse]
+
+
 class SemanticRecalculationResponse(StrictModel):
     incidents_found: int
     embeddings_updated: int
@@ -425,11 +490,28 @@ class OperationalQueryResponse(StrictModel):
     prompt_version: str
     requires_human_review: bool = False
     usage: ModelUsage = Field(default_factory=ModelUsage)
+    session_id: str | None = None
+
+
+class OperationalSessionCreateResponse(StrictModel):
+    session_id: str
+    messages: list[ChatMessage] = Field(default_factory=list)
+    model_name: str
+    prompt_version: str
+
+
+class OperationalSessionResponse(StrictModel):
+    session_id: str
+    messages: list[ChatMessage] = Field(default_factory=list)
+    model_name: str | None = None
+    prompt_version: str
 
 
 class LegalQueryRequest(StrictModel):
     query: str = Field(min_length=3, max_length=4_000)
     document_keys: list[str] | None = Field(default=None, max_length=20)
+    audience: Literal["administrative", "police"] = "administrative"
+    operational_context: str | None = Field(default=None, max_length=4_000)
 
 
 class LegalCitation(StrictModel):
@@ -473,6 +555,8 @@ class LegalQueryResponse(StrictModel):
     corpus_version: str
     insufficient_evidence: bool = False
     caveats: list[str] = Field(default_factory=list)
+    operational_guidance: list[str] = Field(default_factory=list)
+    audience: Literal["administrative", "police"] = "administrative"
     usage: ModelUsage = Field(default_factory=ModelUsage)
 
 
@@ -515,6 +599,12 @@ class ResolveReviewRequest(StrictModel):
 class WorkflowTransitionRequest(StrictModel):
     action: Literal["start", "resolve", "dismiss", "escalate"]
     notes: str = Field(min_length=3, max_length=2_000)
+
+
+class ReviewAssessmentResponse(StrictModel):
+    pending: int
+    completed: int
+    failed: int
 
 
 class AssistantFeedbackRequest(StrictModel):
