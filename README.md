@@ -86,15 +86,26 @@ Endpoints administrativos del flujo interno:
 - `POST /v1/internal-intake/sessions/{session_id}/messages`
 - `POST /v1/internal-intake/sessions/{session_id}/submit`
 
+El asistente operacional usa sesiones persistentes para conservar el contexto entre
+preguntas:
+
+- `POST /v1/operational/sessions`
+- `GET /v1/operational/sessions/{session_id}`
+- `POST /v1/operational/sessions/{session_id}/messages`
+
 El badge se valida como identificador de procedencia, pero no constituye autenticación. En
 producción, los endpoints administrativos exigen además `X-Admin-Key`; para una implantación
 institucional posterior se recomienda sustituirlo por IAM, SSO o Identity-Aware Proxy.
 
-El flujo ciudadano solicita primero el nombre completo. La identificación, el correo y el
-teléfono son opcionales; estos datos se persisten con la denuncia, pero se excluyen de
-embeddings, tools del agente y trazas. El agente entiende referencias locales de Costa Rica,
-registra evidencia por campo y permite terminar con frases como `eso es todo` o
-`no tengo más información`; en ese caso guarda el reporte con los datos disponibles.
+El flujo ciudadano permite elegir entre registro con datos de contacto y registro anónimo.
+En ambos casos la conversación usa una sesión persistente; en el modo anónimo el backend
+descarta cualquier dato de contacto enviado por el cliente. En el modo completo, la
+identificación, el correo y el teléfono son opcionales; estos datos se persisten con la
+denuncia, pero se excluyen de embeddings, tools del agente y trazas. El agente entiende
+referencias locales de Costa Rica, jerga y abreviaturas, registra evidencia por campo y
+permite terminar con frases como `eso es todo`, `no tengo más información` o `llamaré al
+911`; en ese caso guarda el reporte con los datos disponibles. La orientación al 9-1-1 se
+muestra una sola vez por sesión y no sustituye la extracción del incidente.
 
 ### Datos sintéticos para el panel administrativo
 
@@ -163,8 +174,8 @@ Un incidente puede aparecer en ambos apartados. Para analizar datos anteriores a
 utilice `3. Analizar con IA incidentes pendientes` dentro de la opción 6.
 
 El inicio ciudadano muestra siempre que SGCIU no sustituye al 9-1-1. Si durante la conversación
-se detecta peligro inmediato, el agente repite esa orientación, pero no la confunde con una
-revisión de calidad administrativa.
+se detecta peligro inmediato, el agente muestra esa orientación una sola vez y continúa con
+la extracción, sin confundir la emergencia con una revisión de calidad administrativa.
 
 ### Consulta normativa RAG
 
@@ -192,6 +203,11 @@ Luego use `3. Consultar normativa`. Cada respuesta informa:
 - clasificación de cada hallazgo como obligación legal, facultad municipal o procedimiento
   recomendado, validada contra el alcance y fuerza jurídica de la fuente;
 - trace ID, advertencias y abstención cuando la evidencia no es suficiente.
+
+La consulta puede incluir el perfil (`administrative` o `police`) y una situación operativa.
+La generación sintetiza la fuente para el flujo SGCIU y devuelve recomendaciones explícitas
+para registrar, clasificar, derivar o revisar el incidente; no se limita a copiar el texto
+del PDF.
 
 El corpus contiene 27 documentos. El manifiesto registra como vacíos conocidos la
 Constitución Política y el Código Procesal Penal;

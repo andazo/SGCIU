@@ -7,6 +7,7 @@ from app.db import get_db
 from app.schemas import (
     ComplaintSubmissionResponse,
     IntakeMessageRequest,
+    IntakeSessionCreateRequest,
     IntakeSessionCreateResponse,
     IntakeSessionResponse,
     IntakeSubmissionRequest,
@@ -24,13 +25,16 @@ DbSession = Annotated[Session, Depends(get_db)]
 
 
 @router.post("/sessions", response_model=IntakeSessionCreateResponse, status_code=201)
-def start_intake(db: DbSession):
-    session = IntakeService(db).start()
+def start_intake(db: DbSession, payload: IntakeSessionCreateRequest | None = None):
+    session = IntakeService(db).start(
+        registration_mode=payload.registration_mode if payload else "complete"
+    )
     return IntakeSessionCreateResponse(
         session_id=session.id,
         emergency_notice=EMERGENCY_NOTICE,
         assistant_message=INITIAL_MESSAGE,
         prompt_version=session.prompt_version,
+        registration_mode=session.registration_mode,
     )
 
 

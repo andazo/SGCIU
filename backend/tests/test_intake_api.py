@@ -66,6 +66,36 @@ def test_internal_intake_api_marks_source_and_badge():
     assert common_list.json()[0]["police_input"] is True
 
 
+def test_anonymous_intake_session_never_persists_contact_fields():
+    start = client.post("/v1/intake/sessions", json={"registration_mode": "anonymous"})
+    assert start.status_code == 201
+    assert start.json()["registration_mode"] == "anonymous"
+    session_id = start.json()["session_id"]
+
+    analyzed = client.post(
+        f"/v1/intake/sessions/{session_id}/messages",
+        json={"content": "Vi un incidente de ruido en Llorente."},
+    )
+    assert analyzed.status_code == 200
+
+    submitted = client.post(
+        f"/v1/intake/sessions/{session_id}/submit",
+        json={
+            "name": "No debe persistir",
+            "email": "no-debe@example.com",
+            "phone": "8888-8888",
+            "truth_confirmation": True,
+            "data_usage_consent": True,
+        },
+    )
+
+    assert submitted.status_code == 201
+    assert submitted.json()["name"] is None
+    assert submitted.json()["email"] is None
+    assert submitted.json()["phone"] is None
+    assert submitted.json()["analysis_metadata"]["anonymous"] is True
+
+
 def test_public_legacy_complaints_cannot_claim_staff_input():
     response = client.post(
         "/complaints",

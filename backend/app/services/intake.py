@@ -20,6 +20,7 @@ from app.schemas import (
     IntakeSessionResponse,
     IntakeSubmissionRequest,
     InternalIntakeSubmissionRequest,
+    RegistrationMode,
 )
 from app.services.incidents import IncidentService
 
@@ -49,9 +50,10 @@ class IntakeService:
         self.db = db
         self.provider = provider or get_intake_provider()
 
-    def start(self) -> IntakeSession:
+    def start(self, registration_mode: RegistrationMode = "complete") -> IntakeSession:
         session = IntakeSession(
             id=str(uuid.uuid4()),
+            registration_mode=registration_mode,
             messages=[{"role": "assistant", "content": INITIAL_MESSAGE}],
             extracted_data=ComplaintExtractedData().model_dump(),
             prompt_version=PROMPT_VERSION,
@@ -80,6 +82,9 @@ class IntakeService:
             messages,
             current_data,
             follow_up_count=previous_follow_ups,
+            emergency_guidance_already_shown=bool(
+                previous_workflow.get("emergency_guidance_shown")
+            ),
         )
         messages.append(ChatMessage(role="assistant", content=result.assistant_message))
 
@@ -170,19 +175,22 @@ class IntakeService:
                 "explícitamente que desea enviarla con la información disponible."
             )
         workflow = session.extracted_data.get("_workflow", {})
+        is_anonymous = session.registration_mode == "anonymous"
         extracted = dict(session.extracted_data)
         extracted.pop("_workflow", None)
         incident_payload = ComplaintSubmissionCreate(
-            name=name,
-            identification=identification,
-            email=email,
-            phone=phone,
+            name=None if is_anonymous else name,
+            identification=None if is_anonymous else identification,
+            email=None if is_anonymous else email,
+            phone=None if is_anonymous else phone,
             entered_by_badge=entered_by_badge,
             ai_extracted_data=ComplaintExtractedData.model_validate(extracted),
             ai_summary_text=session.summary_text,
             analysis_metadata={
                 "source": source,
                 "session_id": session.id,
+                "registration_mode": session.registration_mode,
+                "anonymous": is_anonymous,
                 "confidence_by_field": (
                     response.extracted_data.confidence_by_field.model_dump(exclude_none=True)
                 ),
@@ -209,6 +217,7 @@ class IntakeService:
         missing = actionable_missing_fields(data)
         return IntakeSessionResponse(
             session_id=session.id,
+            registration_mode=session.registration_mode,
             messages=[ChatMessage.model_validate(message) for message in session.messages],
             is_complete=session.is_complete,
             missing_fields=missing,

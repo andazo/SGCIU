@@ -51,8 +51,16 @@ def source_to_citation(source: RetrievedLegalSource) -> LegalCitation:
     )
 
 
-def _render_answer(summary: str, findings: list[LegalFinding]) -> str:
+def _render_answer(
+    summary: str,
+    findings: list[LegalFinding],
+    operational_guidance: list[str],
+) -> str:
     parts = [summary.strip()]
+    if operational_guidance:
+        guidance = "\n".join(f"- {item.strip()}" for item in operational_guidance if item.strip())
+        if guidance:
+            parts.append("Aplicación en SGCIU:\n" + guidance)
     for finding in findings:
         label = CLASSIFICATION_LABELS[finding.classification]
         references = " ".join(f"[{source_id}]" for source_id in finding.source_ids)
@@ -98,12 +106,28 @@ class LegalRAGService:
         query: str,
         *,
         document_keys: list[str] | None = None,
+        audience: str = "administrative",
+        operational_context: str | None = None,
     ) -> LegalQueryResponse:
         trace_id = str(uuid.uuid4())
         started = time.perf_counter()
         indexed_embeddings = self.retriever.indexed_embedding_count()
         manifest = load_manifest(self.settings.legal_rag_corpus_path)
-        sources = self.retriever.search(query, document_keys=document_keys)
+        context_label = (
+            "personal administrativo"
+            if audience == "administrative"
+            else "personal policial"
+        )
+        context_value = (
+            operational_context.strip().rstrip(".") if operational_context else "no especificada"
+        )
+        contextual_query = (
+            f"Flujo SGCIU de incidentes ciudadanos. Audiencia: {context_label}. "
+            "Situación operativa: "
+            f"{context_value}. "
+            f"Pregunta normativa: {query.strip()}"
+        )
+        sources = self.retriever.search(contextual_query, document_keys=document_keys)
         if not sources:
             response = LegalQueryResponse(
                 answer=(
@@ -120,16 +144,17 @@ class LegalRAGService:
                 prompt_version=LEGAL_RAG_PROMPT_VERSION,
                 corpus_version=manifest.version,
                 insufficient_evidence=True,
+                audience=audience,
                 caveats=["La búsqueda no recuperó fragmentos con relevancia mínima."],
             )
-            self._record_trace(query, response, started)
+            self._record_trace(contextual_query, response, started)
             return response
         provider = self.answer_provider or get_legal_answer_provider(self.settings)
         try:
-            generated, usage = provider.generate(query, sources)
+            generated, usage = provider.generate(contextual_query, sources)
         except Exception as exc:
             self._record_failure(
-                query,
+                contextual_query,
                 trace_id,
                 indexed_embeddings,
                 manifest.version,
@@ -166,6 +191,9 @@ class LegalRAGService:
             cited_ids.extend(source_ids)
         cited_ids = list(dict.fromkeys(cited_ids))
         caveats = list(generated.caveats)
+        operational_guidance = [
+            item.strip() for item in generated.operational_guidance if item.strip()
+        ][:4]
         insufficient = generated.insufficient_evidence
         if invalid_attribution:
             insufficient = True
@@ -183,7 +211,7 @@ class LegalRAGService:
             findings = []
             cited_ids = []
         else:
-            answer = _render_answer(generated.summary, findings)
+            answer = _render_answer(generated.summary, findings, operational_guidance)
         citations = [source_to_citation(valid_sources[source_id]) for source_id in cited_ids]
         response = LegalQueryResponse(
             answer=answer,
@@ -198,9 +226,11 @@ class LegalRAGService:
             corpus_version=manifest.version,
             insufficient_evidence=insufficient,
             caveats=caveats,
+            operational_guidance=operational_guidance,
+            audience=audience,
             usage=usage,
         )
-        self._record_trace(query, response, started)
+        self._record_trace(contextual_query, response, started)
         return response
 
     def _record_trace(

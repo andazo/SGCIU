@@ -10,10 +10,10 @@ from openai import AsyncOpenAI
 from app.agents.gateway import GatewayTool, ToolGateway
 from app.config import Settings, get_settings
 from app.costs import estimate_llm_cost
-from app.schemas import ModelUsage, OperationalQueryResponse, ToolExecutionTrace
+from app.schemas import ChatMessage, ModelUsage, OperationalQueryResponse, ToolExecutionTrace
 
 logger = logging.getLogger(__name__)
-AGENT_PROMPT_VERSION = "operational-react-v4"
+AGENT_PROMPT_VERSION = "operational-react-v5"
 SYSTEM_PROMPT = """
 Eres un asistente operativo para personal autorizado de la Policía Municipal de
 Flores. Responde preguntas exclusivamente a partir de las herramientas SGCIU.
@@ -23,6 +23,14 @@ incidentes ni realices cálculos sobre datos que no recuperaste. Las agrupacione
 y similitudes son candidatas y requieren interpretación humana. No reveles datos
 de contacto ni solicites SQL. Solicita revisión humana cuando una acción o dato
 sea sensible. Responde en español y cita los IDs de incidentes utilizados.
+Para cualquier pregunta de cantidad, frecuencia o comparación usa siempre
+aggregate_incidents; no cuentes la lista limitada de search_incidents ni calcules
+totales a partir del texto de la conversación. Devuelve el total y los filtros
+normalizados que entregue la herramienta.
+Si existe historial de la conversación, úsalo únicamente para resolver referencias
+como "ese distrito" o "los anteriores"; verifica siempre los hechos y conteos actuales
+con una herramienta en cada respuesta. Un resultado vacío significa cero sólo después
+de que la herramienta haya aplicado filtros normalizados y debes explicitar dichos filtros.
 Para consultas sobre normativa, competencias o protocolos usa search_legal_sources,
 limítate a sus fragmentos y cita los identificadores [F#], el documento y la página
 PDF exacta. Aclara que la orientación no sustituye criterio jurídico institucional.
@@ -165,10 +173,15 @@ class OperationalAgent:
         self.settings = settings or get_settings()
         self.client = client
 
-    async def run(self, query: str) -> OperationalQueryResponse:
+    async def run(
+        self,
+        query: str,
+        *,
+        history: list[ChatMessage] | None = None,
+    ) -> OperationalQueryResponse:
         trace_id = str(uuid.uuid4())
         started = time.perf_counter()
-        response = await self._run_openai(query, trace_id)
+        response = await self._run_openai(query, trace_id, history=history)
         logger.info(
             "Operational agent completed",
             extra={
@@ -184,7 +197,13 @@ class OperationalAgent:
         )
         return response
 
-    async def _run_openai(self, query: str, trace_id: str) -> OperationalQueryResponse:
+    async def _run_openai(
+        self,
+        query: str,
+        trace_id: str,
+        *,
+        history: list[ChatMessage] | None = None,
+    ) -> OperationalQueryResponse:
         if not self.settings.openai_api_key and self.client is None:
             raise RuntimeError("OPENAI_API_KEY no está configurada para el agente operativo.")
         client = self.client or AsyncOpenAI(
@@ -194,10 +213,14 @@ class OperationalAgent:
         )
         gateway_tools = await self.gateway.list_tools()
         tools = [self._openai_tool(tool) for tool in gateway_tools]
+        conversation = [
+            message.model_dump() for message in (history or [])[-12:]
+        ]
+        conversation.append({"role": "user", "content": query})
         response = await client.responses.create(
             model=self.settings.openai_model,
             instructions=SYSTEM_PROMPT,
-            input=query,
+            input=conversation,
             tools=tools,
         )
         input_tokens, output_tokens = self._response_usage(response)
@@ -255,6 +278,7 @@ class OperationalAgent:
                 model=self.settings.openai_model,
                 previous_response_id=response.id,
                 input=outputs,
+                instructions=SYSTEM_PROMPT,
                 tools=tools,
             )
             next_input, next_output = self._response_usage(response)

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models import ComplaintSubmission, IncidentCluster
 from app.services.incidents import IncidentNotFoundError, IncidentService
+from app.services.normalization import canonical_category, canonical_district, filter_values
 from app.services.semantic import SemanticIncidentService, _is_recent
 from app.tools.legal import legal_tool_definitions
 from app.tools.registry import ToolDefinition, ToolRegistry
@@ -98,14 +99,21 @@ def search_incidents(db: Session, arguments: SearchIncidentsInput) -> dict[str, 
 def aggregate_incidents(db: Session, arguments: AggregateIncidentsInput) -> dict[str, object]:
     group_expression = ComplaintSubmission.ai_extracted_data[arguments.group_by].as_string()
     query = select(group_expression, func.count()).group_by(group_expression)
-    if arguments.district:
-        query = query.where(
-            ComplaintSubmission.ai_extracted_data["distrito"].as_string() == arguments.district
+    normalized_district = canonical_district(arguments.district)
+    normalized_category = canonical_category(arguments.category)
+    if normalized_district:
+        district_values = filter_values(normalized_district, kind="district") or (
+            normalized_district,
         )
-    if arguments.category:
         query = query.where(
-            ComplaintSubmission.ai_extracted_data["categoria_preliminar"].as_string()
-            == arguments.category
+            ComplaintSubmission.ai_extracted_data["distrito"].as_string().in_(district_values)
+        )
+    if normalized_category:
+        category_values = filter_values(normalized_category, kind="category") or (
+            normalized_category,
+        )
+        query = query.where(
+            ComplaintSubmission.ai_extracted_data["categoria_preliminar"].as_string().in_(category_values)
         )
     if arguments.synthetic_only is not None:
         query = query.where(
@@ -113,15 +121,25 @@ def aggregate_incidents(db: Session, arguments: AggregateIncidentsInput) -> dict
             == arguments.synthetic_only
         )
     rows = db.execute(query.order_by(func.count().desc())).all()
+    groups: dict[str, int] = {}
+    for value, count in rows:
+        if arguments.group_by == "distrito":
+            key = canonical_district(value) or "sin_clasificar"
+        else:
+            key = canonical_category(value) or "sin_clasificar"
+        groups[key] = groups.get(key, 0) + count
     return {
         "group_by": arguments.group_by,
         "filters": {
-            "district": arguments.district,
-            "category": arguments.category,
+            "district": normalized_district,
+            "category": normalized_category,
             "synthetic_only": arguments.synthetic_only,
         },
-        "groups": [{"value": value or "sin_clasificar", "count": count} for value, count in rows],
-        "total": sum(count for _, count in rows),
+        "groups": [
+            {"value": value, "count": count}
+            for value, count in sorted(groups.items(), key=lambda item: item[1], reverse=True)
+        ],
+        "total": sum(groups.values()),
     }
 
 

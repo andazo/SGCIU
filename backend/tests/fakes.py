@@ -76,6 +76,7 @@ class QueueIntakeProvider(IntakeProvider):
         current_data: ComplaintExtractedData,
         *,
         follow_up_count: int = 0,
+        emergency_guidance_already_shown: bool = False,
     ) -> ComplaintIntakeChatResponse:
         self.follow_up_counts.append(follow_up_count)
         if not self.responses:
@@ -92,6 +93,7 @@ class CompleteIntakeProvider(IntakeProvider):
         current_data: ComplaintExtractedData,
         *,
         follow_up_count: int = 0,
+        emergency_guidance_already_shown: bool = False,
     ) -> ComplaintIntakeChatResponse:
         report = " ".join(message.content for message in messages if message.role == "user")
         data = extracted_data(

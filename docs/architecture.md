@@ -14,7 +14,8 @@
 
 ```mermaid
 flowchart LR
-    Citizen["Ciudadano por CLI o API"] --> Profile["Identidad y contacto opcionales"]
+    Citizen["Ciudadano por CLI o API"] --> Mode["Registro completo o anónimo"]
+    Mode --> Profile["Identidad y contacto opcionales"]
     Profile --> Intake["Intake OpenAI con razonamiento high"]
     Intake --> Guardrails["Guardrails, evidencia y confianza"]
     Guardrails --> FollowUp{"¿Falta contexto crucial?"}
@@ -27,7 +28,8 @@ flowchart LR
     Vector --> Cluster["Similitud híbrida y cluster candidato"]
 ```
 
-Los datos personales viajan por una ruta determinista hasta PostgreSQL. El relato estructurado
+La conversación ciudadana y la conversación operacional se persisten por sesión. Los datos personales viajan por una ruta determinista hasta PostgreSQL.
+En modo anónimo el servicio ignora cualquier dato de contacto que el cliente intente enviar. El relato estructurado
 se procesa por separado y únicamente su versión sanitizada alimenta embeddings y tools. El
 administrador humano puede consultar los datos de contacto directamente, pero el agente no los
 recibe en su contexto.
@@ -52,6 +54,10 @@ flowchart LR
     Services --> DB["PostgreSQL + pgvector"]
     Tools --> Audit["Auditoría sin payload sensible"]
 ```
+
+Las sesiones operacionales guardan únicamente el historial visible de preguntas y respuestas
+para resolver referencias entre turnos. Cada respuesta vuelve a consultar las tools tipadas;
+el historial no se trata como evidencia y nunca sustituye los conteos deterministas de la base.
 
 El loop ReAct tiene un máximo configurable de pasos. La traza pública contiene nombre de
 tool, claves de argumentos, latencia, éxito y cantidad de resultados; no contiene el
@@ -106,7 +112,10 @@ identificadores `[F#]`. Cada documento declara fuerza jurídica, alcance institu
 puede respaldar una obligación legal, facultad municipal o procedimiento recomendado. Una
 validación posterior descarta identificadores inexistentes y clasificaciones incompatibles;
 por ejemplo, no permite inferir una facultad municipal desde una norma exclusiva de Fuerza
-Pública. El servicio falla de forma cerrada si una respuesta afirmativa no tiene atribución
+Pública. La consulta incluye el perfil del funcionario y, cuando está disponible, la situación
+del incidente. La respuesta separa alcance normativo de aplicación en SGCIU y devuelve guía
+operativa para registrar, clasificar o derivar; el texto legal se mantiene como evidencia y no
+como respuesta literal. El servicio falla de forma cerrada si una respuesta afirmativa no tiene atribución
 verificable. Las
 consultas se auditan mediante hash, IDs de chunk, versión de prompt/modelo, latencia y uso,
 sin persistir el texto original de la pregunta.

@@ -18,12 +18,7 @@ from .api.routes.legal_rag import router as legal_rag_router
 from .api.routes.operational import router as operational_router
 from .api.routes.reviews import router as reviews_router
 from .config import get_settings
-from .crud import (
-    create_complaint_submission,
-    create_form_submission,
-    list_complaint_submissions,
-    list_form_submissions,
-)
+from .crud import create_form_submission, list_complaint_submissions, list_form_submissions
 from .db import get_db
 from .logging_config import configure_logging, correlation_id_context
 from .schemas import (
@@ -34,6 +29,7 @@ from .schemas import (
     FormSubmissionCreate,
     FormSubmissionResponse,
 )
+from .services.incidents import IncidentService
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -118,7 +114,9 @@ def create_complaint(payload: ComplaintSubmissionCreate, db: DbSession):
             status_code=403,
             detail="Los registros de personal deben utilizar el flujo interno administrativo.",
         )
-    return create_complaint_submission(db, payload)
+    # Keep the legacy route compatible, but send it through the same domain service
+    # as persistent intake so embeddings and administrative assessment are not skipped.
+    return IncidentService(db).create(payload)
 
 
 @app.get("/complaints", response_model=list[ComplaintSubmissionResponse])

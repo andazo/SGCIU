@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import logoFlores from '../branding/logoFlores.png';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 const ADMIN_ROUTE = '/admin';
+const CITIZEN_SESSION_STORAGE_KEY = 'sgciu.citizen.intake.session';
+const OPERATIONAL_SESSION_STORAGE_KEY = 'sgciu.operational.session';
 const NAV_ITEMS = [
   { label: 'Inicio', icon: '⌂' },
   { label: 'Registrar incidente', icon: '+' },
@@ -60,12 +62,6 @@ const VALUE_LABELS = {
   casa: 'Casa',
   parque: 'Parque',
   escuela: 'Escuela',
-};
-
-const INITIAL_AI_MESSAGE = {
-  role: 'assistant',
-  content:
-    'Describa la denuncia cuando esté listo. Le haré preguntas solo si falta algún dato importante. Si detecto información incorrecta, puede indicármelo para corregirla.',
 };
 
 async function apiRequest(path, options = {}) {
@@ -138,12 +134,28 @@ function buildDetailBullets(extractedData) {
     }));
 }
 
-function mergeExtractedData(currentData, nextData) {
-  return Object.fromEntries(
-    Object.keys(INITIAL_EXTRACTED_DATA).map((key) => [
-      key,
-      nextData?.[key] ?? currentData[key] ?? null,
-    ]),
+function ChatTranscript({ messages, isLoading, loadingLabel = 'Procesando información' }) {
+  const endRef = useRef(null);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages.length, isLoading]);
+
+  return (
+    <div className="chatMessages" aria-live="polite" aria-busy={isLoading}>
+      {messages.map((message, index) => (
+        <div className={`chatBubble ${message.role}`} key={`${message.role}-${index}`}>
+          <p>{message.content}</p>
+        </div>
+      ))}
+      {isLoading && (
+        <div className="chatBubble assistant chatProcessing" role="status">
+          <span className="chatTypingDots" aria-hidden="true"><i /><i /><i /></span>
+          <p>{loadingLabel}…</p>
+        </div>
+      )}
+      <div ref={endRef} aria-hidden="true" />
+    </div>
   );
 }
 
@@ -719,6 +731,9 @@ function IncidentsPanel({ incidents, onRefresh }) {
 function AnalyticsPanel({ incidents }) {
   const [query, setQuery] = useState('');
   const [answer, setAnswer] = useState(null);
+  const [sessionId, setSessionId] = useState('');
+  const [messages, setMessages] = useState([]);
+  const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState('');
   const categories = Object.entries(
@@ -730,17 +745,56 @@ function AnalyticsPanel({ incidents }) {
   const staffReports = incidents.filter((incident) => incident.police_input).length;
   const pendingReviews = incidents.filter((incident) => incident.requires_human_review).length;
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadSession() {
+      setIsSessionLoading(true);
+      try {
+        const storedSessionId = sessionStorage.getItem(OPERATIONAL_SESSION_STORAGE_KEY);
+        let session;
+        if (storedSessionId) {
+          try {
+            session = await apiRequest(`/v1/operational/sessions/${storedSessionId}`);
+          } catch {
+            sessionStorage.removeItem(OPERATIONAL_SESSION_STORAGE_KEY);
+          }
+        }
+        if (!session) {
+          session = await apiRequest('/v1/operational/sessions', { method: 'POST' });
+          sessionStorage.setItem(OPERATIONAL_SESSION_STORAGE_KEY, session.session_id);
+        }
+        if (!cancelled) {
+          setSessionId(session.session_id);
+          setMessages(session.messages ?? []);
+        }
+      } catch (requestError) {
+        if (!cancelled) {
+          setError(requestError instanceof Error ? requestError.message : 'No se pudo iniciar el asistente.');
+        }
+      } finally {
+        if (!cancelled) setIsSessionLoading(false);
+      }
+    }
+    loadSession();
+    return () => { cancelled = true; };
+  }, []);
+
   async function runQuery(event) {
     event.preventDefault();
-    if (!query.trim()) return;
+    if (!query.trim() || !sessionId) return;
+    const submittedQuery = query.trim();
+    setMessages((current) => [...current, { role: 'user', content: submittedQuery }]);
+    setQuery('');
     setIsRunning(true);
     setError('');
     try {
-      setAnswer(await apiRequest('/v1/operational/query', {
+      const result = await apiRequest(`/v1/operational/sessions/${sessionId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: query.trim() }),
-      }));
+        body: JSON.stringify({ query: submittedQuery }),
+      });
+      setAnswer(result);
+      setMessages((current) => [...current, { role: 'assistant', content: result.answer }]);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No se pudo consultar al asistente.');
     } finally {
@@ -782,8 +836,18 @@ function AnalyticsPanel({ incidents }) {
           {categories.length === 0 && <p className="adminEmpty">Sin datos.</p>}
         </article>
       </div>
+      <div className="assistantSessionMeta">
+        <span className={'statusDot ' + (sessionId ? 'ready' : '')} />
+        {isSessionLoading
+          ? 'Conectando con la sesión del asistente…'
+          : sessionId
+            ? 'Sesión persistente activa'
+            : 'Sesión no disponible; reintenta la conexión'}
+      </div>
       <form className="agentQueryBox" onSubmit={runQuery}>
         <label htmlFor="operational-query"><strong>Pregunta al asistente operacional</strong></label>
+        <p className="queryHint">Puedes hacer varias preguntas; el asistente conserva el contexto y valida cada conteo contra SGCIU.</p>
+        <ChatTranscript messages={messages} isLoading={isRunning} loadingLabel="Consultando incidentes" />
         <div className="queryRow">
           <input
             id="operational-query"
@@ -792,7 +856,7 @@ function AnalyticsPanel({ incidents }) {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-          <button className="primaryButton" type="submit" disabled={isRunning || !query.trim()}>
+          <button className="primaryButton" type="submit" disabled={isRunning || isSessionLoading || !sessionId || !query.trim()}>
             {isRunning ? 'Consultando...' : 'Consultar'}
           </button>
         </div>
@@ -801,14 +865,16 @@ function AnalyticsPanel({ incidents }) {
       {answer && (
         <article className="agentAnswer">
           <div className="answerHeader">
-            <h3>Respuesta del asistente</h3>
-            <span>{answer.steps?.length || 0} pasos trazables</span>
+            <h3>Verificación de la última respuesta</h3>
+            <span>{answer.steps?.length || 0} pasos trazables · {answer.trace_id}</span>
           </div>
-          <p>{answer.answer}</p>
           {answer.incident_citations?.length > 0 && (
             <p className="citationLine">
               Incidentes consultados: {answer.incident_citations.map((id) => '#' + id).join(', ')}
             </p>
+          )}
+          {answer.incident_citations?.length === 0 && (
+            <p className="citationLine">La respuesta no utilizó incidentes concretos como cita.</p>
           )}
         </article>
       )}
@@ -818,6 +884,15 @@ function AnalyticsPanel({ incidents }) {
 
 function PolicyAssistantPanel() {
   const [query, setQuery] = useState('');
+  const [audience, setAudience] = useState('administrative');
+  const [operationalContext, setOperationalContext] = useState('');
+  const [messages, setMessages] = useState(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('sgciu.policy.history') || '[]');
+    } catch {
+      return [];
+    }
+  });
   const [result, setResult] = useState(null);
   const [corpus, setCorpus] = useState(null);
   const [isQuerying, setIsQuerying] = useState(false);
@@ -835,6 +910,10 @@ function PolicyAssistantPanel() {
   useEffect(() => {
     loadCorpus();
   }, []);
+
+  useEffect(() => {
+    sessionStorage.setItem('sgciu.policy.history', JSON.stringify(messages.slice(-24)));
+  }, [messages]);
 
   async function indexCorpus() {
     setIsIndexing(true);
@@ -856,14 +935,23 @@ function PolicyAssistantPanel() {
   async function askPolicy(event) {
     event.preventDefault();
     if (!query.trim()) return;
+    const submittedQuery = query.trim();
+    setMessages((current) => [...current, { role: 'user', content: submittedQuery }]);
+    setQuery('');
     setIsQuerying(true);
     setError('');
     try {
-      setResult(await apiRequest('/v1/legal-rag/query', {
+      const response = await apiRequest('/v1/legal-rag/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: query.trim() }),
-      }));
+        body: JSON.stringify({
+          query: submittedQuery,
+          audience,
+          operational_context: operationalContext.trim() || null,
+        }),
+      });
+      setMessages((current) => [...current, { role: 'assistant', content: response.answer }]);
+      setResult(response);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No se pudo consultar la normativa.');
     } finally {
@@ -889,6 +977,25 @@ function PolicyAssistantPanel() {
       </div>
       <form className="policyQuery" onSubmit={askPolicy}>
         <label htmlFor="policy-query"><strong>¿Qué necesitas consultar?</strong></label>
+        <div className="policyContextGrid">
+          <label className="field" htmlFor="policy-audience">
+            <span>Perfil que consulta</span>
+            <select id="policy-audience" value={audience} onChange={(event) => setAudience(event.target.value)}>
+              <option value="administrative">Personal administrativo</option>
+              <option value="police">Personal policial</option>
+            </select>
+          </label>
+          <label className="field" htmlFor="policy-context">
+            <span>Situación del incidente <small>(opcional)</small></span>
+            <input
+              id="policy-context"
+              type="text"
+              placeholder="Ej. pelea en curso reportada en San Joaquín"
+              value={operationalContext}
+              onChange={(event) => setOperationalContext(event.target.value)}
+            />
+          </label>
+        </div>
         <textarea
           id="policy-query"
           rows="3"
@@ -896,6 +1003,7 @@ function PolicyAssistantPanel() {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
+        <ChatTranscript messages={messages} isLoading={isQuerying} loadingLabel="Interpretando la normativa para SGCIU" />
         <button className="primaryButton" type="submit" disabled={isQuerying || !query.trim()}>
           {isQuerying ? 'Revisando fuentes...' : 'Consultar normativa'}
         </button>
@@ -907,7 +1015,12 @@ function PolicyAssistantPanel() {
             <h3>Respuesta fundamentada</h3>
             <span>{result.insufficient_evidence ? 'Evidencia insuficiente' : (result.citations?.length || 0) + ' fuentes'}</span>
           </div>
-          <p className="policyAnswerText">{result.answer}</p>
+          {result.operational_guidance?.length > 0 && (
+            <div className="operationalGuidance">
+              <strong>Aplicación operativa:</strong>
+              <ul>{result.operational_guidance.map((item) => <li key={item}>{item}</li>)}</ul>
+            </div>
+          )}
           {result.citations?.length > 0 && (
             <div className="citationCards">
               {result.citations.map((citation) => (
@@ -1068,27 +1181,24 @@ function InternalIncidentForm({ onSaved }) {
         <small>Este dato se registra manualmente para identificar al funcionario responsable.</small>
       </label>
 
-      <div className="chatPanel" aria-live="polite">
-        <div className="chatMessages">
-          {isStarting && <div className="chatBubble assistant"><p>Iniciando asistente interno...</p></div>}
-          {messages.map((message, index) => (
-            <div className={`chatBubble ${message.role}`} key={`${message.role}-${index}`}>
-              <p>{message.content}</p>
-            </div>
-          ))}
-          {isChatLoading && (
-            <div className="chatBubble assistant"><p>Analizando la información...</p></div>
-          )}
-        </div>
+      <div className="chatPanel">
+        <ChatTranscript
+          messages={messages}
+          isLoading={isStarting || isChatLoading}
+          loadingLabel={isStarting ? 'Preparando la sesión' : 'Extrayendo y verificando la información'}
+        />
         <div className="chatInputRow">
           <textarea
             aria-label="Mensaje para el asistente interno"
             placeholder="Describa la denuncia recibida..."
             value={currentMessage}
-            disabled={!sessionId || isStarting}
+            disabled={!sessionId || isStarting || isChatLoading}
             onChange={(event) => setCurrentMessage(event.target.value)}
+            onKeyDown={(event) => {
+              if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') handleSendMessage(event);
+            }}
           />
-          <button type="button" disabled={!sessionId || isChatLoading} onClick={handleSendMessage}>
+          <button type="button" disabled={!sessionId || isStarting || isChatLoading} onClick={handleSendMessage}>
             {isChatLoading ? 'Enviando...' : 'Enviar'}
           </button>
         </div>
@@ -1541,18 +1651,21 @@ function AdminDashboard() {
 }
 
 function CitizenComplaintForm() {
+  const [registrationMode, setRegistrationMode] = useState('');
+  const [sessionId, setSessionId] = useState('');
   const [contactData, setContactData] = useState({
     name: '',
     email: '',
     phone: '',
   });
-  const [messages, setMessages] = useState([INITIAL_AI_MESSAGE]);
+  const [messages, setMessages] = useState([]);
   const [currentMessage, setCurrentMessage] = useState('');
   const [extractedData, setExtractedData] = useState(INITIAL_EXTRACTED_DATA);
   const [isAiComplete, setIsAiComplete] = useState(false);
   const [summaryText, setSummaryText] = useState('');
   const [truthConfirmation, setTruthConfirmation] = useState(false);
   const [dataUsageConsent, setDataUsageConsent] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [chatError, setChatError] = useState('');
@@ -1563,6 +1676,7 @@ function CitizenComplaintForm() {
   const canSubmit = useMemo(
     () =>
       Boolean(extractedData.descripcion_detallada) &&
+      Boolean(sessionId) &&
       isAiComplete &&
       truthConfirmation &&
       dataUsageConsent &&
@@ -1572,9 +1686,74 @@ function CitizenComplaintForm() {
       extractedData.descripcion_detallada,
       isAiComplete,
       isSubmitting,
+      sessionId,
       truthConfirmation,
     ],
   );
+
+  function hydrateSession(data) {
+    setSessionId(data.session_id);
+    setRegistrationMode(data.registration_mode ?? 'complete');
+    setMessages(data.messages ?? []);
+    setExtractedData(data.extracted_data ?? INITIAL_EXTRACTED_DATA);
+    setIsAiComplete(Boolean(data.is_complete));
+    setSummaryText(data.summary_text ?? '');
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    async function restoreSession() {
+      const storedSessionId = sessionStorage.getItem(CITIZEN_SESSION_STORAGE_KEY);
+      if (!storedSessionId) return;
+      try {
+        const response = await fetch(`${API_BASE_URL}/v1/intake/sessions/${storedSessionId}`);
+        if (!response.ok) throw new Error('La sesión ya no está disponible.');
+        const data = await response.json();
+        if (!cancelled) hydrateSession(data);
+      } catch {
+        sessionStorage.removeItem(CITIZEN_SESSION_STORAGE_KEY);
+      }
+    }
+    restoreSession();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function startSession(mode) {
+    if (!mode) {
+      setRegistrationMode('');
+      setSessionId('');
+      setMessages([]);
+      return;
+    }
+    setRegistrationMode(mode);
+    setIsStarting(true);
+    setChatError('');
+    setSubmissionError('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/v1/intake/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registration_mode: mode }),
+      });
+      if (!response.ok) throw new Error((await response.text()) || 'No se pudo iniciar la sesión.');
+      const data = await response.json();
+      hydrateSession({
+        ...data,
+        messages: [{ role: 'assistant', content: data.assistant_message }],
+        extracted_data: INITIAL_EXTRACTED_DATA,
+        is_complete: false,
+        summary_text: '',
+      });
+      sessionStorage.setItem(CITIZEN_SESSION_STORAGE_KEY, data.session_id);
+    } catch (startError) {
+      setSessionId('');
+      setMessages([]);
+      setRegistrationMode('');
+      setChatError(startError instanceof Error ? startError.message : 'No se pudo iniciar la sesión.');
+    } finally {
+      setIsStarting(false);
+    }
+  }
 
   function handleContactChange(event) {
     const { name, value } = event.target;
@@ -1588,7 +1767,7 @@ function CitizenComplaintForm() {
     event.preventDefault();
 
     const trimmedMessage = currentMessage.trim();
-    if (!trimmedMessage || isChatLoading) {
+    if (!trimmedMessage || !sessionId || isChatLoading || isStarting) {
       return;
     }
 
@@ -1599,15 +1778,12 @@ function CitizenComplaintForm() {
     setIsChatLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/ai/intake/chat`, {
+      const response = await fetch(`${API_BASE_URL}/v1/intake/sessions/${sessionId}/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          messages: nextMessages.filter((message) => message.role !== 'system'),
-          current_extracted_data: extractedData,
-        }),
+        body: JSON.stringify({ content: trimmedMessage }),
       });
 
       if (!response.ok) {
@@ -1616,13 +1792,8 @@ function CitizenComplaintForm() {
       }
 
       const aiResponse = await response.json();
-      setMessages((current) => [
-        ...current,
-        { role: 'assistant', content: aiResponse.assistant_message },
-      ]);
-      setExtractedData((currentData) =>
-        mergeExtractedData(currentData, aiResponse.extracted_data),
-      );
+      setMessages(aiResponse.messages ?? nextMessages);
+      setExtractedData(aiResponse.extracted_data ?? extractedData);
       setIsAiComplete(Boolean(aiResponse.is_complete));
       setSummaryText(aiResponse.summary_text ?? '');
     } catch (error) {
@@ -1638,23 +1809,25 @@ function CitizenComplaintForm() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    if (!sessionId) {
+      setSubmissionError('Seleccione una modalidad e inicie la conversación antes de enviar.');
+      return;
+    }
     setSubmissionError('');
     setSuccessMessage('');
     setSavedComplaint(null);
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/complaints`, {
+      const response = await fetch(`${API_BASE_URL}/v1/intake/sessions/${sessionId}/submit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: contactData.name || null,
-          email: contactData.email || null,
-          phone: contactData.phone || null,
-          ai_extracted_data: extractedData,
-          ai_summary_text: summaryText || null,
+          name: registrationMode === 'anonymous' ? null : (contactData.name || null),
+          email: registrationMode === 'anonymous' ? null : (contactData.email || null),
+          phone: registrationMode === 'anonymous' ? null : (contactData.phone || null),
           truth_confirmation: truthConfirmation,
           data_usage_consent: dataUsageConsent,
         }),
@@ -1668,8 +1841,11 @@ function CitizenComplaintForm() {
       const saved = await response.json();
       setSavedComplaint(saved);
       setSuccessMessage('Denuncia guardada correctamente en la base de datos.');
+      sessionStorage.removeItem(CITIZEN_SESSION_STORAGE_KEY);
+      setRegistrationMode('');
+      setSessionId('');
       setContactData({ name: '', email: '', phone: '' });
-      setMessages([INITIAL_AI_MESSAGE]);
+      setMessages([]);
       setCurrentMessage('');
       setExtractedData(INITIAL_EXTRACTED_DATA);
       setIsAiComplete(false);
@@ -1698,20 +1874,43 @@ function CitizenComplaintForm() {
         <p className="eyebrow">Sistema de Gestión y Clasificación de Incidentes Urbanos</p>
         <h1>Formulario Denuncia Ciudadana</h1>
       </section>
+      <p className="citizenEmergencyNotice">
+        SGCIU no sustituye al 9-1-1. Si el incidente ocurre ahora, existe peligro o hay personas heridas, llame inmediatamente al 9-1-1.
+      </p>
 
       <form className="formPanel" onSubmit={handleSubmit}>
         <section className="formSection">
           <div className="sectionHeader">
             <span>1</span>
             <div>
-              <h2>Información General - Usuario</h2>
-              <p>Datos opcionales</p>
+              <h2>¿Cómo desea registrar el incidente?</h2>
+              <p>Puede identificarse o enviar la denuncia de forma anónima.</p>
             </div>
           </div>
 
-          <div className="fieldGrid">
+          <label className="field modeField" htmlFor="registrationMode">
+            <span>Modalidad de registro</span>
+            <select
+              id="registrationMode"
+              value={registrationMode}
+              onChange={(event) => startSession(event.target.value)}
+              disabled={isStarting || isChatLoading}
+            >
+              <option value="">Seleccione una opción</option>
+              <option value="complete">Registro con datos de contacto</option>
+              <option value="anonymous">Registro anónimo</option>
+            </select>
+          </label>
+
+          {registrationMode === 'anonymous' && (
+            <p className="anonymousNotice">
+              No solicitaremos nombre, correo ni teléfono. La información del incidente sí se conservará para su gestión municipal.
+            </p>
+          )}
+
+          {registrationMode === 'complete' && <div className="fieldGrid">
             <label className="field" htmlFor="name">
-              <span>Nombre completo</span>
+              <span>Nombre completo <small>(opcional)</small></span>
               <input
                 id="name"
                 name="name"
@@ -1723,7 +1922,7 @@ function CitizenComplaintForm() {
             </label>
 
             <label className="field" htmlFor="email">
-              <span>Correo electrónico</span>
+              <span>Correo electrónico <small>(opcional)</small></span>
               <input
                 id="email"
                 name="email"
@@ -1735,7 +1934,7 @@ function CitizenComplaintForm() {
             </label>
 
             <label className="field" htmlFor="phone">
-              <span>Número de teléfono</span>
+              <span>Número de teléfono <small>(opcional)</small></span>
               <input
                 id="phone"
                 name="phone"
@@ -1745,10 +1944,10 @@ function CitizenComplaintForm() {
                 onChange={handleContactChange}
               />
             </label>
-          </div>
+          </div>}
         </section>
 
-        <section className="formSection">
+        {registrationMode && <section className="formSection">
           <div className="sectionHeader">
             <span>2</span>
             <div>
@@ -1766,29 +1965,26 @@ function CitizenComplaintForm() {
             <li>Puede corregir al asistente si detecta algún dato incorrecto.</li>
           </ul>
 
-          <div className="chatPanel" aria-live="polite">
-            <div className="chatMessages">
-              {messages.map((message, index) => (
-                <div className={`chatBubble ${message.role}`} key={`${message.role}-${index}`}>
-                  <p>{message.content}</p>
-                </div>
-              ))}
-              {isChatLoading && (
-                <div className="chatBubble assistant">
-                  <p>Analizando la información...</p>
-                </div>
-              )}
-            </div>
+          <div className="chatPanel">
+            <ChatTranscript
+              messages={messages}
+              isLoading={isStarting || isChatLoading}
+              loadingLabel={isStarting ? 'Preparando la sesión' : 'Extrayendo y verificando la información'}
+            />
 
             <div className="chatInputRow">
               <textarea
                 aria-label="Mensaje para el asistente IA"
-                placeholder="Escriba aquí..."
+                placeholder={isStarting ? 'Preparando el asistente…' : 'Escriba aquí…'}
                 value={currentMessage}
+                disabled={!sessionId || isStarting || isChatLoading}
                 onChange={(event) => setCurrentMessage(event.target.value)}
+                onKeyDown={(event) => {
+                  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') handleSendMessage(event);
+                }}
               />
-              <button type="button" disabled={isChatLoading} onClick={handleSendMessage}>
-                {isChatLoading ? 'Enviando...' : 'Enviar'}
+              <button type="button" disabled={!sessionId || isStarting || isChatLoading} onClick={handleSendMessage}>
+                {isChatLoading ? 'Procesando…' : 'Enviar'}
               </button>
             </div>
 
@@ -1798,7 +1994,7 @@ function CitizenComplaintForm() {
               </p>
             )}
           </div>
-        </section>
+        </section>}
 
         <section className="formSection">
           <div className="sectionHeader">
@@ -1818,6 +2014,7 @@ function CitizenComplaintForm() {
                   </li>
                 ))}
               </ul>
+              {summaryText && <p>{summaryText}</p>}
             </div>
           ) : (
             <p className="summaryPlaceholder">
@@ -1862,7 +2059,13 @@ function CitizenComplaintForm() {
           </button>
         </div>
 
-        {!extractedData.descripcion_detallada && (
+        {!registrationMode && (
+          <p className="statusMessage warning">
+            Seleccione una modalidad de registro para iniciar la conversación.
+          </p>
+        )}
+
+        {registrationMode && !extractedData.descripcion_detallada && (
           <p className="statusMessage warning">
             La descripción detallada es obligatoria. Converse con el asistente para completarla.
           </p>

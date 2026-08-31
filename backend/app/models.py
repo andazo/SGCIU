@@ -88,12 +88,27 @@ class IntakeSession(Base):
     __tablename__ = "intake_sessions"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    registration_mode = Column(
+        String(16), nullable=False, default="complete", server_default="complete"
+    )
     messages = Column(JSON_TYPE, nullable=False, default=list)
     extracted_data = Column(JSON_TYPE, nullable=False, default=dict)
     summary_text = Column(Text, nullable=True)
     is_complete = Column(Boolean, nullable=False, default=False)
     model_name = Column(String(120), nullable=True)
     prompt_version = Column(String(40), nullable=False, default="intake-v1")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class OperationalSession(Base):
+    __tablename__ = "operational_sessions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    messages = Column(JSON_TYPE, nullable=False, default=list)
+    model_name = Column(String(120), nullable=True)
+    prompt_version = Column(String(40), nullable=False, default="operational-react-v5")
+    last_trace_id = Column(String(36), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

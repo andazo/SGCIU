@@ -267,6 +267,7 @@ h2 {
 }
 
 input,
+select,
 textarea {
   width: 100%;
   border: 1px solid #b7c9bd;
@@ -276,7 +277,8 @@ textarea {
   outline: none;
 }
 
-input {
+input,
+select {
   height: 44px;
   padding: 0 12px;
 }
@@ -289,6 +291,7 @@ textarea {
 }
 
 input:focus,
+select:focus,
 textarea:focus {
   border-color: #226641;
   box-shadow: 0 0 0 3px rgba(34, 102, 65, 0.16);
@@ -306,9 +309,11 @@ textarea:focus {
 .chatMessages {
   display: grid;
   max-height: 430px;
+  min-height: 160px;
   overflow-y: auto;
   gap: 12px;
   padding-right: 4px;
+  scroll-behavior: smooth;
 }
 
 .chatBubble {
@@ -329,6 +334,106 @@ textarea:focus {
   margin: 0;
   color: #334e68;
   line-height: 1.5;
+}
+
+.chatProcessing {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  border-style: dashed;
+  background: #f4f8f2;
+}
+
+.chatTypingDots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.chatTypingDots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #226641;
+  animation: chatDotPulse 1.2s infinite ease-in-out;
+}
+
+.chatTypingDots i:nth-child(2) { animation-delay: 0.15s; }
+.chatTypingDots i:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes chatDotPulse {
+  0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+.modeField {
+  max-width: 560px;
+}
+
+.field small {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.anonymousNotice,
+.assistantSessionMeta,
+.queryHint {
+  margin: 0;
+  color: #52616f;
+  line-height: 1.45;
+}
+
+.citizenEmergencyNotice {
+  margin: 0 0 18px;
+  border: 1px solid #f2c94c;
+  border-radius: 8px;
+  background: #fff8d7;
+  color: #6b4b00;
+  font-weight: 700;
+  line-height: 1.45;
+  padding: 12px 14px;
+}
+
+.anonymousNotice {
+  border-left: 4px solid #f2c94c;
+  border-radius: 0 8px 8px 0;
+  background: #fffdf2;
+  padding: 12px 14px;
+}
+
+.assistantSessionMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.queryHint {
+  font-size: 0.86rem;
+}
+
+.policyContextGrid {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.6fr) minmax(0, 1.4fr);
+  gap: 12px;
+}
+
+.operationalGuidance {
+  border-left: 4px solid #226641;
+  border-radius: 0 8px 8px 0;
+  background: #edf9ef;
+  color: #184f34;
+  padding: 12px 14px;
+}
+
+.operationalGuidance ul {
+  display: grid;
+  gap: 6px;
+  margin: 7px 0 0;
+  padding-left: 20px;
+  color: #334e68;
 }
 
 .chatInputRow {
@@ -1420,7 +1525,8 @@ pre {
   .adminCharts,
   .analyticsKpis,
   .analyticsGrid,
-  .incidentWorkspace {
+  .incidentWorkspace,
+  .policyContextGrid {
     grid-template-columns: 1fr;
   }
 

@@ -29,6 +29,7 @@ Distrito = Literal["San Joaquin", "Barrantes", "Llorente"]
 TipoLugar = Literal["establecimiento", "casa", "parque", "escuela", "otro"]
 Urgencia = Literal["baja", "media", "alta", "inmediata"]
 TemporalRelation = Literal["pasado", "en_curso", "futuro", "desconocido"]
+RegistrationMode = Literal["complete", "anonymous"]
 IntakeFieldStatus = Literal["known", "missing", "ambiguous", "unknown", "declined"]
 IntakeCompletionReason = Literal[
     "needs_follow_up",
@@ -215,11 +216,16 @@ class ComplaintIntakeChatResponse(StrictModel):
     prompt_version: str = "intake-v5"
 
 
+class IntakeSessionCreateRequest(StrictModel):
+    registration_mode: RegistrationMode = "complete"
+
+
 class IntakeSessionCreateResponse(StrictModel):
     session_id: str
     emergency_notice: str
     assistant_message: str
     prompt_version: str
+    registration_mode: RegistrationMode = "complete"
 
 
 class IntakeMessageRequest(StrictModel):
@@ -233,6 +239,7 @@ class IntakeMessageRequest(StrictModel):
 
 class IntakeSessionResponse(StrictModel):
     session_id: str
+    registration_mode: RegistrationMode
     messages: list[ChatMessage]
     is_complete: bool
     missing_fields: list[str]
@@ -483,11 +490,28 @@ class OperationalQueryResponse(StrictModel):
     prompt_version: str
     requires_human_review: bool = False
     usage: ModelUsage = Field(default_factory=ModelUsage)
+    session_id: str | None = None
+
+
+class OperationalSessionCreateResponse(StrictModel):
+    session_id: str
+    messages: list[ChatMessage] = Field(default_factory=list)
+    model_name: str
+    prompt_version: str
+
+
+class OperationalSessionResponse(StrictModel):
+    session_id: str
+    messages: list[ChatMessage] = Field(default_factory=list)
+    model_name: str | None = None
+    prompt_version: str
 
 
 class LegalQueryRequest(StrictModel):
     query: str = Field(min_length=3, max_length=4_000)
     document_keys: list[str] | None = Field(default=None, max_length=20)
+    audience: Literal["administrative", "police"] = "administrative"
+    operational_context: str | None = Field(default=None, max_length=4_000)
 
 
 class LegalCitation(StrictModel):
@@ -531,6 +555,8 @@ class LegalQueryResponse(StrictModel):
     corpus_version: str
     insufficient_evidence: bool = False
     caveats: list[str] = Field(default_factory=list)
+    operational_guidance: list[str] = Field(default_factory=list)
+    audience: Literal["administrative", "police"] = "administrative"
     usage: ModelUsage = Field(default_factory=ModelUsage)
 
 

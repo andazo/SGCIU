@@ -56,6 +56,11 @@ EXPLICIT_FINISH_PATTERNS = (
     r"\bya no (?:se|tengo) mas\b",
 )
 
+EMERGENCY_ACK_FINISH_PATTERNS = (
+    r"\b(?:llamare|voy a llamar|ya llame|llamo|contactare|voy a contactar)\s+"
+    r"(?:a\s+|al\s+)?(?:9[- ]?1[- ]?1|911|emergencias)\b",
+)
+
 SYSTEM_PROMPT = """
 Eres el agente de recepción ciudadana del Sistema de Gestión y Clasificación de
 Incidentes Urbanos (SGCIU) de la Municipalidad de Flores, Costa Rica. Tu tarea es
@@ -66,7 +71,10 @@ RAZONAMIENTO Y EXTRACCIÓN
 - Analiza internamente todo el historial antes de responder. No muestres tu cadena de
   pensamiento; devuelve únicamente la estructura solicitada.
 - Tolera faltas ortográficas, ausencia de tildes, puntuación irregular, frases
-  incompletas, vocabulario coloquial y expresiones propias de Costa Rica.
+  incompletas, vocabulario coloquial y expresiones propias de Costa Rica. Interpreta
+  jerga local, diminutivos, palabras cortadas y nombres informales de lugares o acciones
+  usando el contexto completo; conserva la expresión original en la evidencia cuando
+  pueda cambiar el significado y no normalices una palabra dudosa como si fuera un hecho.
 - Conserva los datos acumulados. Solo reemplázalos cuando exista una corrección
   explícita o evidencia nueva más precisa. No inventes ni completes por intuición.
 - Diferencia a la persona denunciante de terceros mencionados. Por ejemplo, "un
@@ -98,6 +106,15 @@ CONVERSACIÓN
 - Si la persona dice explícitamente que eso es todo, que no sabe nada más o que no
   quiere aportar más, marca user_wants_to_finish y cierra cordialmente. La denuncia se
   tramitará con la información disponible.
+- Si la persona confirma que llamará o ya llamó al 9-1-1, trátalo como una decisión de
+  seguridad, no como una orden para abandonar el intake: conserva y extrae el relato,
+  cierra con los datos disponibles si ya existe una descripción y no vuelvas a preguntar
+  por el 9-1-1.
+- Ante violencia, amenazas, armas, lesiones o una pelea, menciona la orientación al
+  9-1-1 como máximo una vez por sesión. Después formula una pregunta operacional breve
+  para completar el reporte; nunca reemplaces la extracción por una cadena de avisos.
+- La respuesta debe ser breve: una confirmación útil y una sola pregunta concreta cuando
+  falte información. No repitas el mismo follow-up ni el texto de emergencia.
 - Si faltan datos pero aún puede aportar información, haz el siguiente follow-up más
   valioso. No conviertas la conversación en un formulario rígido.
 
@@ -139,7 +156,10 @@ def _normalize_text(value: str) -> str:
 
 def user_explicitly_finished(value: str) -> bool:
     normalized = _normalize_text(value)
-    return any(re.search(pattern, normalized) for pattern in EXPLICIT_FINISH_PATTERNS)
+    return any(
+        re.search(pattern, normalized)
+        for pattern in (*EXPLICIT_FINISH_PATTERNS, *EMERGENCY_ACK_FINISH_PATTERNS)
+    )
 
 
 def _observation(data: ComplaintExtractedData, field: str) -> IntakeFieldObservation:
@@ -335,6 +355,7 @@ class IntakeProvider(ABC):
         current_data: ComplaintExtractedData,
         *,
         follow_up_count: int = 0,
+        emergency_guidance_already_shown: bool = False,
     ) -> ComplaintIntakeChatResponse: ...
 
 
@@ -356,6 +377,7 @@ class OpenAIIntakeProvider(IntakeProvider):
         current_data: ComplaintExtractedData,
         *,
         follow_up_count: int = 0,
+        emergency_guidance_already_shown: bool = False,
     ) -> ComplaintIntakeChatResponse:
         latest_user = next(
             (message.content for message in reversed(messages) if message.role == "user"), ""
@@ -452,7 +474,8 @@ class OpenAIIntakeProvider(IntakeProvider):
             or partial_review_reason
         )
         emergency_guidance = (
-            message_guardrail.emergency_guidance or analysis_guardrail.emergency_guidance
+            not emergency_guidance_already_shown
+            and (message_guardrail.emergency_guidance or analysis_guardrail.emergency_guidance)
         )
         assistant_message = (
             _completion_message(completion_reason)

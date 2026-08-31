@@ -32,6 +32,7 @@ def start_internal_intake(db: DbSession, _actor: AdminRole):
         emergency_notice=EMERGENCY_NOTICE,
         assistant_message=INITIAL_MESSAGE,
         prompt_version=session.prompt_version,
+        registration_mode=session.registration_mode,
     )
 
 

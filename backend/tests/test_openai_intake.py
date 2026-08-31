@@ -1,7 +1,12 @@
 from dataclasses import replace
 from types import SimpleNamespace
 
-from app.ai.intake import SYSTEM_PROMPT, IntakeModelOutput, OpenAIIntakeProvider
+from app.ai.intake import (
+    SYSTEM_PROMPT,
+    IntakeModelOutput,
+    OpenAIIntakeProvider,
+    user_explicitly_finished,
+)
 from app.config import get_settings
 from app.schemas import ChatMessage, ComplaintExtractedData, IntakeFieldObservation
 from tests.fakes import extracted_data
@@ -139,3 +144,26 @@ def test_previous_supported_fact_survives_an_incomplete_model_turn():
 
     assert result.extracted_data.direccion_exacta == "frente a la Tienda Gollo"
     assert result.extracted_data.field_states.direccion_exacta.status == "known"
+
+
+def test_acknowledging_911_is_a_safe_finish_signal():
+    current = extracted_data(
+        descripcion_detallada="Reporto una pelea que sigue ocurriendo frente al parque.",
+    )
+    output = IntakeModelOutput(
+        assistant_message="¿En qué distrito ocurrió?",
+        user_wants_to_finish=False,
+        extracted_data=current,
+    )
+    provider = OpenAIIntakeProvider(settings(), client=RecordingOpenAIClient(output))
+
+    result = provider.analyze(
+        [ChatMessage(role="user", content="Está bien, llamaré al 911.")],
+        current,
+    )
+
+    assert user_explicitly_finished("Está bien, llamaré al 911.") is True
+    assert result.is_complete is True
+    assert result.user_wants_to_finish is True
+    assert result.completion_reason == "user_finished"
+    assert result.summary_text

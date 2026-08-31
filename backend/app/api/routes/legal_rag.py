@@ -38,6 +38,8 @@ def query_legal_corpus(payload: LegalQueryRequest, db: DbSession, _actor: AdminR
         return LegalRAGService(db).answer(
             payload.query,
             document_keys=payload.document_keys,
+            audience=payload.audience,
+            operational_context=payload.operational_context,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
