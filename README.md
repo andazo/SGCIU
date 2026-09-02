@@ -249,6 +249,10 @@ Tools disponibles:
 - `search_legal_sources`
 - `get_legal_corpus_status`
 
+`search_incidents` y `aggregate_incidents` aceptan `created_from` y `created_to` en
+formato `YYYY-MM-DD` para filtrar por la fecha de registro en SGCIU, además de paginación
+en la búsqueda. `get_recurrent_patterns` permite definir `window_days` entre 1 y 365.
+
 ## Calidad y evaluación
 
 ```bash

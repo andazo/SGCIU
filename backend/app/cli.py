@@ -79,7 +79,10 @@ def run_citizen() -> None:
                 continue
             print("Asistente SGCIU:", response.messages[-1].content)
             if response.requires_human_review:
-                print("Aviso: el reporte será marcado para revisión humana.")
+                print(
+                    "Aviso: el reporte tendrá fiabilidad limitada y requerirá "
+                    "verificación de datos."
+                )
             if not response.is_complete:
                 continue
             print("\nResumen propuesto:")
@@ -483,8 +486,7 @@ def run_admin(transport: str) -> None:
         "3": "Buscar relacionados",
         "4": "Agrupación semántica y recurrente",
         "5": "Preguntar al agente operativo",
-        "6": "Gestionar resaltados y revisiones de calidad",
-        "7": "Consultar normativa (RAG)",
+        "6": "Consultar normativa (RAG)",
         "0": "Salir",
     }
     with SessionLocal() as db:
@@ -506,8 +508,6 @@ def run_admin(transport: str) -> None:
             elif selection == "5":
                 asyncio.run(_ask_agent(db, transport))
             elif selection == "6":
-                _manage_reviews(db)
-            elif selection == "7":
                 _manage_legal_rag(db)
             else:
                 print("Opción inválida.")

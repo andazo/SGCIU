@@ -136,12 +136,27 @@ class ReviewService:
         )
         self._apply_highlight(incident, assessment)
         quality = assessment.quality_review
+        quality_reason = (
+            initial_quality_reason
+            or "; ".join(quality.issues)
+            or "La denuncia necesita validación de calidad."
+            if quality.required or initial_quality_reason
+            else None
+        )
+        incident.analysis_metadata = {
+            **(incident.analysis_metadata or {}),
+            "quality_control": {
+                "reliability": "limited" if quality_reason else "sufficient",
+                "issues": quality.issues,
+                "summary": quality.admin_summary,
+                "recommended_actions": [
+                    action.model_dump() for action in quality.recommended_actions
+                ],
+                "contact_available": self._contact_available(incident),
+            },
+        }
         if quality.required or initial_quality_reason:
-            reason = (
-                initial_quality_reason
-                or "; ".join(quality.issues)
-                or "La denuncia necesita validación de calidad."
-            )
+            reason = quality_reason
             recommended_actions = [
                 action.model_dump() for action in quality.recommended_actions
             ]

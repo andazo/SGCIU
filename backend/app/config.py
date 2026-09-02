@@ -8,6 +8,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+APP_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(PROJECT_ROOT / ".env")
 
 
@@ -143,7 +144,7 @@ def get_settings() -> Settings:
             os.getenv("LEGAL_RAG_MIN_SEMANTIC_SCORE", "0.25")
         ),
         legal_rag_corpus_path=Path(
-            os.getenv("LEGAL_RAG_CORPUS_PATH", str(PROJECT_ROOT / "backend/corpus/legal"))
+            os.getenv("LEGAL_RAG_CORPUS_PATH", str(APP_ROOT / "corpus/legal"))
         ).expanduser(),
         llm_input_cost_per_million=float(os.getenv("LLM_INPUT_COST_PER_MILLION", "0")),
         llm_output_cost_per_million=float(os.getenv("LLM_OUTPUT_COST_PER_MILLION", "0")),

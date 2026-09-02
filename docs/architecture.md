@@ -68,11 +68,11 @@ razonamiento interno del modelo.
 | Tool | Lectura/escritura | Propósito |
 |---|---|---|
 | `get_incident` | Lectura | Recuperar un incidente sanitizado |
-| `search_incidents` | Lectura | Filtrar por distrito y categoría |
-| `aggregate_incidents` | Lectura | Obtener conteos deterministas mediante SQL |
+| `search_incidents` | Lectura | Filtrar por distrito, categoría y fecha de registro, con paginación |
+| `aggregate_incidents` | Lectura | Obtener conteos deterministas mediante SQL y rango de fecha de registro |
 | `find_related_incidents` | Lectura | Aplicar recuperación semántica híbrida |
 | `get_incident_cluster` | Lectura | Inspeccionar un cluster candidato |
-| `get_recurrent_patterns` | Lectura | Consultar patrones recurrentes recientes |
+| `get_recurrent_patterns` | Lectura | Consultar patrones recurrentes dentro de una ventana configurable |
 | `request_human_review` | Escritura acotada | Crear una revisión humana |
 | `search_legal_sources` | Lectura | Recuperar normativa con página y artículo |
 | `get_legal_corpus_status` | Lectura | Inspeccionar versión, cobertura y embeddings |
