@@ -12,6 +12,9 @@ substitutions:
   _IMAGE_TAG: manual
   _CLOUD_SQL_INSTANCE: project:region:instance
 
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 steps:
   - id: build
     name: gcr.io/cloud-builders/docker
