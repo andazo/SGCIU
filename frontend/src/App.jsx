@@ -3,6 +3,7 @@ import logoFlores from '../branding/logoFlores.png';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 const ADMIN_ROUTE = '/admin';
+const ADMIN_AUTH_STORAGE_KEY = 'sgciu.admin.auth';
 const CITIZEN_SESSION_STORAGE_KEY = 'sgciu.citizen.intake.session';
 const OPERATIONAL_SESSION_STORAGE_KEY = 'sgciu.operational.session';
 const NAV_ITEMS = [
@@ -64,8 +65,22 @@ const VALUE_LABELS = {
 };
 
 async function apiRequest(path, options = {}) {
-  const response = await fetch(API_BASE_URL + path, options);
+  const headers = new Headers(options.headers || {});
+  let storedAuth = null;
+  try {
+    storedAuth = JSON.parse(sessionStorage.getItem(ADMIN_AUTH_STORAGE_KEY) || 'null');
+  } catch {
+    sessionStorage.removeItem(ADMIN_AUTH_STORAGE_KEY);
+  }
+  if (storedAuth?.access_token && !path.startsWith('/v1/auth/login')) {
+    headers.set('Authorization', `Bearer ${storedAuth.access_token}`);
+  }
+  const response = await fetch(API_BASE_URL + path, { ...options, headers });
   if (!response.ok) {
+    if (response.status === 401 && !path.startsWith('/v1/auth/')) {
+      sessionStorage.removeItem(ADMIN_AUTH_STORAGE_KEY);
+      window.dispatchEvent(new Event('sgciu-auth-expired'));
+    }
     let message = 'La operación no se pudo completar (' + response.status + ').';
     try {
       const body = await response.json();
@@ -1296,13 +1311,9 @@ function InternalIncidentForm({ onSaved }) {
     setIsStarting(true);
     setError('');
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/internal-intake/sessions`, {
+      const data = await apiRequest('/v1/internal-intake/sessions', {
         method: 'POST',
       });
-      if (!response.ok) {
-        throw new Error('No se pudo iniciar la sesión interna de registro.');
-      }
-      const data = await response.json();
       setSessionId(data.session_id);
       setMessages([{ role: 'assistant', content: data.assistant_message }]);
     } catch (startError) {
@@ -1336,18 +1347,11 @@ function InternalIncidentForm({ onSaved }) {
     setError('');
     setIsChatLoading(true);
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/v1/internal-intake/sessions/${sessionId}/messages`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: trimmedMessage }),
-        },
-      );
-      if (!response.ok) {
-        throw new Error((await response.text()) || 'No se pudo analizar el mensaje.');
-      }
-      const data = await response.json();
+      const data = await apiRequest(`/v1/internal-intake/sessions/${sessionId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: trimmedMessage }),
+      });
       setMessages(data.messages);
       setExtractedData(data.extracted_data);
       setIsAiComplete(Boolean(data.is_complete));
@@ -1368,22 +1372,15 @@ function InternalIncidentForm({ onSaved }) {
     setSuccessMessage('');
     setIsSubmitting(true);
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/v1/internal-intake/sessions/${sessionId}/submit`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            entered_by_badge: enteredByBadge.trim(),
-            truth_confirmation: truthConfirmation,
-            data_usage_consent: dataUsageConsent,
-          }),
-        },
-      );
-      if (!response.ok) {
-        throw new Error((await response.text()) || 'No se pudo guardar el incidente.');
-      }
-      const saved = await response.json();
+      const saved = await apiRequest(`/v1/internal-intake/sessions/${sessionId}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entered_by_badge: enteredByBadge.trim(),
+          truth_confirmation: truthConfirmation,
+          data_usage_consent: dataUsageConsent,
+        }),
+      });
       if (onSaved) {
         await onSaved(saved);
       }
@@ -1485,7 +1482,7 @@ function InternalIncidentForm({ onSaved }) {
   );
 }
 
-function AdminDashboard() {
+function AdminWorkspace({ user, onLogout }) {
   const [isMenuOpen, setIsMenuOpen] = useState(true);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [activeItem, setActiveItem] = useState(
@@ -1677,16 +1674,24 @@ function AdminDashboard() {
             <h1>Sistema de Gestión y Clasificación de Incidentes Urbanos</h1>
             <p>Convierte cada denuncia en contexto útil para actuar mejor en Flores.</p>
           </div>
-          <button
-            className={`filterLauncher ${activeFilterCount > 0 ? 'hasActiveFilters' : ''}`}
-            type="button"
-            aria-expanded={isFiltersOpen}
-            aria-controls="incident-filter-fields"
-            onClick={() => setIsFiltersOpen(true)}
-          >
-            <span className="filterLauncherIcon" aria-hidden="true">⌕</span>
-            <strong>Filtros</strong>
-          </button>
+          <div className="adminTopActions">
+            <button
+              className={`filterLauncher ${activeFilterCount > 0 ? 'hasActiveFilters' : ''}`}
+              type="button"
+              aria-expanded={isFiltersOpen}
+              aria-controls="incident-filter-fields"
+              onClick={() => setIsFiltersOpen(true)}
+            >
+              <span className="filterLauncherIcon" aria-hidden="true">⌕</span>
+              <strong>Filtros</strong>
+            </button>
+            <div className="adminSessionActions">
+              <span className="adminUserBadge">
+                {user.role === 'police' ? 'Policía' : 'Administrativo'} · {user.username}
+              </span>
+              <button className="ghostButton" type="button" onClick={onLogout}>Cerrar sesión</button>
+            </div>
+          </div>
         </header>
 
         {activeItem === 'Agrupación recurrente' && (
@@ -1857,6 +1862,119 @@ function AdminDashboard() {
       />
     </div>
   );
+}
+
+function AdminLogin({ onAuthenticated }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (!username.trim() || !password) return;
+    setIsSubmitting(true);
+    setError('');
+    try {
+      const session = await apiRequest('/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim(), password }),
+      });
+      sessionStorage.setItem(ADMIN_AUTH_STORAGE_KEY, JSON.stringify(session));
+      onAuthenticated(session.user);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo iniciar sesión.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="authShell">
+      <section className="authCard" aria-labelledby="admin-login-title">
+        <img src={logoFlores} alt="Logo Municipalidad de Flores" />
+        <span className="eyebrow">Acceso institucional</span>
+        <h1 id="admin-login-title">SGCIU</h1>
+        <p>Inicie sesión para consultar y gestionar la información operativa.</p>
+        <form onSubmit={handleSubmit}>
+          <label className="field" htmlFor="admin-username">
+            <span>Usuario</span>
+            <input
+              id="admin-username"
+              type="text"
+              autoComplete="username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              required
+            />
+          </label>
+          <label className="field" htmlFor="admin-password">
+            <span>Contraseña</span>
+            <input
+              id="admin-password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+          </label>
+          {error && <p className="statusMessage error" role="alert">{error}</p>}
+          <button className="primaryButton" type="submit" disabled={isSubmitting || !username.trim() || !password}>
+            {isSubmitting ? 'Ingresando…' : 'Iniciar sesión'}
+          </button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
+function AdminDashboard() {
+  const [user, setUser] = useState(null);
+  const [isChecking, setIsChecking] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function validateSession() {
+      try {
+        const storedAuth = JSON.parse(sessionStorage.getItem(ADMIN_AUTH_STORAGE_KEY) || 'null');
+        if (!storedAuth?.access_token) return;
+        const currentUser = await apiRequest('/v1/auth/me');
+        if (!cancelled) setUser(currentUser);
+      } catch {
+        sessionStorage.removeItem(ADMIN_AUTH_STORAGE_KEY);
+      } finally {
+        if (!cancelled) setIsChecking(false);
+      }
+    }
+    validateSession();
+    function handleExpiredSession() {
+      setUser(null);
+    }
+    window.addEventListener('sgciu-auth-expired', handleExpiredSession);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('sgciu-auth-expired', handleExpiredSession);
+    };
+  }, []);
+
+  async function logout() {
+    try {
+      await apiRequest('/v1/auth/logout', { method: 'POST' });
+    } finally {
+      sessionStorage.removeItem(ADMIN_AUTH_STORAGE_KEY);
+      setUser(null);
+    }
+  }
+
+  if (isChecking) {
+    return <main className="authShell"><p className="authLoading">Validando sesión…</p></main>;
+  }
+  if (!user) {
+    return <AdminLogin onAuthenticated={setUser} />;
+  }
+  return <AdminWorkspace user={user} onLogout={logout} />;
 }
 
 function CitizenComplaintForm() {

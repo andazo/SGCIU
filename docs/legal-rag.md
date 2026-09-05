@@ -91,7 +91,8 @@ Endpoints administrativos:
 - `POST /v1/legal-rag/corpus/index`
 - `POST /v1/legal-rag/query`
 
-Cuando `REQUIRE_ADMIN_AUTH=true`, se exige `X-Admin-Key`.
+Cuando `REQUIRE_ADMIN_AUTH=true`, se exige una sesión institucional Bearer obtenida mediante
+`POST /v1/auth/login`.
 
 Tools MCP de solo lectura:
 

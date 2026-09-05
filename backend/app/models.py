@@ -51,6 +51,40 @@ class FormSubmission(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String(80), nullable=False, unique=True, index=True)
+    role = Column(String(32), nullable=False)
+    password_hash = Column(String(512), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    sessions = relationship("AuthSession", back_populates="user", cascade="all, delete-orphan")
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+
+    id = Column(Integer, primary_key=True)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="sessions")
+
+
 class ComplaintSubmission(Base):
     __tablename__ = "complaint_submissions"
 

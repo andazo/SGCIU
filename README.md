@@ -7,6 +7,10 @@ El MVP prioriza el backend Python y la arquitectura de IA generativa. Incluye in
 conversacional, extracción estructurada, guardrails, embeddings, agrupación semántica,
 un agente operativo ReAct con tools tipados, un servidor MCP y un panel administrativo web.
 
+El panel institucional utiliza usuarios con roles `police` y `administrative`. Las
+contraseñas se almacenan mediante PBKDF2-SHA256 con salt único y las sesiones se representan
+por tokens opacos revocables cuyo hash es el único valor persistido.
+
 ## Funcionalidades implementadas
 
 - Sesiones persistentes de intake ciudadano con correcciones acumulativas y razonamiento
@@ -17,7 +21,7 @@ un agente operativo ReAct con tools tipados, un servidor MCP y un panel administ
 - Clasificación, resumen, entidades, urgencia, evidencia y confianza por campo.
 - Follow-ups priorizados según valor operativo, con cierre parcial cuando la persona no
   sabe o no desea aportar más información.
-- Revisión humana ante baja confianza, riesgo inmediato o prompt injection.
+- Control de calidad asistido por IA ante datos incompletos, ambiguos o de baja confianza.
 - Embeddings de incidentes con PostgreSQL y `pgvector`.
 - Agrupación recurrente proactiva de incidentes similares en los últimos 30 días, con
   similitud semántica de ubicación, relato, categoría y refuerzo por distrito.
@@ -25,8 +29,7 @@ un agente operativo ReAct con tools tipados, un servidor MCP y un panel administ
 - Servidor MCP `sgciu-incident-intelligence` sin acceso a SQL arbitrario.
 - RAG normativo con corpus versionado, extracción por página, recuperación híbrida,
   abstención y citas verificables de documento, página PDF y artículo detectado.
-- Control de endpoints administrativos mediante `X-Admin-Key` en producción; es opcional
-  únicamente en desarrollo local.
+- Autenticación institucional por usuarios, roles y sesiones Bearer revocables.
 - CLI para ciudadanos y administradores.
 - Dataset sintético y métricas reproducibles para regresión del workflow.
 - Logs JSON con correlation IDs, latencia, tokens y auditoría de tools.
@@ -42,6 +45,14 @@ cd backend
 python3 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/alembic -c alembic.ini upgrade head
+```
+
+Para crear los usuarios institucionales localmente, utilice el comando interactivo. Las
+contraseñas no se muestran ni se guardan en el repositorio:
+
+```bash
+.venv/bin/python -m app.cli --create-user policia.flores --user-role police
+.venv/bin/python -m app.cli --create-user administrativo.flores --user-role administrative
 ```
 
 El runtime usa exclusivamente servicios de OpenAI. Configure `OPENAI_API_KEY`; el modelo
@@ -94,8 +105,8 @@ preguntas:
 - `POST /v1/operational/sessions/{session_id}/messages`
 
 El badge se valida como identificador de procedencia, pero no constituye autenticación. En
-producción, los endpoints administrativos exigen además `X-Admin-Key`; para una implantación
-institucional posterior se recomienda sustituirlo por IAM, SSO o Identity-Aware Proxy.
+producción, los endpoints administrativos exigen una sesión Bearer creada mediante
+`POST /v1/auth/login`. La autenticación usa sesiones revocables con expiración configurable.
 
 El flujo ciudadano permite elegir entre registro con datos de contacto y registro anónimo.
 En ambos casos la conversación usa una sesión persistente; en el modo anónimo el backend
@@ -223,11 +234,12 @@ cd backend
 
 Documentación OpenAPI: `http://localhost:8000/docs`.
 
-En producción la autenticación administrativa se activa automáticamente y los endpoints
-administrativos requieren:
+En producción la autenticación administrativa se activa automáticamente. El panel inicia
+sesión mediante `POST /v1/auth/login` y utiliza el token Bearer devuelto para los endpoints
+protegidos:
 
 ```text
-X-Admin-Key: <ADMIN_API_KEY>
+Authorization: Bearer <access_token>
 ```
 
 ### MCP

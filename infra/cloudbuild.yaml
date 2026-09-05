@@ -3,7 +3,13 @@ substitutions:
   _REPOSITORY: sgciu
   _IMAGE: backend
   _SERVICE: sgciu-backend
+  _FRONTEND_IMAGE: frontend
+  _FRONTEND_SERVICE: sgciu-frontend
   _MIGRATION_JOB: sgciu-migrate
+  _AUTH_JOB: sgciu-provision-users
+  _LEGAL_INDEX_JOB: sgciu-index-legal-corpus
+  _RUNTIME_SERVICE_ACCOUNT: sgciu-runtime@tfm-sgciu.iam.gserviceaccount.com
+  _IMAGE_TAG: manual
   _CLOUD_SQL_INSTANCE: project:region:instance
 
 steps:
@@ -12,14 +18,14 @@ steps:
     args:
       - build
       - --tag
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:${_IMAGE_TAG}
       - backend
 
   - id: push
     name: gcr.io/cloud-builders/docker
     args:
       - push
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:${_IMAGE_TAG}
 
   - id: configure-migration-job
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
@@ -29,12 +35,13 @@ steps:
       - jobs
       - deploy
       - ${_MIGRATION_JOB}
-      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:${_IMAGE_TAG}
       - --region=${_REGION}
       - --command=alembic
       - --args=-c,alembic.ini,upgrade,head
       - --set-cloudsql-instances=${_CLOUD_SQL_INSTANCE}
       - --set-secrets=DATABASE_URL=sgciu-database-url:latest
+      - --service-account=${_RUNTIME_SERVICE_ACCOUNT}
       - --quiet
 
   - id: migrate
@@ -55,14 +62,126 @@ steps:
       - run
       - deploy
       - ${_SERVICE}
-      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:${_IMAGE_TAG}
       - --region=${_REGION}
       - --platform=managed
       - --set-cloudsql-instances=${_CLOUD_SQL_INSTANCE}
       - --set-env-vars=APP_ENV=production,REQUIRE_ADMIN_AUTH=true
-      - --set-secrets=DATABASE_URL=sgciu-database-url:latest,OPENAI_API_KEY=sgciu-openai-key:latest,ADMIN_API_KEY=sgciu-admin-key:latest
-      - --no-allow-unauthenticated
+      - --set-secrets=DATABASE_URL=sgciu-database-url:latest,OPENAI_API_KEY=sgciu-openai-key:latest
+      - --service-account=${_RUNTIME_SERVICE_ACCOUNT}
+      - --allow-unauthenticated
       - --quiet
 
+  - id: configure-auth-provisioning-job
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - deploy
+      - ${_AUTH_JOB}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:${_IMAGE_TAG}
+      - --region=${_REGION}
+      - --command=python
+      - --args=-m,app.provision_users
+      - --set-cloudsql-instances=${_CLOUD_SQL_INSTANCE}
+      - --set-secrets=DATABASE_URL=sgciu-database-url:latest,AUTH_BOOTSTRAP_POLICE_PASSWORD=sgciu-police-admin-password:latest,AUTH_BOOTSTRAP_ADMINISTRATIVE_PASSWORD=sgciu-administrative-admin-password:latest
+      - --service-account=${_RUNTIME_SERVICE_ACCOUNT}
+      - --quiet
+
+  - id: provision-auth-users
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - execute
+      - ${_AUTH_JOB}
+      - --region=${_REGION}
+      - --wait
+
+  - id: configure-legal-index-job
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - deploy
+      - ${_LEGAL_INDEX_JOB}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:${_IMAGE_TAG}
+      - --region=${_REGION}
+      - --command=python
+      - --args=-m,app.index_legal_corpus
+      - --set-cloudsql-instances=${_CLOUD_SQL_INSTANCE}
+      - --set-secrets=DATABASE_URL=sgciu-database-url:latest,OPENAI_API_KEY=sgciu-openai-key:latest
+      - --service-account=${_RUNTIME_SERVICE_ACCOUNT}
+      - --max-retries=1
+      - --task-timeout=1800s
+      - --quiet
+
+  - id: index-legal-corpus
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - execute
+      - ${_LEGAL_INDEX_JOB}
+      - --region=${_REGION}
+      - --wait
+
+  - id: read-backend-url
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: sh
+    args:
+      - -c
+      - gcloud run services describe ${_SERVICE} --region=${_REGION} --format='value(status.url)' > /workspace/backend-url
+
+  - id: build-frontend
+    name: gcr.io/cloud-builders/docker
+    entrypoint: sh
+    args:
+      - -c
+      - docker build --build-arg VITE_API_BASE_URL="$$(cat /workspace/backend-url)" --tag ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_FRONTEND_IMAGE}:${_IMAGE_TAG} frontend
+
+  - id: push-frontend
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_FRONTEND_IMAGE}:${_IMAGE_TAG}
+
+  - id: deploy-frontend
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_FRONTEND_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_FRONTEND_IMAGE}:${_IMAGE_TAG}
+      - --region=${_REGION}
+      - --platform=managed
+      - --port=8080
+      - --allow-unauthenticated
+      - --quiet
+
+  - id: read-frontend-url
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: sh
+    args:
+      - -c
+      - gcloud run services describe ${_FRONTEND_SERVICE} --region=${_REGION} --format='value(status.url)' > /workspace/frontend-url
+
+  - id: configure-backend-cors
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: sh
+    args:
+      - -c
+      - |-
+        FRONTEND_URL="$$(cat /workspace/frontend-url)"
+        LEGACY_FRONTEND_URL="https://${_FRONTEND_SERVICE}-$PROJECT_NUMBER.${_REGION}.run.app"
+        CORS_ORIGINS="$${FRONTEND_URL},$${LEGACY_FRONTEND_URL}"
+        gcloud run services update ${_SERVICE} --region=${_REGION} --update-env-vars="^@^CORS_ORIGINS=$${CORS_ORIGINS}" --quiet
+
 images:
-  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:${_IMAGE_TAG}
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_FRONTEND_IMAGE}:${_IMAGE_TAG}

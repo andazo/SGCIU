@@ -603,6 +603,56 @@ pre {
   line-height: 1.5;
 }
 
+.authShell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.authCard {
+  display: grid;
+  width: min(100%, 420px);
+  gap: 14px;
+  border: 1px solid rgba(34, 102, 65, 0.16);
+  border-top: 5px solid #f2c94c;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 20px 56px rgba(31, 41, 51, 0.12);
+  padding: 30px;
+}
+
+.authCard > img {
+  width: 76px;
+  height: auto;
+  margin-bottom: 4px;
+}
+
+.authCard h1 {
+  font-size: 2.2rem;
+}
+
+.authCard > p {
+  margin: 0 0 6px;
+  color: #52616f;
+  line-height: 1.5;
+}
+
+.authCard form {
+  display: grid;
+  gap: 14px;
+}
+
+.authCard form button {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.authLoading {
+  color: #52616f;
+  font-weight: 700;
+}
+
 .adminShell {
   display: grid;
   grid-template-columns: 274px minmax(0, 1fr);
@@ -754,6 +804,32 @@ pre {
   gap: 18px;
   border-top: 4px solid #f2c94c;
   padding: 20px;
+}
+
+.adminTopActions {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.adminSessionActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.adminUserBadge {
+  max-width: 220px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f0f5ee;
+  color: #52616f;
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 7px 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .adminTop h1 {
@@ -1713,6 +1789,16 @@ pre {
 
   .filterLauncher {
     width: 100%;
+  }
+
+  .adminTopActions,
+  .adminSessionActions {
+    justify-items: stretch;
+    justify-content: stretch;
+  }
+
+  .adminSessionActions .ghostButton {
+    flex: 1;
   }
 
   .adminToggle {
