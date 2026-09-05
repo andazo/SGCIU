@@ -336,6 +336,31 @@ textarea:focus {
   line-height: 1.5;
 }
 
+.chatFormattedContent {
+  display: grid;
+  gap: 7px;
+}
+
+.chatFormattedContent p {
+  margin: 0;
+}
+
+.chatMessageBullet {
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  gap: 5px;
+  align-items: start;
+}
+
+.chatMessageBullet > span:first-child {
+  color: #226641;
+  font-weight: 800;
+}
+
+.chatMessageSpacer {
+  height: 4px;
+}
+
 .chatProcessing {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -578,6 +603,56 @@ pre {
   line-height: 1.5;
 }
 
+.authShell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.authCard {
+  display: grid;
+  width: min(100%, 420px);
+  gap: 14px;
+  border: 1px solid rgba(34, 102, 65, 0.16);
+  border-top: 5px solid #f2c94c;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 20px 56px rgba(31, 41, 51, 0.12);
+  padding: 30px;
+}
+
+.authCard > img {
+  width: 76px;
+  height: auto;
+  margin-bottom: 4px;
+}
+
+.authCard h1 {
+  font-size: 2.2rem;
+}
+
+.authCard > p {
+  margin: 0 0 6px;
+  color: #52616f;
+  line-height: 1.5;
+}
+
+.authCard form {
+  display: grid;
+  gap: 14px;
+}
+
+.authCard form button {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.authLoading {
+  color: #52616f;
+  font-weight: 700;
+}
+
 .adminShell {
   display: grid;
   grid-template-columns: 274px minmax(0, 1fr);
@@ -724,106 +799,88 @@ pre {
 
 .adminTop {
   display: grid;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
   border-top: 4px solid #f2c94c;
   padding: 20px;
 }
 
+.adminTopActions {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.adminSessionActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.adminUserBadge {
+  max-width: 220px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f0f5ee;
+  color: #52616f;
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 7px 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .adminTop h1 {
-  text-align: center;
+  max-width: 900px;
+  text-align: left;
   font-size: clamp(1.35rem, 3vw, 2rem);
 }
 
-.filterSection {
-  display: grid;
-  gap: 10px;
-  justify-items: end;
-}
-
-.filterToggle {
-  display: inline-flex;
+.filterLauncher {
+  display: flex;
+  width: auto;
+  min-width: 0;
   align-items: center;
-  gap: 9px;
-  border: 1px solid #b7cbb6;
-  border-radius: 9px;
-  padding: 9px 13px;
-  color: #184f34;
+  gap: 10px;
+  border: 1px solid #cfe0d2;
+  border-radius: 12px;
   background: #f8fbf4;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 800;
-}
-
-.filterToggle:hover,
-.filterToggle:focus-visible {
-  border-color: #184f34;
-  background: #edf9ef;
-}
-
-.filterToggleState {
-  color: #52616f;
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.adminFilters {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  width: min(100%, 720px);
-  padding: 14px;
-  border: 1px solid #dce8d9;
-  border-radius: 10px;
-  background: #ffffff;
-}
-
-.adminFilters label {
-  display: grid;
-  gap: 7px;
-}
-
-.adminFilters span {
   color: #184f34;
-  font-size: 0.84rem;
-  font-weight: 800;
+  padding: 8px 12px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition: 160ms ease;
 }
 
-.adminFilters input,
-.adminFilters select {
-  width: 100%;
-  height: 44px;
-  border: 1px solid #b7c9bd;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #1f2933;
-  outline: none;
-  padding: 0 12px;
-}
-
-.adminFilters input:focus,
-.adminFilters select:focus {
+.filterLauncher:hover,
+.filterLauncher:focus-visible,
+.filterLauncher.hasActiveFilters {
   border-color: #226641;
-  box-shadow: 0 0 0 3px rgba(34, 102, 65, 0.16);
+  background: #edf9ef;
+  box-shadow: 0 8px 20px rgba(34, 102, 65, 0.12);
 }
 
-.clearFiltersButton {
-  align-self: end;
-  min-height: 44px;
-  border: 0;
-  border-radius: 8px;
-  padding: 0 12px;
-  color: #184f34;
-  background: #edf9ef;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 700;
+.filterLauncherIcon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 9px;
+  background: #226641;
+  color: #ffffff;
+  font-size: 1.15rem;
+  line-height: 1;
 }
 
 .adminTopHeading {
   display: grid;
-  justify-items: center;
+  justify-items: start;
+  max-width: 980px;
   gap: 4px;
-  text-align: center;
+  text-align: left;
 }
 
 .adminTopHeading h1 {
@@ -901,8 +958,204 @@ pre {
   align-items: start;
 }
 
+.filterDrawerBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(16, 42, 67, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+}
+
+.filterDrawerBackdrop.isVisible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.filterDrawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 21;
+  display: grid;
+  width: min(420px, calc(100vw - 28px));
+  height: 100vh;
+  align-content: start;
+  gap: 24px;
+  overflow-y: auto;
+  border-left: 1px solid #d8e5dc;
+  background: #ffffff;
+  box-shadow: -18px 0 42px rgba(31, 41, 51, 0.16);
+  padding: 28px 24px;
+  transform: translateX(105%);
+  visibility: hidden;
+  transition:
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 260ms;
+}
+
+.filterDrawer.isOpen {
+  transform: translateX(0);
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.incidentFiltersHeader {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.incidentFiltersHeader h3 {
+  margin: 2px 0 3px;
+  color: #184f34;
+}
+
+.incidentFiltersHeader h2 {
+  margin: 2px 0 5px;
+  color: #184f34;
+}
+
+.incidentFiltersHeader p {
+  margin: 0;
+  color: #52616f;
+  font-size: 0.88rem;
+}
+
+.incidentFiltersActions,
+.paginationControls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.filterCount {
+  border-radius: 999px;
+  background: #fff8d7;
+  color: #6b4b00;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 6px 9px;
+}
+
+.incidentFilterFields {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 12px;
+}
+
+.incidentFilterFields .field {
+  gap: 6px;
+}
+
+.incidentFilterFields .field span {
+  color: #184f34;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.incidentFilterFields input,
+.incidentFilterFields select {
+  min-height: 46px;
+  border-radius: 9px;
+}
+
+.incidentFilterFields .clearFiltersButton {
+  margin-top: 8px;
+}
+
+.incidentPagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-top: 1px solid #d8e5dc;
+  padding-top: 14px;
+}
+
+.paginationSummary,
+.paginationPage {
+  color: #52616f;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.paginationPage strong {
+  color: #184f34;
+}
+
 .incidentWorkspace .adminTable {
   min-width: 780px;
+}
+
+.qualityControlCard {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+  border: 1px solid #d8e5dc;
+  border-radius: 12px;
+  padding: 14px;
+  background: #f8fbf4;
+}
+
+.qualityControlCard.isLimited {
+  border-color: #e7c86e;
+  background: #fffaf0;
+}
+
+.qualityControlCard.isReliable {
+  border-color: #b7d9bd;
+  background: #f2fbf3;
+}
+
+.qualityControlHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.qualityControlHeader h4 {
+  margin: 2px 0 0;
+  color: #184f34;
+}
+
+.qualityControlIcon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: #226641;
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.qualityControlCard.isLimited .qualityControlIcon {
+  background: #b7791f;
+}
+
+.qualityControlCard p,
+.qualityControlCard ul {
+  margin: 0;
+  color: #52616f;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.qualityControlCard ul {
+  display: grid;
+  gap: 4px;
+  padding-left: 20px;
+}
+
+.qualityControlMissing {
+  color: #6b4b00 !important;
 }
 
 .adminTable tbody tr[tabindex] {
@@ -985,6 +1238,28 @@ pre {
 .detailSummary {
   color: #52616f;
   line-height: 1.5;
+}
+
+.detailContactCard {
+  margin: 16px 0;
+  border: 1px solid #d8e5dc;
+  border-radius: 10px;
+  background: #f4f8f2;
+  padding: 13px 14px 4px;
+}
+
+.detailContactCard h4 {
+  margin: 0;
+  color: #184f34;
+  font-size: 0.92rem;
+}
+
+.detailContactGrid {
+  margin: 10px 0 0;
+}
+
+.detailContactGrid div:last-child {
+  border-bottom: 0;
 }
 
 .detailHeader,
@@ -1508,6 +1783,24 @@ pre {
     height: 100vh;
   }
 
+  .adminTop {
+    grid-template-columns: 1fr;
+  }
+
+  .filterLauncher {
+    width: 100%;
+  }
+
+  .adminTopActions,
+  .adminSessionActions {
+    justify-items: stretch;
+    justify-content: stretch;
+  }
+
+  .adminSessionActions .ghostButton {
+    flex: 1;
+  }
+
   .adminToggle {
     left: min(250px, calc(100vw - 62px));
   }
@@ -1520,7 +1813,6 @@ pre {
     grid-template-columns: 1fr;
   }
 
-  .adminFilters,
   .adminStats,
   .adminCharts,
   .analyticsKpis,
@@ -1532,9 +1824,19 @@ pre {
 
   .sectionIntro,
   .adminPanelHeader,
-  .reviewHeader {
+  .reviewHeader,
+  .incidentPagination {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .incidentFiltersHeader {
+    align-items: stretch;
+    flex-direction: row;
+  }
+
+  .incidentFilterFields {
+    grid-template-columns: 1fr;
   }
 
   .panelActions,
@@ -1556,6 +1858,11 @@ pre {
 
   .queryRow {
     grid-template-columns: 1fr;
+  }
+
+  .paginationControls,
+  .incidentFiltersActions {
+    justify-content: flex-start;
   }
 }
 

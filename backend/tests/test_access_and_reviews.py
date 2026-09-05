@@ -1,6 +1,5 @@
 from dataclasses import replace
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -43,15 +42,15 @@ def test_production_authentication_is_secure_by_default(monkeypatch):
     assert settings.require_admin_auth is True
 
 
-def test_production_without_admin_key_fails_fast(monkeypatch):
+def test_production_uses_user_sessions_without_admin_key(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.delenv("REQUIRE_ADMIN_AUTH", raising=False)
     monkeypatch.delenv("ADMIN_API_KEY", raising=False)
     get_settings.cache_clear()
 
     try:
-        with pytest.raises(ValueError, match="ADMIN_API_KEY"):
-            get_settings()
+        assert get_settings().require_admin_auth is True
+        assert get_settings().admin_api_key is None
     finally:
         get_settings.cache_clear()
 

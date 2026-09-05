@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import getpass
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
@@ -9,6 +10,7 @@ from pydantic import ValidationError
 
 from app.agents.gateway import LocalToolGateway, connect_mcp_gateway
 from app.agents.operational import OperationalAgent
+from app.auth import AuthService
 from app.db import SessionLocal
 from app.rag.corpus import LegalCorpusIndexer
 from app.schemas import CitizenProfile, IntakeSubmissionRequest
@@ -79,7 +81,10 @@ def run_citizen() -> None:
                 continue
             print("Asistente SGCIU:", response.messages[-1].content)
             if response.requires_human_review:
-                print("Aviso: el reporte será marcado para revisión humana.")
+                print(
+                    "Aviso: el reporte tendrá fiabilidad limitada y requerirá "
+                    "verificación de datos."
+                )
             if not response.is_complete:
                 continue
             print("\nResumen propuesto:")
@@ -483,8 +488,7 @@ def run_admin(transport: str) -> None:
         "3": "Buscar relacionados",
         "4": "Agrupación semántica y recurrente",
         "5": "Preguntar al agente operativo",
-        "6": "Gestionar resaltados y revisiones de calidad",
-        "7": "Consultar normativa (RAG)",
+        "6": "Consultar normativa (RAG)",
         "0": "Salir",
     }
     with SessionLocal() as db:
@@ -506,8 +510,6 @@ def run_admin(transport: str) -> None:
             elif selection == "5":
                 asyncio.run(_ask_agent(db, transport))
             elif selection == "6":
-                _manage_reviews(db)
-            elif selection == "7":
                 _manage_legal_rag(db)
             else:
                 print("Opción inválida.")
@@ -517,11 +519,24 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Interfaz terminal de SGCIU")
     parser.add_argument("--role", choices=("citizen", "admin"))
     parser.add_argument("--transport", choices=("local", "mcp"), default="local")
+    parser.add_argument("--create-user", metavar="USERNAME")
+    parser.add_argument("--user-role", choices=("police", "administrative"))
     return parser.parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = parse_args(argv)
+    if args.create_user:
+        if not args.user_role:
+            raise SystemExit("--user-role es obligatorio con --create-user.")
+        password = getpass.getpass("Contraseña (mínimo 12 caracteres): ")
+        confirmation = getpass.getpass("Repita la contraseña: ")
+        if password != confirmation:
+            raise SystemExit("Las contraseñas no coinciden.")
+        with SessionLocal() as db:
+            user = AuthService(db).create_user(args.create_user, password, args.user_role)
+        print(f"Usuario {user.username} creado con rol {user.role}.")
+        return
     role = args.role
     if role is None:
         selected = input("Seleccione rol: [1] ciudadano, [2] administrador: ").strip()

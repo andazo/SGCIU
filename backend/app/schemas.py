@@ -30,6 +30,7 @@ TipoLugar = Literal["establecimiento", "casa", "parque", "escuela", "otro"]
 Urgencia = Literal["baja", "media", "alta", "inmediata"]
 TemporalRelation = Literal["pasado", "en_curso", "futuro", "desconocido"]
 RegistrationMode = Literal["complete", "anonymous"]
+AuthRole = Literal["police", "administrative"]
 IntakeFieldStatus = Literal["known", "missing", "ambiguous", "unknown", "declined"]
 IntakeCompletionReason = Literal[
     "needs_follow_up",
@@ -61,6 +62,35 @@ ReviewActionCode = Literal[
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class AuthLoginRequest(StrictModel):
+    username: str = Field(min_length=3, max_length=80)
+    password: str = Field(min_length=12, max_length=256)
+
+    @field_validator("username")
+    @classmethod
+    def username_must_be_trimmed(cls, value: str):
+        value = value.strip()
+        if not value:
+            raise ValueError("El usuario es obligatorio.")
+        return value
+
+
+class AuthUserResponse(StrictModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    role: AuthRole
+    is_active: bool
+
+
+class AuthSessionResponse(StrictModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_at: datetime
+    user: AuthUserResponse
 
 
 class CitizenProfile(StrictModel):

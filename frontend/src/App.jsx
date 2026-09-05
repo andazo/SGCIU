@@ -3,6 +3,7 @@ import logoFlores from '../branding/logoFlores.png';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 const ADMIN_ROUTE = '/admin';
+const ADMIN_AUTH_STORAGE_KEY = 'sgciu.admin.auth';
 const CITIZEN_SESSION_STORAGE_KEY = 'sgciu.citizen.intake.session';
 const OPERATIONAL_SESSION_STORAGE_KEY = 'sgciu.operational.session';
 const NAV_ITEMS = [
@@ -12,7 +13,6 @@ const NAV_ITEMS = [
   { label: 'Agrupación recurrente', icon: '↻' },
   { label: 'Analítica', icon: '∿' },
   { label: 'Asistente de Políticas', icon: '?' },
-  { label: 'Revisiones', icon: '✓' },
 ];
 const DISTRICTS = ['Todos', 'San Joaquin', 'Barrantes', 'Llorente'];
 
@@ -65,8 +65,22 @@ const VALUE_LABELS = {
 };
 
 async function apiRequest(path, options = {}) {
-  const response = await fetch(API_BASE_URL + path, options);
+  const headers = new Headers(options.headers || {});
+  let storedAuth = null;
+  try {
+    storedAuth = JSON.parse(sessionStorage.getItem(ADMIN_AUTH_STORAGE_KEY) || 'null');
+  } catch {
+    sessionStorage.removeItem(ADMIN_AUTH_STORAGE_KEY);
+  }
+  if (storedAuth?.access_token && !path.startsWith('/v1/auth/login')) {
+    headers.set('Authorization', `Bearer ${storedAuth.access_token}`);
+  }
+  const response = await fetch(API_BASE_URL + path, { ...options, headers });
   if (!response.ok) {
+    if (response.status === 401 && !path.startsWith('/v1/auth/')) {
+      sessionStorage.removeItem(ADMIN_AUTH_STORAGE_KEY);
+      window.dispatchEvent(new Event('sgciu-auth-expired'));
+    }
     let message = 'La operación no se pudo completar (' + response.status + ').';
     try {
       const body = await response.json();
@@ -134,6 +148,42 @@ function buildDetailBullets(extractedData) {
     }));
 }
 
+function renderInlineMessage(text) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={`${part}-${index}`}>{part.slice(2, -2)}</strong>;
+    }
+    return <span key={`${part}-${index}`}>{part}</span>;
+  });
+}
+
+function ChatMessageContent({ content }) {
+  const normalizedContent = content
+    .replace(/\r\n/g, '\n')
+    .replace(/\s+-\s+(?=[A-ZÁÉÍÓÚÑ][^:\n]{0,80}:)/g, '\n- ');
+  const lines = normalizedContent.split('\n');
+
+  return (
+    <div className="chatFormattedContent">
+      {lines.map((line, index) => {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) {
+          return <div className="chatMessageSpacer" key={`spacer-${index}`} />;
+        }
+        if (/^[-*]\s+/.test(trimmedLine)) {
+          return (
+            <div className="chatMessageBullet" key={`bullet-${index}`}>
+              <span aria-hidden="true">•</span>
+              <span>{renderInlineMessage(trimmedLine.slice(2))}</span>
+            </div>
+          );
+        }
+        return <p key={`line-${index}`}>{renderInlineMessage(trimmedLine)}</p>;
+      })}
+    </div>
+  );
+}
+
 function ChatTranscript({ messages, isLoading, loadingLabel = 'Procesando información' }) {
   const endRef = useRef(null);
 
@@ -145,7 +195,7 @@ function ChatTranscript({ messages, isLoading, loadingLabel = 'Procesando inform
     <div className="chatMessages" aria-live="polite" aria-busy={isLoading}>
       {messages.map((message, index) => (
         <div className={`chatBubble ${message.role}`} key={`${message.role}-${index}`}>
-          <p>{message.content}</p>
+          <ChatMessageContent content={message.content} />
         </div>
       ))}
       {isLoading && (
@@ -540,7 +590,7 @@ function ReviewsPanel({ onRefresh }) {
   );
 }
 
-function IncidentTable({ incidents, selectedId, onSelect }) {
+function IncidentTable({ incidents, selectedId, onSelect, isLoading }) {
   return (
     <div className="adminTableWrap">
       <table className="adminTable">
@@ -555,7 +605,9 @@ function IncidentTable({ incidents, selectedId, onSelect }) {
           </tr>
         </thead>
         <tbody>
-          {incidents.map((incident) => (
+          {isLoading ? (
+            <tr><td colSpan="6" className="adminEmptyTable">Cargando incidentes…</td></tr>
+          ) : incidents.map((incident) => (
             <tr
               className={selectedId === incident.id ? 'isSelected' : ''}
               key={incident.id}
@@ -597,8 +649,52 @@ function IncidentTable({ incidents, selectedId, onSelect }) {
   );
 }
 
+function IncidentQualityCard({ incident, data }) {
+  const fieldLabels = {
+    descripcion_detallada: 'Descripción del incidente',
+    distrito: 'Distrito',
+    direccion_exacta: 'Ubicación exacta',
+    fecha_hora_aproximada: 'Fecha y hora aproximada',
+  };
+  const missingFields = Object.entries(data.field_states || {})
+    .filter(([, field]) => ['missing', 'ambiguous', 'unknown', 'declined'].includes(field?.status))
+    .map(([field]) => fieldLabels[field] || SUMMARY_LABELS[field] || field);
+  const qualityControl = incident.analysis_metadata?.quality_control;
+  const issues = qualityControl?.issues?.length > 0
+    ? qualityControl.issues
+    : incident.review_reason
+      ? [incident.review_reason]
+      : missingFields;
+  const hasLimitedReliability = qualityControl
+    ? qualityControl.reliability === 'limited'
+    : incident.requires_human_review || missingFields.length > 0;
+
+  return (
+    <section className={`qualityControlCard ${hasLimitedReliability ? 'isLimited' : 'isReliable'}`} aria-label="Control de calidad asistido por IA">
+      <div className="qualityControlHeader">
+        <span className="qualityControlIcon" aria-hidden="true">{hasLimitedReliability ? '!' : '✓'}</span>
+        <div>
+          <span className="eyebrow">Control de calidad asistido por IA</span>
+          <h4>{hasLimitedReliability ? 'Fiabilidad limitada' : 'Información suficientemente completa'}</h4>
+        </div>
+      </div>
+      {hasLimitedReliability ? (
+        <>
+          <p>La información contiene elementos incompletos o poco claros. Verifica estos datos antes de tomar una decisión operativa.</p>
+          {issues.length > 0 && <ul>{issues.slice(0, 4).map((issue) => <li key={issue}>{issue}</li>)}</ul>}
+          {missingFields.length > 0 && <p className="qualityControlMissing"><strong>Datos pendientes:</strong> {missingFields.join(', ')}.</p>}
+        </>
+      ) : (
+        <p>La IA no detectó faltantes críticos en los datos estructurados del incidente.</p>
+      )}
+    </section>
+  );
+}
+
 function IncidentDetail({ incident, related, isLoadingRelated, onFindRelated, onReindex }) {
   const data = incident?.ai_extracted_data || {};
+  const isAnonymous = incident?.analysis_metadata?.anonymous === true
+    || incident?.analysis_metadata?.registration_mode === 'anonymous';
   if (!incident) {
     return (
       <aside className="detailEmpty">
@@ -623,6 +719,27 @@ function IncidentDetail({ incident, related, isLoadingRelated, onFindRelated, on
       <p className="detailSummary">
         {incident.ai_summary_text || data.descripcion_detallada || 'Sin resumen disponible.'}
       </p>
+      <IncidentQualityCard incident={incident} data={data} />
+      <section className="detailContactCard" aria-label="Procedencia y contacto del incidente">
+        <h4>Procedencia y contacto</h4>
+        {incident.police_input ? (
+          <dl className="detailGrid detailContactGrid">
+            <div><dt>Registrado por</dt><dd>Personal administrativo o policial</dd></div>
+            <div><dt>Identificador</dt><dd>{incident.entered_by_badge || 'No disponible'}</dd></div>
+          </dl>
+        ) : isAnonymous ? (
+          <dl className="detailGrid detailContactGrid">
+            <div><dt>Modalidad</dt><dd>Registro anónimo</dd></div>
+            <div><dt>Contacto</dt><dd>No proporcionado</dd></div>
+          </dl>
+        ) : (
+          <dl className="detailGrid detailContactGrid">
+            <div><dt>Nombre</dt><dd>{incident.name || 'No proporcionado'}</dd></div>
+            <div><dt>Teléfono</dt><dd>{incident.phone || 'No proporcionado'}</dd></div>
+            <div><dt>Correo</dt><dd>{incident.email || 'No proporcionado'}</dd></div>
+          </dl>
+        )}
+      </section>
       <dl className="detailGrid">
         <div><dt>Categoría</dt><dd>{normalizeValue(data.categoria_preliminar)}</dd></div>
         <div><dt>Distrito</dt><dd>{normalizeValue(data.distrito)}</dd></div>
@@ -660,12 +777,139 @@ function IncidentDetail({ incident, related, isLoadingRelated, onFindRelated, on
   );
 }
 
-function IncidentsPanel({ incidents, onRefresh }) {
+const INCIDENTS_PAGE_SIZE = 30;
+
+function IncidentFilters({
+  dateFilter,
+  districtFilter,
+  incidentSearch,
+  setDateFilter,
+  setDistrictFilter,
+  setIncidentSearch,
+  isOpen,
+  onClose,
+}) {
+  const activeFilters = [dateFilter, districtFilter !== 'Todos' ? districtFilter : '', incidentSearch]
+    .filter(Boolean).length;
+
+  function clearFilters() {
+    setDateFilter('');
+    setDistrictFilter('Todos');
+    setIncidentSearch('');
+  }
+
+  return (
+    <aside
+      className={`filterDrawer ${isOpen ? 'isOpen' : ''}`}
+      aria-label="Filtros globales de incidentes"
+      aria-hidden={!isOpen}
+      role="dialog"
+    >
+      <div className="incidentFiltersHeader">
+        <div>
+          <span className="eyebrow">Filtros globales</span>
+          <h2>Buscar información</h2>
+          <p>Estos filtros se aplican en Inicio, Incidentes y Analítica.</p>
+        </div>
+        <div className="incidentFiltersActions">
+          {activeFilters > 0 && <span className="filterCount">{activeFilters} activo{activeFilters > 1 ? 's' : ''}</span>}
+          <button
+            className="ghostButton"
+            type="button"
+            aria-label="Cerrar filtros"
+            onClick={onClose}
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+      <div className="incidentFilterFields" id="incident-filter-fields">
+          <label className="field">
+            <span>Fecha de registro</span>
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(event) => setDateFilter(event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Distrito</span>
+            <select value={districtFilter} onChange={(event) => setDistrictFilter(event.target.value)}>
+              {DISTRICTS.map((district) => <option key={district} value={district}>{district}</option>)}
+            </select>
+          </label>
+          <label className="field">
+            <span>ID del incidente</span>
+            <input
+              type="search"
+              placeholder="Ej. 24"
+              value={incidentSearch}
+              onChange={(event) => setIncidentSearch(event.target.value)}
+            />
+          </label>
+          {activeFilters > 0 && (
+            <button className="clearFiltersButton" type="button" onClick={clearFilters}>
+              Limpiar filtros
+            </button>
+          )}
+      </div>
+    </aside>
+  );
+}
+
+function IncidentPagination({ currentPage, totalPages, totalItems, pageStart, pageEnd, onPageChange }) {
+  if (totalItems === 0) return null;
+
+  return (
+    <nav className="incidentPagination" aria-label="Paginación de incidentes">
+      <span className="paginationSummary">Mostrando {pageStart}–{pageEnd} de {totalItems}</span>
+      <div className="paginationControls">
+        <button
+          className="ghostButton"
+          type="button"
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+        >
+          Anterior
+        </button>
+        <span className="paginationPage">Página <strong>{currentPage}</strong> de {totalPages}</span>
+        <button
+          className="secondaryButton"
+          type="button"
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+        >
+          Siguiente
+        </button>
+      </div>
+    </nav>
+  );
+}
+
+function IncidentsPanel({
+  incidents,
+  onRefresh,
+  isLoading,
+}) {
   const [selectedIncident, setSelectedIncident] = useState(null);
   const [related, setRelated] = useState(null);
   const [isLoadingRelated, setIsLoadingRelated] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
   const [error, setError] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(incidents.length / INCIDENTS_PAGE_SIZE));
+  const pageStartIndex = (currentPage - 1) * INCIDENTS_PAGE_SIZE;
+  const visibleIncidents = incidents.slice(pageStartIndex, pageStartIndex + INCIDENTS_PAGE_SIZE);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    setSelectedIncident(null);
+    setRelated(null);
+  }, [incidents]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
 
   async function findRelated() {
     if (!selectedIncident) return;
@@ -708,8 +952,9 @@ function IncidentsPanel({ incidents, onRefresh }) {
       {error && <p className="statusMessage error">{error}</p>}
       <div className="incidentWorkspace">
         <IncidentTable
-          incidents={incidents}
+          incidents={visibleIncidents}
           selectedId={selectedIncident?.id}
+          isLoading={isLoading}
           onSelect={(incident) => {
             setSelectedIncident(incident);
             setRelated(null);
@@ -724,6 +969,14 @@ function IncidentsPanel({ incidents, onRefresh }) {
           onReindex={reindex}
         />
       </div>
+      <IncidentPagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalItems={incidents.length}
+        pageStart={pageStartIndex + 1}
+        pageEnd={Math.min(pageStartIndex + INCIDENTS_PAGE_SIZE, incidents.length)}
+        onPageChange={setCurrentPage}
+      />
     </section>
   );
 }
@@ -743,7 +996,7 @@ function AnalyticsPanel({ incidents }) {
     countBy(incidents, (incident) => incident.ai_extracted_data?.distrito),
   ).sort(([, countA], [, countB]) => countB - countA);
   const staffReports = incidents.filter((incident) => incident.police_input).length;
-  const pendingReviews = incidents.filter((incident) => incident.requires_human_review).length;
+  const limitedReliability = incidents.filter((incident) => incident.requires_human_review).length;
 
   useEffect(() => {
     let cancelled = false;
@@ -814,7 +1067,7 @@ function AnalyticsPanel({ incidents }) {
       <div className="analyticsKpis">
         <StatCard label="Registros totales" value={incidents.length} />
         <StatCard label="Ingresados por personal" value={staffReports} />
-        <StatCard label="Requieren revisión" value={pendingReviews} />
+        <StatCard label="Fiabilidad limitada" value={limitedReliability} />
       </div>
       <div className="analyticsGrid">
         <article className="insightCard">
@@ -1058,13 +1311,9 @@ function InternalIncidentForm({ onSaved }) {
     setIsStarting(true);
     setError('');
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/internal-intake/sessions`, {
+      const data = await apiRequest('/v1/internal-intake/sessions', {
         method: 'POST',
       });
-      if (!response.ok) {
-        throw new Error('No se pudo iniciar la sesión interna de registro.');
-      }
-      const data = await response.json();
       setSessionId(data.session_id);
       setMessages([{ role: 'assistant', content: data.assistant_message }]);
     } catch (startError) {
@@ -1098,18 +1347,11 @@ function InternalIncidentForm({ onSaved }) {
     setError('');
     setIsChatLoading(true);
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/v1/internal-intake/sessions/${sessionId}/messages`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: trimmedMessage }),
-        },
-      );
-      if (!response.ok) {
-        throw new Error((await response.text()) || 'No se pudo analizar el mensaje.');
-      }
-      const data = await response.json();
+      const data = await apiRequest(`/v1/internal-intake/sessions/${sessionId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: trimmedMessage }),
+      });
       setMessages(data.messages);
       setExtractedData(data.extracted_data);
       setIsAiComplete(Boolean(data.is_complete));
@@ -1130,22 +1372,15 @@ function InternalIncidentForm({ onSaved }) {
     setSuccessMessage('');
     setIsSubmitting(true);
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/v1/internal-intake/sessions/${sessionId}/submit`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            entered_by_badge: enteredByBadge.trim(),
-            truth_confirmation: truthConfirmation,
-            data_usage_consent: dataUsageConsent,
-          }),
-        },
-      );
-      if (!response.ok) {
-        throw new Error((await response.text()) || 'No se pudo guardar el incidente.');
-      }
-      const saved = await response.json();
+      const saved = await apiRequest(`/v1/internal-intake/sessions/${sessionId}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entered_by_badge: enteredByBadge.trim(),
+          truth_confirmation: truthConfirmation,
+          data_usage_consent: dataUsageConsent,
+        }),
+      });
       if (onSaved) {
         await onSaved(saved);
       }
@@ -1247,7 +1482,7 @@ function InternalIncidentForm({ onSaved }) {
   );
 }
 
-function AdminDashboard() {
+function AdminWorkspace({ user, onLogout }) {
   const [isMenuOpen, setIsMenuOpen] = useState(true);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [activeItem, setActiveItem] = useState(
@@ -1361,6 +1596,17 @@ function AdminDashboard() {
     [complaints, dateFilter, districtFilter, incidentSearch],
   );
 
+  const activeFilterCount = [dateFilter, districtFilter !== 'Todos' ? districtFilter : '', incidentSearch]
+    .filter(Boolean).length;
+
+  useEffect(() => {
+    function closeFiltersOnEscape(event) {
+      if (event.key === 'Escape') setIsFiltersOpen(false);
+    }
+    document.addEventListener('keydown', closeFiltersOnEscape);
+    return () => document.removeEventListener('keydown', closeFiltersOnEscape);
+  }, []);
+
   const todayReports = useMemo(() => {
     const today = toDateKey(new Date());
     return complaints.filter((complaint) => toDateKey(new Date(complaint.created_at)) === today)
@@ -1392,20 +1638,19 @@ function AdminDashboard() {
 
   return (
     <div className={`adminShell ${isMenuOpen ? 'isOpen' : 'isCollapsed'}`}>
+      <button
+        className="adminToggle"
+        type="button"
+        aria-label={isMenuOpen ? 'Ocultar menú administrativo' : 'Mostrar menú administrativo'}
+        onClick={() => setIsMenuOpen((open) => !open)}
+      >
+        {isMenuOpen ? '‹' : '☰'}
+      </button>
       <aside className="adminNav" aria-label="Navegación administrativa">
         <div className="adminBrand">
           <img src={logoFlores} alt="Logo Municipalidad de Flores" />
           {isMenuOpen && <strong>Municipalidad de Flores</strong>}
         </div>
-
-        <button
-          className="adminToggle"
-          type="button"
-          aria-label={isMenuOpen ? 'Ocultar menú administrativo' : 'Mostrar menú administrativo'}
-          onClick={() => setIsMenuOpen((open) => !open)}
-        >
-          {isMenuOpen ? '‹' : '☰'}
-        </button>
 
         <nav className="adminNavList">
           {NAV_ITEMS.map((item) => (
@@ -1429,71 +1674,23 @@ function AdminDashboard() {
             <h1>Sistema de Gestión y Clasificación de Incidentes Urbanos</h1>
             <p>Convierte cada denuncia en contexto útil para actuar mejor en Flores.</p>
           </div>
-          <div className="filterSection">
+          <div className="adminTopActions">
             <button
-              className="filterToggle"
+              className={`filterLauncher ${activeFilterCount > 0 ? 'hasActiveFilters' : ''}`}
               type="button"
               aria-expanded={isFiltersOpen}
-              aria-controls="incident-filters"
-              onClick={() => setIsFiltersOpen((open) => !open)}
+              aria-controls="incident-filter-fields"
+              onClick={() => setIsFiltersOpen(true)}
             >
-              <span aria-hidden="true">⌕</span>
-              Filtros principales
-              <span className="filterToggleState">
-                {isFiltersOpen ? 'Ocultar' : 'Mostrar'}
-              </span>
+              <span className="filterLauncherIcon" aria-hidden="true">⌕</span>
+              <strong>Filtros</strong>
             </button>
-
-            {isFiltersOpen && (
-              <div className="adminFilters" id="incident-filters">
-                <label>
-                  <span>Fecha</span>
-                  <input
-                    type="date"
-                    value={dateFilter}
-                    onChange={(event) => setDateFilter(event.target.value)}
-                  />
-                </label>
-
-                <label>
-                  <span>Distrito</span>
-                  <select
-                    value={districtFilter}
-                    onChange={(event) => setDistrictFilter(event.target.value)}
-                  >
-                    {DISTRICTS.map((district) => (
-                      <option key={district} value={district}>
-                        {district}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label>
-                  <span>ID incidente</span>
-                  <input
-                    type="search"
-                    placeholder="Ej. 24"
-                    value={incidentSearch}
-                    onChange={(event) => setIncidentSearch(event.target.value)}
-                  />
-                </label>
-
-                {(dateFilter || districtFilter !== 'Todos' || incidentSearch) && (
-                  <button
-                    className="clearFiltersButton"
-                    type="button"
-                    onClick={() => {
-                      setDateFilter('');
-                      setDistrictFilter('Todos');
-                      setIncidentSearch('');
-                    }}
-                  >
-                    Limpiar filtros
-                  </button>
-                )}
-              </div>
-            )}
+            <div className="adminSessionActions">
+              <span className="adminUserBadge">
+                {user.role === 'police' ? 'Policía' : 'Administrativo'} · {user.username}
+              </span>
+              <button className="ghostButton" type="button" onClick={onLogout}>Cerrar sesión</button>
+            </div>
           </div>
         </header>
 
@@ -1555,14 +1752,16 @@ function AdminDashboard() {
         )}
 
         {activeItem === 'Incidentes' && (
-          <IncidentsPanel incidents={filteredComplaints} onRefresh={refreshComplaints} />
+          <IncidentsPanel
+            incidents={filteredComplaints}
+            onRefresh={refreshComplaints}
+            isLoading={isLoading}
+          />
         )}
 
         {activeItem === 'Analítica' && <AnalyticsPanel incidents={filteredComplaints} />}
 
         {activeItem === 'Asistente de Políticas' && <PolicyAssistantPanel />}
-
-        {activeItem === 'Revisiones' && <ReviewsPanel onRefresh={refreshComplaints} />}
 
         {loadError && <p className="statusMessage error">{loadError}</p>}
 
@@ -1646,8 +1845,136 @@ function AdminDashboard() {
           </>
         )}
       </main>
+      <div
+        className={`filterDrawerBackdrop ${isFiltersOpen ? 'isVisible' : ''}`}
+        aria-hidden={!isFiltersOpen}
+        onClick={() => setIsFiltersOpen(false)}
+      />
+      <IncidentFilters
+        dateFilter={dateFilter}
+        districtFilter={districtFilter}
+        incidentSearch={incidentSearch}
+        setDateFilter={setDateFilter}
+        setDistrictFilter={setDistrictFilter}
+        setIncidentSearch={setIncidentSearch}
+        isOpen={isFiltersOpen}
+        onClose={() => setIsFiltersOpen(false)}
+      />
     </div>
   );
+}
+
+function AdminLogin({ onAuthenticated }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (!username.trim() || !password) return;
+    setIsSubmitting(true);
+    setError('');
+    try {
+      const session = await apiRequest('/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim(), password }),
+      });
+      sessionStorage.setItem(ADMIN_AUTH_STORAGE_KEY, JSON.stringify(session));
+      onAuthenticated(session.user);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo iniciar sesión.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="authShell">
+      <section className="authCard" aria-labelledby="admin-login-title">
+        <img src={logoFlores} alt="Logo Municipalidad de Flores" />
+        <span className="eyebrow">Acceso institucional</span>
+        <h1 id="admin-login-title">SGCIU</h1>
+        <p>Inicie sesión para consultar y gestionar la información operativa.</p>
+        <form onSubmit={handleSubmit}>
+          <label className="field" htmlFor="admin-username">
+            <span>Usuario</span>
+            <input
+              id="admin-username"
+              type="text"
+              autoComplete="username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              required
+            />
+          </label>
+          <label className="field" htmlFor="admin-password">
+            <span>Contraseña</span>
+            <input
+              id="admin-password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+          </label>
+          {error && <p className="statusMessage error" role="alert">{error}</p>}
+          <button className="primaryButton" type="submit" disabled={isSubmitting || !username.trim() || !password}>
+            {isSubmitting ? 'Ingresando…' : 'Iniciar sesión'}
+          </button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
+function AdminDashboard() {
+  const [user, setUser] = useState(null);
+  const [isChecking, setIsChecking] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function validateSession() {
+      try {
+        const storedAuth = JSON.parse(sessionStorage.getItem(ADMIN_AUTH_STORAGE_KEY) || 'null');
+        if (!storedAuth?.access_token) return;
+        const currentUser = await apiRequest('/v1/auth/me');
+        if (!cancelled) setUser(currentUser);
+      } catch {
+        sessionStorage.removeItem(ADMIN_AUTH_STORAGE_KEY);
+      } finally {
+        if (!cancelled) setIsChecking(false);
+      }
+    }
+    validateSession();
+    function handleExpiredSession() {
+      setUser(null);
+    }
+    window.addEventListener('sgciu-auth-expired', handleExpiredSession);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('sgciu-auth-expired', handleExpiredSession);
+    };
+  }, []);
+
+  async function logout() {
+    try {
+      await apiRequest('/v1/auth/logout', { method: 'POST' });
+    } finally {
+      sessionStorage.removeItem(ADMIN_AUTH_STORAGE_KEY);
+      setUser(null);
+    }
+  }
+
+  if (isChecking) {
+    return <main className="authShell"><p className="authLoading">Validando sesión…</p></main>;
+  }
+  if (!user) {
+    return <AdminLogin onAuthenticated={setUser} />;
+  }
+  return <AdminWorkspace user={user} onLogout={logout} />;
 }
 
 function CitizenComplaintForm() {

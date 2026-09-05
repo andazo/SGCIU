@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -161,6 +162,46 @@ def test_aggregate_normalizes_district_accents_and_category_plurals(db_session):
 
     assert result["total"] == 3
     assert result["groups"] == [{"value": "robo", "count": 3}]
+
+
+def test_incident_tools_filter_inclusive_report_date_and_paginate(db_session):
+    incidents = [create_incident(db_session, "robo") for _ in range(3)]
+    incidents[0].created_at = datetime(2026, 8, 30, 8, 0)
+    incidents[1].created_at = datetime(2026, 8, 31, 9, 0)
+    incidents[2].created_at = datetime(2026, 9, 1, 10, 0)
+    db_session.commit()
+    registry = build_incident_tool_registry()
+
+    result = registry.call(
+        db_session,
+        "search_incidents",
+        {
+            "category": "robos",
+            "created_from": "2026-08-31",
+            "created_to": "2026-08-31",
+            "limit": 1,
+            "offset": 0,
+        },
+        actor_role="admin",
+    )
+    aggregate = registry.call(
+        db_session,
+        "aggregate_incidents",
+        {
+            "group_by": "distrito",
+            "category": "robo",
+            "created_from": "2026-08-31",
+            "created_to": "2026-08-31",
+        },
+        actor_role="admin",
+    )
+
+    assert result["total"] == 1
+    assert result["returned"] == 1
+    assert result["has_more"] is False
+    assert result["filters"]["created_from"] == "2026-08-31"
+    assert aggregate["total"] == 1
+    assert aggregate["filters"]["created_to"] == "2026-08-31"
 
 
 @pytest.mark.asyncio

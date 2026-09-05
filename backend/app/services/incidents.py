@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, date, datetime, time, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -119,6 +120,8 @@ class IncidentService:
         district: str | None = None,
         category: str | None = None,
         synthetic_only: bool | None = None,
+        created_from: date | None = None,
+        created_to: date | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[ComplaintSubmission], int]:
@@ -141,6 +144,18 @@ class IncidentService:
         if synthetic_only is not None:
             condition = (
                 ComplaintSubmission.analysis_metadata["synthetic"].as_boolean() == synthetic_only
+            )
+            query = query.where(condition)
+            count_query = count_query.where(condition)
+        if created_from:
+            condition = ComplaintSubmission.created_at >= datetime.combine(
+                created_from, time.min, tzinfo=UTC
+            )
+            query = query.where(condition)
+            count_query = count_query.where(condition)
+        if created_to:
+            condition = ComplaintSubmission.created_at < datetime.combine(
+                created_to + timedelta(days=1), time.min, tzinfo=UTC
             )
             query = query.where(condition)
             count_query = count_query.where(condition)

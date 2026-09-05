@@ -8,6 +8,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+APP_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(PROJECT_ROOT / ".env")
 
 
@@ -71,6 +72,7 @@ class Settings:
     cluster_time_window_days: int
     admin_api_key: str | None
     require_admin_auth: bool
+    auth_session_ttl_hours: int
 
     @property
     def is_production(self) -> bool:
@@ -87,11 +89,6 @@ def get_settings() -> Settings:
     )
     if app_env == "production" and not require_admin_auth:
         raise ValueError("La autenticación administrativa debe estar activa en producción.")
-    if require_admin_auth and not admin_api_key:
-        raise ValueError(
-            "ADMIN_API_KEY es obligatorio cuando la autenticación administrativa está activa."
-        )
-
     default_origins = (
         "http://localhost:3000",
         "http://127.0.0.1:3000",
@@ -143,7 +140,7 @@ def get_settings() -> Settings:
             os.getenv("LEGAL_RAG_MIN_SEMANTIC_SCORE", "0.25")
         ),
         legal_rag_corpus_path=Path(
-            os.getenv("LEGAL_RAG_CORPUS_PATH", str(PROJECT_ROOT / "backend/corpus/legal"))
+            os.getenv("LEGAL_RAG_CORPUS_PATH", str(APP_ROOT / "corpus/legal"))
         ).expanduser(),
         llm_input_cost_per_million=float(os.getenv("LLM_INPUT_COST_PER_MILLION", "0")),
         llm_output_cost_per_million=float(os.getenv("LLM_OUTPUT_COST_PER_MILLION", "0")),
@@ -154,4 +151,5 @@ def get_settings() -> Settings:
         cluster_time_window_days=int(os.getenv("CLUSTER_TIME_WINDOW_DAYS", "30")),
         admin_api_key=admin_api_key,
         require_admin_auth=require_admin_auth,
+        auth_session_ttl_hours=max(1, int(os.getenv("AUTH_SESSION_TTL_HOURS", "8"))),
     )

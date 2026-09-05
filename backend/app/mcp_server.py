@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import date
 
 from mcp.server.fastmcp import FastMCP
 
@@ -40,16 +41,22 @@ def search_incidents(
     district: str | None = None,
     category: str | None = None,
     synthetic_only: bool | None = None,
+    created_from: date | None = None,
+    created_to: date | None = None,
     limit: int = 20,
+    offset: int = 0,
 ) -> str:
-    """Busca incidentes por distrito o categoría sin devolver datos de contacto."""
+    """Busca incidentes por filtros operativos y fecha de registro, sin datos de contacto."""
     return _execute(
         "search_incidents",
         {
             "district": district,
             "category": category,
             "synthetic_only": synthetic_only,
+            "created_from": created_from,
+            "created_to": created_to,
             "limit": limit,
+            "offset": offset,
         },
     )
 
@@ -60,6 +67,8 @@ def aggregate_incidents(
     district: str | None = None,
     category: str | None = None,
     synthetic_only: bool | None = None,
+    created_from: date | None = None,
+    created_to: date | None = None,
 ) -> str:
     """Agrupa y cuenta incidentes por categoria_preliminar o distrito."""
     return _execute(
@@ -69,6 +78,8 @@ def aggregate_incidents(
             "district": district,
             "category": category,
             "synthetic_only": synthetic_only,
+            "created_from": created_from,
+            "created_to": created_to,
         },
     )
 
@@ -89,18 +100,9 @@ def get_incident_cluster(cluster_id: int) -> str:
 
 
 @mcp.tool()
-def get_recurrent_patterns() -> str:
-    """Obtiene patrones recurrentes proactivos de incidentes similares recientes."""
-    return _execute("get_recurrent_patterns", {})
-
-
-@mcp.tool()
-def request_human_review(incident_id: int, reason: str) -> str:
-    """Solicita revisión humana explícita de un incidente; no modifica su clasificación."""
-    return _execute(
-        "request_human_review",
-        {"incident_id": incident_id, "reason": reason},
-    )
+def get_recurrent_patterns(window_days: int = 30) -> str:
+    """Obtiene patrones recurrentes proactivos dentro de una ventana configurable."""
+    return _execute("get_recurrent_patterns", {"window_days": window_days})
 
 
 @mcp.tool()

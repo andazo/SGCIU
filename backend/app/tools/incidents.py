@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -23,14 +23,26 @@ class GetIncidentInput(ToolInput):
     incident_id: int = Field(ge=1)
 
 
-class SearchIncidentsInput(ToolInput):
+class DateRangeInput(ToolInput):
+    created_from: date | None = None
+    created_to: date | None = None
+
+    @model_validator(mode="after")
+    def validate_date_range(self):
+        if self.created_from and self.created_to and self.created_from > self.created_to:
+            raise ValueError("created_from no puede ser posterior a created_to.")
+        return self
+
+
+class SearchIncidentsInput(DateRangeInput):
     district: str | None = None
     category: str | None = None
     synthetic_only: bool | None = None
     limit: int = Field(default=20, ge=1, le=100)
+    offset: int = Field(default=0, ge=0, le=10_000)
 
 
-class AggregateIncidentsInput(ToolInput):
+class AggregateIncidentsInput(DateRangeInput):
     group_by: Literal["categoria_preliminar", "distrito"]
     district: str | None = None
     category: str | None = None
@@ -47,12 +59,7 @@ class GetClusterInput(ToolInput):
 
 
 class GetRecurrentPatternsInput(ToolInput):
-    pass
-
-
-class RequestReviewInput(ToolInput):
-    incident_id: int = Field(ge=1)
-    reason: str = Field(min_length=10, max_length=500)
+    window_days: int = Field(default=30, ge=1, le=365)
 
 
 def _safe_incident(incident: ComplaintSubmission) -> dict[str, object]:
@@ -87,11 +94,24 @@ def search_incidents(db: Session, arguments: SearchIncidentsInput) -> dict[str, 
         district=arguments.district,
         category=arguments.category,
         synthetic_only=arguments.synthetic_only,
+        created_from=arguments.created_from,
+        created_to=arguments.created_to,
         limit=arguments.limit,
+        offset=arguments.offset,
     )
     return {
         "total": total,
         "returned": len(incidents),
+        "offset": arguments.offset,
+        "limit": arguments.limit,
+        "has_more": arguments.offset + len(incidents) < total,
+        "filters": {
+            "district": canonical_district(arguments.district),
+            "category": canonical_category(arguments.category),
+            "synthetic_only": arguments.synthetic_only,
+            "created_from": arguments.created_from.isoformat() if arguments.created_from else None,
+            "created_to": arguments.created_to.isoformat() if arguments.created_to else None,
+        },
         "incidents": [_safe_incident(incident) for incident in incidents],
     }
 
@@ -120,6 +140,16 @@ def aggregate_incidents(db: Session, arguments: AggregateIncidentsInput) -> dict
             ComplaintSubmission.analysis_metadata["synthetic"].as_boolean()
             == arguments.synthetic_only
         )
+    if arguments.created_from:
+        query = query.where(
+            ComplaintSubmission.created_at
+            >= datetime.combine(arguments.created_from, time.min, tzinfo=UTC)
+        )
+    if arguments.created_to:
+        query = query.where(
+            ComplaintSubmission.created_at
+            < datetime.combine(arguments.created_to + timedelta(days=1), time.min, tzinfo=UTC)
+        )
     rows = db.execute(query.order_by(func.count().desc())).all()
     groups: dict[str, int] = {}
     for value, count in rows:
@@ -134,6 +164,8 @@ def aggregate_incidents(db: Session, arguments: AggregateIncidentsInput) -> dict
             "district": normalized_district,
             "category": normalized_category,
             "synthetic_only": arguments.synthetic_only,
+            "created_from": arguments.created_from.isoformat() if arguments.created_from else None,
+            "created_to": arguments.created_to.isoformat() if arguments.created_to else None,
         },
         "groups": [
             {"value": value, "count": count}
@@ -195,7 +227,7 @@ def get_recurrent_patterns(
     db: Session, arguments: GetRecurrentPatternsInput
 ) -> dict[str, object]:
     service = SemanticIncidentService(db)
-    window_days = service.settings.cluster_time_window_days
+    window_days = arguments.window_days
     threshold = datetime.now(UTC) - timedelta(days=window_days)
     patterns: list[dict[str, object]] = []
     for cluster in service.list_recurrent_patterns():
@@ -245,15 +277,6 @@ def get_recurrent_patterns(
     }
 
 
-def request_human_review(db: Session, arguments: RequestReviewInput) -> dict[str, object]:
-    try:
-        incident = IncidentService(db).get(arguments.incident_id)
-    except IncidentNotFoundError:
-        return {"created": False, "incident_id": arguments.incident_id}
-    review, created = IncidentService(db).request_human_review(incident, arguments.reason)
-    return {"created": created, "review_id": review.id, "incident_id": incident.id}
-
-
 def build_incident_tool_registry() -> ToolRegistry:
     return ToolRegistry(
         [
@@ -300,16 +323,6 @@ def build_incident_tool_registry() -> ToolRegistry:
                 ),
                 input_model=GetRecurrentPatternsInput,
                 handler=get_recurrent_patterns,
-            ),
-            ToolDefinition(
-                name="request_human_review",
-                description=(
-                    "Crea una revisión de calidad cuando un incidente sea ambiguo, "
-                    "incompleto o requiera validación; no representa despacho de emergencias."
-                ),
-                input_model=RequestReviewInput,
-                handler=request_human_review,
-                mutating=True,
             ),
             *legal_tool_definitions(),
         ]
