@@ -1,3 +1,4 @@
+from dataclasses import replace
 from types import SimpleNamespace
 
 from app.ai.embeddings import OpenAIEmbeddingProvider
@@ -27,7 +28,7 @@ class OpenAIClientDouble:
 def test_openai_embedding_provider_batches_inputs_and_restores_api_order():
     client = OpenAIClientDouble()
     provider = OpenAIEmbeddingProvider(
-        get_settings(),
+        replace(get_settings(), embedding_cost_per_million=0.02),
         model_name="test-model",
         dimensions=2,
         feature="test",

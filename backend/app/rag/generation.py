@@ -11,6 +11,7 @@ from pydantic import Field
 
 from app.config import Settings, get_settings
 from app.costs import estimate_llm_cost
+from app.monitoring import record_ai_call
 from app.rag.retrieval import RetrievedLegalSource
 from app.schemas import ModelUsage, StrictModel
 
@@ -146,17 +147,44 @@ class OpenAILegalAnswerProvider(LegalAnswerProvider):
                 store=False,
             )
         except (OpenAIError, ValueError) as exc:
+            record_ai_call(
+                feature="legal_rag_generation",
+                model=self.model_name,
+                status="error",
+                duration_seconds=time.perf_counter() - started,
+            )
             raise RuntimeError("No se pudo generar una respuesta normativa con OpenAI.") from exc
         parsed = response.output_parsed
         if parsed is None:
+            record_ai_call(
+                feature="legal_rag_generation",
+                model=self.model_name,
+                status="error",
+                duration_seconds=time.perf_counter() - started,
+            )
             raise RuntimeError("OpenAI no devolvió una respuesta normativa estructurada.")
         usage = getattr(response, "usage", None)
         input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
         output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
+        duration_seconds = time.perf_counter() - started
         model_usage = ModelUsage(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            estimated_cost_usd=estimate_llm_cost(input_tokens, output_tokens, self.settings),
+            estimated_cost_usd=estimate_llm_cost(
+                input_tokens,
+                output_tokens,
+                self.settings,
+                model_name=self.model_name,
+            ),
+        )
+        record_ai_call(
+            feature="legal_rag_generation",
+            model=self.model_name,
+            status="success",
+            duration_seconds=duration_seconds,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            estimated_cost_usd=model_usage.estimated_cost_usd,
         )
         logger.info(
             "Legal RAG generation completed",
@@ -165,7 +193,7 @@ class OpenAILegalAnswerProvider(LegalAnswerProvider):
                 "model": self.model_name,
                 "prompt_version": LEGAL_RAG_PROMPT_VERSION,
                 "sources": len(sources),
-                "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+                "latency_ms": round(duration_seconds * 1000, 2),
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
                 "estimated_cost_usd": model_usage.estimated_cost_usd,

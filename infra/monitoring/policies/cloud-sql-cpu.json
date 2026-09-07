@@ -1,0 +1,31 @@
+{
+  "displayName": "SGCIU - CPU Cloud SQL",
+  "combiner": "OR",
+  "enabled": true,
+  "documentation": {
+    "content": "Cloud SQL mantuvo más de 80% de CPU durante cinco minutos. Revise consultas, conexiones y si db-g1-small continúa siendo suficiente.",
+    "mimeType": "text/markdown"
+  },
+  "userLabels": {
+    "application": "sgciu",
+    "severity": "warning"
+  },
+  "conditions": [
+    {
+      "displayName": "CPU mayor a 80%",
+      "conditionThreshold": {
+        "filter": "resource.type = \"cloudsql_database\" AND resource.labels.database_id = \"tfm-sgciu:sgciu-postgres\" AND metric.type = \"cloudsql.googleapis.com/database/cpu/utilization\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_MEAN"
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0.8,
+        "duration": "300s",
+        "trigger": {"count": 1}
+      }
+    }
+  ]
+}

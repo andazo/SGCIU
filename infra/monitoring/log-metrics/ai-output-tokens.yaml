@@ -1,0 +1,25 @@
+description: Tokens de salida reportados por operaciones exitosas de IA de SGCIU.
+filter: >-
+  resource.type="cloud_run_revision"
+  resource.labels.service_name="sgciu-backend"
+  jsonPayload.feature:* jsonPayload.model:* jsonPayload.output_tokens>0
+metricDescriptor:
+  metricKind: DELTA
+  valueType: DISTRIBUTION
+  unit: "1"
+  labels:
+    - key: feature
+      valueType: STRING
+      description: Módulo funcional de IA.
+    - key: model
+      valueType: STRING
+      description: Modelo utilizado.
+labelExtractors:
+  feature: EXTRACT(jsonPayload.feature)
+  model: EXTRACT(jsonPayload.model)
+valueExtractor: EXTRACT(jsonPayload.output_tokens)
+bucketOptions:
+  exponentialBuckets:
+    numFiniteBuckets: 20
+    growthFactor: 2
+    scale: 10

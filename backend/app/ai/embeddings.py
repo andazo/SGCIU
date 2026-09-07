@@ -8,6 +8,7 @@ from openai import OpenAI, OpenAIError
 
 from app.config import Settings, get_settings
 from app.costs import estimate_embedding_cost
+from app.monitoring import record_ai_call
 
 logger = logging.getLogger(__name__)
 
@@ -58,17 +59,37 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
                 dimensions=self.dimensions,
             )
         except OpenAIError as exc:
+            record_ai_call(
+                feature=self.feature,
+                model=self.model_name,
+                status="error",
+                duration_seconds=time.perf_counter() - started,
+            )
             raise RuntimeError("No se pudieron generar embeddings con OpenAI.") from exc
         input_tokens = int(getattr(response.usage, "prompt_tokens", 0) or 0)
+        duration_seconds = time.perf_counter() - started
+        estimated_cost_usd = estimate_embedding_cost(
+            input_tokens,
+            self.settings,
+            model_name=self.model_name,
+        )
+        record_ai_call(
+            feature=self.feature,
+            model=self.model_name,
+            status="success",
+            duration_seconds=duration_seconds,
+            input_tokens=input_tokens,
+            estimated_cost_usd=estimated_cost_usd,
+        )
         logger.info(
             "Embedding model call completed",
             extra={
                 "feature": self.feature,
                 "model": self.model_name,
                 "embeddings": len(texts),
-                "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+                "latency_ms": round(duration_seconds * 1000, 2),
                 "input_tokens": input_tokens,
-                "estimated_cost_usd": estimate_embedding_cost(input_tokens, self.settings),
+                "estimated_cost_usd": estimated_cost_usd,
             },
         )
         return [item.embedding for item in sorted(response.data, key=lambda item: item.index)]

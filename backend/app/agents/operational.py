@@ -10,6 +10,7 @@ from openai import AsyncOpenAI
 from app.agents.gateway import GatewayTool, ToolGateway
 from app.config import Settings, get_settings
 from app.costs import estimate_llm_cost
+from app.monitoring import record_ai_call
 from app.schemas import ChatMessage, ModelUsage, OperationalQueryResponse, ToolExecutionTrace
 
 logger = logging.getLogger(__name__)
@@ -187,14 +188,33 @@ class OperationalAgent:
     ) -> OperationalQueryResponse:
         trace_id = str(uuid.uuid4())
         started = time.perf_counter()
-        response = await self._run_openai(query, trace_id, history=history)
+        try:
+            response = await self._run_openai(query, trace_id, history=history)
+        except Exception:
+            record_ai_call(
+                feature="operational_agent",
+                model=self.settings.openai_model,
+                status="error",
+                duration_seconds=time.perf_counter() - started,
+            )
+            raise
+        duration_seconds = time.perf_counter() - started
+        record_ai_call(
+            feature="operational_agent",
+            model=response.model_name,
+            status="success",
+            duration_seconds=duration_seconds,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            estimated_cost_usd=response.usage.estimated_cost_usd,
+        )
         logger.info(
             "Operational agent completed",
             extra={
                 "feature": "operational_agent",
                 "model": response.model_name,
                 "prompt_version": AGENT_PROMPT_VERSION,
-                "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+                "latency_ms": round(duration_seconds * 1000, 2),
                 "tool_steps": len(response.steps),
                 "input_tokens": response.usage.input_tokens,
                 "output_tokens": response.usage.output_tokens,
@@ -327,5 +347,10 @@ class OperationalAgent:
         return ModelUsage(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            estimated_cost_usd=estimate_llm_cost(input_tokens, output_tokens, self.settings),
+            estimated_cost_usd=estimate_llm_cost(
+                input_tokens,
+                output_tokens,
+                self.settings,
+                model_name=self.settings.openai_model,
+            ),
         )

@@ -33,19 +33,29 @@ por tokens opacos revocables cuyo hash es el único valor persistido.
 - CLI para ciudadanos y administradores.
 - Dataset sintético y métricas reproducibles para regresión del workflow.
 - Logs JSON con correlation IDs, latencia, tokens y auditoría de tools.
+- Métricas Prometheus por ruta y módulo de IA, estimación de costes por modelo y
+  observabilidad administrada en Google Cloud.
 
-## Ejecución local
+## Ejecución local reproducible
 
-Requisitos: Python 3.13+, Docker y Docker Compose para PostgreSQL.
+La ruta recomendada levanta PostgreSQL con `pgvector`, aplica las migraciones y construye
+el backend y el frontend en contenedores. Solo requiere Docker con Compose v2 y una API key
+de OpenAI; no necesita Python ni Node.js instalados en el equipo anfitrión.
 
 ```bash
-cp .env.example .env
-docker compose up -d db
-cd backend
-python3 -m venv .venv
-.venv/bin/pip install -r requirements-dev.txt
-.venv/bin/alembic -c alembic.ini upgrade head
+make bootstrap
+# Edite .env y defina OPENAI_API_KEY.
+make up
+make smoke
 ```
+
+La interfaz queda en `http://localhost:5173`, la API en `http://localhost:8000` y OpenAPI en
+`http://localhost:8000/docs`. `make status`, `make logs` y `make down` permiten operar el
+entorno. El volumen `sgciu_postgres_data` conserva los datos entre reinicios; `make down` no
+lo elimina.
+
+Para desarrollo directo fuera de contenedores se mantienen disponibles Python 3.13+ y
+Node.js 22. Consulte los comandos de cada componente más adelante en esta guía.
 
 Para crear los usuarios institucionales localmente, utilice el comando interactivo. Las
 contraseñas no se muestran ni se guardan en el repositorio:
@@ -289,10 +299,32 @@ Para medir Hit@k y MRR de la recuperación legal con 12 consultas sintéticas:
 PYTHONPATH=. .venv/bin/python -m app.evaluation.legal_rag_runner
 ```
 
+La suite E2E recorre por HTTP los módulos ciudadano y administrativo, incluyendo
+autenticación, persistencia, anonimización, intake interno, búsqueda semántica, clusters,
+revisiones, resaltados, agente operativo, feedback y RAG normativo:
+
+```bash
+make e2e
+```
+
+Los límites de la prueba, sus escenarios geográficos y la matriz de cobertura están en la
+[guía de pruebas](docs/testing.md). Los relatos son ficticios y los proveedores externos se
+reemplazan por dobles deterministas; la API, reglas de dominio y base de datos sí se ejecutan
+de extremo a extremo.
+
+La estimación mensual versionada se recalcula y valida con `make cost-report`. El escenario,
+sus supuestos y la diferencia entre estimación e importe facturado se explican en la
+[guía de costes](docs/costs.md). La API expone métricas sin PII en `/metrics`; los dashboards,
+uptime checks y alertas se describen en la [guía de monitorización](docs/monitoring.md).
+
 ## Documentación técnica
 
 - [Arquitectura](docs/architecture.md)
 - [Despliegue en Google Cloud](docs/gcp-deployment.md)
+- [Pruebas automatizadas](docs/testing.md)
+- [Monitorización](docs/monitoring.md)
+- [Estimación de costes](docs/costs.md)
+- [Flujo de ramas y despliegue](docs/development-workflow.md)
 - [Variables de entorno](.env.example)
 
 ## Estructura principal

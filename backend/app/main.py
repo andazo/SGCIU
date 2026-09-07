@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -22,6 +22,13 @@ from .config import get_settings
 from .crud import create_form_submission, list_complaint_submissions, list_form_submissions
 from .db import get_db
 from .logging_config import configure_logging, correlation_id_context
+from .monitoring import (
+    DATABASE_READY,
+    HTTP_IN_PROGRESS,
+    normalized_route,
+    prometheus_payload,
+    record_http_request,
+)
 from .schemas import (
     ComplaintIntakeChatRequest,
     ComplaintIntakeChatResponse,
@@ -37,7 +44,7 @@ configure_logging(settings.log_level)
 logger = logging.getLogger(__name__)
 DbSession = Annotated[Session, Depends(get_db)]
 
-app = FastAPI(title=settings.app_name, version="0.3.0")
+app = FastAPI(title=settings.app_name, version="0.4.0")
 app.include_router(intake_router, prefix="/v1")
 app.include_router(incidents_router, prefix="/v1")
 app.include_router(internal_intake_router, prefix="/v1")
@@ -60,8 +67,11 @@ async def request_observability(request: Request, call_next):
     correlation_id = request.headers.get("X-Correlation-ID") or str(uuid.uuid4())
     token = correlation_id_context.set(correlation_id)
     started = time.perf_counter()
+    status_code = 500
+    HTTP_IN_PROGRESS.inc()
     try:
         response = await call_next(request)
+        status_code = response.status_code
     except Exception:
         logger.exception(
             "Unhandled request error",
@@ -69,12 +79,23 @@ async def request_observability(request: Request, call_next):
         )
         response = JSONResponse(status_code=500, content={"detail": "Internal error"})
     finally:
-        elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+        duration_seconds = time.perf_counter() - started
+        elapsed_ms = round(duration_seconds * 1000, 2)
+        route = normalized_route(request.scope)
+        record_http_request(
+            method=request.method,
+            route=route,
+            status_code=status_code,
+            duration_seconds=duration_seconds,
+        )
+        HTTP_IN_PROGRESS.dec()
         logger.info(
             "Request completed",
             extra={
                 "method": request.method,
                 "path": request.url.path,
+                "route": route,
+                "status_code": status_code,
                 "latency_ms": elapsed_ms,
             },
         )
@@ -90,8 +111,20 @@ def health():
 
 @app.get("/ready")
 def readiness(db: DbSession):
-    db.execute(text("SELECT 1"))
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as exc:
+        DATABASE_READY.set(0)
+        logger.exception("Database readiness check failed")
+        raise HTTPException(status_code=503, detail="Database unavailable") from exc
+    DATABASE_READY.set(1)
     return {"status": "ready"}
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics():
+    payload, content_type = prometheus_payload()
+    return Response(content=payload, media_type=content_type)
 
 
 @app.post("/submissions", response_model=FormSubmissionResponse)

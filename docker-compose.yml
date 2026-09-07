@@ -1,6 +1,9 @@
+name: sgciu
+
 services:
   db:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:pg16@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
+    restart: unless-stopped
     environment:
       POSTGRES_DB: app_db
       POSTGRES_USER: app_user
@@ -16,12 +19,14 @@ services:
       retries: 10
 
   backend:
+    restart: unless-stopped
     build:
       context: backend
     env_file:
       - .env
     environment:
       DATABASE_URL: postgresql+psycopg://app_user:app_password@db:5432/app_db
+      CORS_ORIGINS: http://localhost:5173
     command:
       - sh
       - -c
@@ -31,6 +36,38 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://localhost:8000/ready', timeout=3)
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    stop_grace_period: 20s
+
+  frontend:
+    restart: unless-stopped
+    build:
+      context: frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "5173:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    stop_grace_period: 10s
 
 volumes:
   sgciu_postgres_data:

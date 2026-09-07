@@ -1,8 +1,12 @@
 from dataclasses import replace
+from datetime import date
 from types import SimpleNamespace
 
+import pytest
+
 from app.config import _normalize_database_url, get_settings
-from app.costs import estimate_embedding_cost, estimate_llm_cost
+from app.costs import estimate_embedding_cost, estimate_llm_cost, model_price
+from app.evaluation.cost_report import build_cost_report, load_cost_scenario
 from app.evaluation.legal_rag_runner import (
     LegalRetrievalCase,
     LegalRetrievalDataset,
@@ -96,6 +100,63 @@ def test_cost_estimates_use_configured_provider_rates():
 
     assert estimate_llm_cost(1_000_000, 500_000, settings) == 2.0
     assert estimate_embedding_cost(2_000_000, settings) == 1.0
+
+
+def test_cost_estimates_use_model_catalog_when_overrides_are_zero():
+    settings = replace(
+        get_settings(),
+        llm_input_cost_per_million=0.0,
+        llm_output_cost_per_million=0.0,
+        embedding_cost_per_million=0.0,
+    )
+
+    assert estimate_llm_cost(
+        1_000_000, 100_000, settings, model_name="gpt-5.6"
+    ) == 6.0
+    assert estimate_llm_cost(
+        1_000_000, 100_000, settings, model_name="gpt-5.4-mini"
+    ) == 1.2
+    assert estimate_embedding_cost(
+        1_000_000, settings, model_name="text-embedding-3-large"
+    ) == 0.13
+    assert model_price("gpt-5.4-mini-2026-08-01") == model_price("gpt-5.4-mini")
+
+
+def test_cost_estimates_price_cached_input_and_reject_invalid_usage():
+    settings = replace(
+        get_settings(),
+        llm_input_cost_per_million=0.0,
+        llm_output_cost_per_million=0.0,
+    )
+
+    assert estimate_llm_cost(
+        1_000_000,
+        100_000,
+        settings,
+        model_name="gpt-5.6-terra",
+        cached_input_tokens=500_000,
+    ) == 2.3
+    with pytest.raises(ValueError, match="negativos"):
+        estimate_embedding_cost(-1, settings)
+    with pytest.raises(ValueError, match="superar"):
+        estimate_llm_cost(1, 0, settings, cached_input_tokens=2)
+    with pytest.raises(ValueError, match="tarifa completa"):
+        estimate_llm_cost(100, 10, settings, model_name="unknown-model")
+
+
+def test_versioned_cost_scenario_remains_below_warning_budget():
+    report = build_cost_report(load_cost_scenario(), as_of=date(2026, 9, 6))
+
+    assert report["scenario_version"] == "1.0.0"
+    assert report["pricing_is_current"] is True
+    assert report["totals"] == {
+        "monthly_ai_usd": 15.9002,
+        "monthly_infrastructure_usd": 29.05,
+        "monthly_estimate_usd": 44.9502,
+        "one_time_ai_usd": 0.3315,
+        "monthly_warning_usd": 75.0,
+        "within_warning_budget": True,
+    }
 
 
 def test_legacy_postgres_url_uses_the_installed_psycopg_driver():

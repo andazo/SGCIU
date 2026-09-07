@@ -1,0 +1,32 @@
+{
+  "displayName": "SGCIU - disponibilidad de base de datos",
+  "combiner": "OR",
+  "enabled": true,
+  "documentation": {
+    "content": "SGCIU registró un fallo real al ejecutar SELECT 1 contra PostgreSQL. Revise el estado de Cloud SQL, conexiones y el secreto DATABASE_URL.",
+    "mimeType": "text/markdown"
+  },
+  "userLabels": {
+    "application": "sgciu",
+    "severity": "critical"
+  },
+  "conditions": [
+    {
+      "displayName": "Falló el readiness de PostgreSQL",
+      "conditionThreshold": {
+        "filter": "resource.type = \"cloud_run_revision\" AND metric.type = \"logging.googleapis.com/user/sgciu_readiness_failures\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_DELTA",
+            "crossSeriesReducer": "REDUCE_SUM"
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0,
+        "duration": "0s",
+        "trigger": {"count": 1}
+      }
+    }
+  ]
+}
