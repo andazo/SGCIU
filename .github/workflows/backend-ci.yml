@@ -87,6 +87,7 @@ jobs:
           sh -n infra/iam/setup-cloud-build.sh
           shellcheck infra/monitoring/setup.sh
           shellcheck infra/iam/setup-cloud-build.sh
+          cp .env.example .env
           docker compose config --quiet
 
   verify-images:
