@@ -45,7 +45,7 @@ def list_incidents(
     return IncidentListResponse(items=items, total=total, limit=limit, offset=offset)
 
 
-@router.get("/{incident_id}", response_model=ComplaintSubmissionResponse)
+@router.get("/{incident_id:int}", response_model=ComplaintSubmissionResponse)
 def get_incident(incident_id: int, db: DbSession, _actor: AdminRole):
     try:
         return IncidentService(db).get(incident_id)
@@ -53,7 +53,7 @@ def get_incident(incident_id: int, db: DbSession, _actor: AdminRole):
         raise HTTPException(status_code=404, detail="Incidente no encontrado.") from exc
 
 
-@router.get("/{incident_id}/related", response_model=RelatedIncidentList)
+@router.get("/{incident_id:int}/related", response_model=RelatedIncidentList)
 def get_related_incidents(
     incident_id: int,
     db: DbSession,
@@ -82,7 +82,7 @@ def get_related_incidents(
     )
 
 
-@router.post("/{incident_id}/semantic-index", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/{incident_id:int}/semantic-index", status_code=status.HTTP_204_NO_CONTENT)
 def reindex_incident(incident_id: int, db: DbSession, _actor: AdminRole):
     try:
         incident = IncidentService(db).get(incident_id)

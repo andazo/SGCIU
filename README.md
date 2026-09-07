@@ -297,10 +297,24 @@ Para medir Hit@k y MRR de la recuperación legal con 12 consultas sintéticas:
 PYTHONPATH=. .venv/bin/python -m app.evaluation.legal_rag_runner
 ```
 
+La suite E2E recorre por HTTP los módulos ciudadano y administrativo, incluyendo
+autenticación, persistencia, anonimización, intake interno, búsqueda semántica, clusters,
+revisiones, resaltados, agente operativo, feedback y RAG normativo:
+
+```bash
+make e2e
+```
+
+Los límites de la prueba, sus escenarios geográficos y la matriz de cobertura están en la
+[guía de pruebas](docs/testing.md). Los relatos son ficticios y los proveedores externos se
+reemplazan por dobles deterministas; la API, reglas de dominio y base de datos sí se ejecutan
+de extremo a extremo.
+
 ## Documentación técnica
 
 - [Arquitectura](docs/architecture.md)
 - [Despliegue en Google Cloud](docs/gcp-deployment.md)
+- [Pruebas automatizadas](docs/testing.md)
 - [Variables de entorno](.env.example)
 
 ## Estructura principal

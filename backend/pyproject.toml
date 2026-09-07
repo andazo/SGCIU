@@ -2,6 +2,9 @@
 pythonpath = ["."]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+    "e2e: complete HTTP-to-database journeys with deterministic external-service doubles",
+]
 
 [tool.ruff]
 line-length = 100

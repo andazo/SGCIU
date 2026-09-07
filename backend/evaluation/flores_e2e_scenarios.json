@@ -1,0 +1,67 @@
+{
+  "version": "1.0.0",
+  "description": "Escenarios enteramente ficticios para validar los recorridos E2E de SGCIU con geografía real del cantón de Flores.",
+  "privacy_notice": "Los hechos, personas, contactos y badges son sintéticos. Los nombres geográficos son referencias públicas y no representan denuncias reales.",
+  "geographic_source": {
+    "title": "División Territorial Administrativa de la República de Costa Rica 2017",
+    "publisher": "Instituto Nacional de Estadística y Censos (INEC)",
+    "url": "https://inec.cr/wwwisis/documentos/Imprenta_Nacional/Division_Territorial_Administrativa_2017.pdf",
+    "verified_at": "2026-09-06",
+    "facts_used": [
+      "El cantón de Flores contiene los distritos San Joaquín, Barrantes y Llorente.",
+      "Santa Marta figura como barrio de San Joaquín.",
+      "Ugalde figura como barrio de Barrantes.",
+      "Ángeles figura como barrio de Llorente."
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "citizen-complete-santa-marta",
+      "channel": "citizen_complete",
+      "match_text": "Santa Marta",
+      "report": "Ayer a las ocho de la noche observé un automóvil estacionado sobre la acera en barrio Santa Marta, distrito San Joaquín, cien metros al norte de la entrada del barrio. Varias personas tenían que caminar por la calle.",
+      "expected": {
+        "relacion_incidente": "testigo",
+        "categoria_preliminar": "obstruccion_via_publica",
+        "distrito": "San Joaquin",
+        "direccion_exacta": "Barrio Santa Marta, 100 metros al norte de la entrada del barrio",
+        "tipo_lugar": "otro",
+        "fecha_hora_aproximada": "ayer a las 8:00 p. m.",
+        "urgency": "media",
+        "landmarks": ["entrada de barrio Santa Marta"]
+      }
+    },
+    {
+      "id": "citizen-anonymous-angeles",
+      "channel": "citizen_anonymous",
+      "match_text": "barrio Ángeles",
+      "report": "Anoche escuché música a volumen muy alto en la vía pública de barrio Ángeles, distrito Llorente, frente a la parada de autobús. Soy una persona vecina y el ruido terminó cerca de medianoche.",
+      "expected": {
+        "relacion_incidente": "vecino",
+        "categoria_preliminar": "ruido",
+        "distrito": "Llorente",
+        "direccion_exacta": "Barrio Ángeles, frente a la parada de autobús",
+        "tipo_lugar": "otro",
+        "fecha_hora_aproximada": "anoche hasta cerca de medianoche",
+        "urgency": "baja",
+        "landmarks": ["parada de autobús de barrio Ángeles"]
+      }
+    },
+    {
+      "id": "staff-intake-ugalde",
+      "channel": "staff_internal",
+      "match_text": "barrio Ugalde",
+      "report": "Una persona informó hoy sobre tres bolsas de residuos abandonadas en la vía pública de barrio Ugalde, distrito Barrantes, cincuenta metros al oeste de la entrada del barrio. No hay personas heridas ni peligro inmediato.",
+      "expected": {
+        "relacion_incidente": "otro",
+        "categoria_preliminar": "basura_o_contaminacion",
+        "distrito": "Barrantes",
+        "direccion_exacta": "Barrio Ugalde, 50 metros al oeste de la entrada del barrio",
+        "tipo_lugar": "otro",
+        "fecha_hora_aproximada": "hoy",
+        "urgency": "baja",
+        "landmarks": ["entrada de barrio Ugalde"]
+      }
+    }
+  ]
+}
