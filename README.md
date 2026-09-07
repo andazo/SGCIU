@@ -34,18 +34,26 @@ por tokens opacos revocables cuyo hash es el único valor persistido.
 - Dataset sintético y métricas reproducibles para regresión del workflow.
 - Logs JSON con correlation IDs, latencia, tokens y auditoría de tools.
 
-## Ejecución local
+## Ejecución local reproducible
 
-Requisitos: Python 3.13+, Docker y Docker Compose para PostgreSQL.
+La ruta recomendada levanta PostgreSQL con `pgvector`, aplica las migraciones y construye
+el backend y el frontend en contenedores. Solo requiere Docker con Compose v2 y una API key
+de OpenAI; no necesita Python ni Node.js instalados en el equipo anfitrión.
 
 ```bash
-cp .env.example .env
-docker compose up -d db
-cd backend
-python3 -m venv .venv
-.venv/bin/pip install -r requirements-dev.txt
-.venv/bin/alembic -c alembic.ini upgrade head
+make bootstrap
+# Edite .env y defina OPENAI_API_KEY.
+make up
+make smoke
 ```
+
+La interfaz queda en `http://localhost:5173`, la API en `http://localhost:8000` y OpenAPI en
+`http://localhost:8000/docs`. `make status`, `make logs` y `make down` permiten operar el
+entorno. El volumen `sgciu_postgres_data` conserva los datos entre reinicios; `make down` no
+lo elimina.
+
+Para desarrollo directo fuera de contenedores se mantienen disponibles Python 3.13+ y
+Node.js 22. Consulte los comandos de cada componente más adelante en esta guía.
 
 Para crear los usuarios institucionales localmente, utilice el comando interactivo. Las
 contraseñas no se muestran ni se guardan en el repositorio:
