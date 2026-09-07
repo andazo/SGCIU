@@ -1,0 +1,13 @@
+title: SGCIU Cloud Build Coordinator
+description: >-
+  Starts production builds and reads their Cloud Build and Cloud Run operation
+  status. It cannot create, update, delete, or invoke Cloud Run workloads.
+stage: GA
+includedPermissions:
+  - cloudbuild.builds.create
+  - cloudbuild.builds.get
+  - cloudbuild.operations.get
+  - resourcemanager.projects.get
+  - run.locations.list
+  - run.operations.get
+  - run.operations.list

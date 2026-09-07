@@ -1,4 +1,9 @@
-# Despliegue propuesto en Google Cloud
+# Despliegue en Google Cloud
+
+La implantación de referencia está activa en el proyecto `tfm-sgciu`, región
+`us-central1`. El frontend, backend, base de datos, imágenes, jobs, secretos y llamadas a
+OpenAI se ejecutan desde servicios cloud; el equipo local solo se utiliza para desarrollar,
+probar y enviar cambios a Git.
 
 ## Servicios
 
@@ -22,9 +27,17 @@
    `sgciu-administrative-admin-password` con contraseñas de al menos 12 caracteres.
 6. Crear una cuenta de servicio de runtime con acceso mínimo a Cloud SQL y secretos. La
    configuración incluida usa `sgciu-runtime@PROJECT_ID.iam.gserviceaccount.com`.
-7. Conceder a la cuenta de Cloud Build permisos para desplegar Cloud Run, publicar en
-   Artifact Registry y usar la cuenta de servicio de runtime.
-8. Sustituir `_CLOUD_SQL_INSTANCE` y las demás variables de `infra/cloudbuild.yaml`.
+7. Ejecutar `infra/iam/setup-cloud-build.sh PROJECT_ID REGION`. Este instalador crea una
+   cuenta exclusiva y dos roles personalizados: a nivel de proyecto solo puede iniciar el
+   build y leer operaciones; la escritura se concede individualmente a `sgciu-backend`,
+   `sgciu-frontend` y los tres jobs existentes. También obtiene `Artifact Registry Writer`
+   solo sobre el repositorio, `Service Account User` solo sobre la cuenta de runtime y
+   `Logs Writer`. El agente de Cloud Build obtiene `Service Account Token Creator`
+   únicamente sobre la cuenta de build. No se utiliza la cuenta por defecto con rol
+   `Editor`.
+8. Conceder una sola vez `roles/run.invoker` a `allUsers` sobre los servicios frontend y
+   backend. La pipeline conserva esta política y no puede modificar IAM de Cloud Run.
+9. Sustituir `_CLOUD_SQL_INSTANCE` y las demás variables de `infra/cloudbuild.yaml`.
 
 La migración inicial ejecuta `CREATE EXTENSION IF NOT EXISTS vector`. La cuenta de base de
 datos utilizada por el job debe tener permiso para habilitarla. Después de la migración,
@@ -40,13 +53,21 @@ gcloud builds submit --config infra/cloudbuild.yaml \
 
 La pipeline realiza el orden siguiente:
 
-1. Construye y publica una imagen con el SHA del commit.
-2. Configura un Cloud Run Job para Alembic.
-3. Ejecuta y espera la migración.
-4. Provisiona los usuarios de Policía y Administrativo desde Secret Manager.
-5. Indexa de forma idempotente el corpus legal mediante `sgciu-index-legal-corpus`.
-6. Despliega el backend y el frontend como revisiones identificadas por commit.
-7. Ajusta `CORS_ORIGINS` del backend con el origen final de Cloud Run del frontend.
+1. Audita dependencias Python y npm, ejecuta Ruff, migraciones desde cero, 78 pruebas
+   (incluida la E2E), cobertura, build web, proyección de costes y sintaxis de infraestructura.
+2. Construye y publica una imagen inmutable con el SHA del commit.
+3. Configura un Cloud Run Job para Alembic y espera la migración.
+4. Despliega backend con recursos, escalado y probes explícitos.
+5. Provisiona los usuarios de Policía y Administrativo desde Secret Manager.
+6. Indexa de forma idempotente el corpus legal mediante `sgciu-index-legal-corpus`.
+7. Construye el frontend con la URL real del backend y lo despliega.
+8. Ajusta `CORS_ORIGINS` con el origen final del frontend.
+9. Ejecuta smoke tests de `/health`, `/ready`, `/metrics` y la página pública. Cualquier
+   fallo marca el build como fallido.
+
+El trigger regional `sgciu-production-main` escucha exclusivamente pushes a `main` desde el
+repositorio conectado `andazo/SGCIU`. `Develop` ejecuta CI, pero nunca despliega producción.
+Consulte el [flujo de ramas](development-workflow.md).
 
 El backend se expone a nivel de red para que el formulario ciudadano pueda llegar a los
 endpoints públicos, pero las rutas institucionales exigen `Authorization: Bearer <token>`.
@@ -78,3 +99,7 @@ como capa adicional.
   exposición.
 - Aplicar backups y retención reducida en los entornos de demostración.
 - Destruir los recursos de prueba cuando finalice la evaluación para evitar costes residuales.
+
+Las métricas, uptime checks, dashboard y siete alertas se versionan en `infra/monitoring/` y
+se aplican de forma idempotente con `make monitoring-setup`. Consulte la
+[guía de monitorización](monitoring.md) y la [estimación de costes](costs.md).

@@ -1,0 +1,19 @@
+title: SGCIU Cloud Run Resource Deployer
+description: >-
+  Updates and inspects only the existing Cloud Run service or job on which this
+  role is granted. Job bindings may also execute and inspect that exact job.
+stage: GA
+includedPermissions:
+  - run.configurations.get
+  - run.configurations.list
+  - run.executions.get
+  - run.executions.list
+  - run.jobs.get
+  - run.jobs.run
+  - run.jobs.update
+  - run.revisions.get
+  - run.revisions.list
+  - run.routes.get
+  - run.routes.list
+  - run.services.get
+  - run.services.update

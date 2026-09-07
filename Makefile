@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: bootstrap up down logs status smoke verify test e2e build cost-report monitoring-setup
+.PHONY: bootstrap up down logs status smoke verify test e2e build cost-report monitoring-setup cloud-build-setup
 
 bootstrap:
 	@if [ ! -f .env ]; then cp .env.example .env; fi
@@ -46,3 +46,6 @@ cost-report:
 
 monitoring-setup:
 	./infra/monitoring/setup.sh tfm-sgciu us-central1
+
+cloud-build-setup:
+	./infra/iam/setup-cloud-build.sh tfm-sgciu us-central1

@@ -12,27 +12,83 @@ substitutions:
   _IMAGE_TAG: manual
   _CLOUD_SQL_INSTANCE: project:region:instance
 
+serviceAccount: projects/tfm-sgciu/serviceAccounts/sgciu-cloud-build@tfm-sgciu.iam.gserviceaccount.com
+
 options:
   logging: CLOUD_LOGGING_ONLY
+  dynamicSubstitutions: true
+  requestedVerifyOption: VERIFIED
+
+timeout: 3600s
+tags:
+  - sgciu
+  - production
 
 steps:
-  - id: build
-    name: gcr.io/cloud-builders/docker
+  - id: validate-backend
+    name: python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285
+    entrypoint: bash
+    dir: backend
+    waitFor: ['-']
+    env:
+      - DATABASE_URL=sqlite+pysqlite:////workspace/sgciu-ci.db
+      - OPENAI_API_KEY=test-key-not-used
+      - REQUIRE_ADMIN_AUTH=false
+    args:
+      - -ceu
+      - |-
+        python -m pip install --no-cache-dir -r requirements-dev.txt
+        pip-audit -r requirements.txt --progress-spinner=off
+        ruff check app tests migrations
+        alembic -c alembic.ini upgrade head
+        pytest --cov=app --cov-report=term-missing --cov-fail-under=70
+        PYTHONPATH=. python -m app.evaluation.cost_report --check
+
+  - id: validate-frontend
+    name: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    entrypoint: sh
+    dir: frontend
+    waitFor: ['-']
+    args:
+      - -ceu
+      - |-
+        npm ci
+        npm audit --audit-level=high
+        npm run build
+
+  - id: validate-infrastructure
+    name: python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285
+    entrypoint: sh
+    waitFor: ['-']
+    args:
+      - -ceu
+      - |-
+        python -m json.tool infra/monitoring/dashboard.json >/dev/null
+        for policy in infra/monitoring/policies/*.json; do
+          python -m json.tool "$${policy}" >/dev/null
+        done
+        sh -n infra/monitoring/setup.sh
+
+  - id: build-backend
+    name: gcr.io/cloud-builders/docker@sha256:3d00b6c1a9b862621c30fc74d4f2abfc62bcbdee631ed3febd31e7edbdf6252c
+    waitFor: [validate-backend, validate-infrastructure]
     args:
       - build
       - --tag
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:${_IMAGE_TAG}
       - backend
 
-  - id: push
-    name: gcr.io/cloud-builders/docker
+  - id: push-backend
+    name: gcr.io/cloud-builders/docker@sha256:3d00b6c1a9b862621c30fc74d4f2abfc62bcbdee631ed3febd31e7edbdf6252c
+    waitFor: [build-backend]
     args:
       - push
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:${_IMAGE_TAG}
 
   - id: configure-migration-job
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:df30191e2435b838d0d6e07c228ced843829703c9f966c0163175bad88b291be
     entrypoint: gcloud
+    waitFor: [push-backend]
     args:
       - run
       - jobs
@@ -45,11 +101,17 @@ steps:
       - --set-cloudsql-instances=${_CLOUD_SQL_INSTANCE}
       - --set-secrets=DATABASE_URL=sgciu-database-url:latest
       - --service-account=${_RUNTIME_SERVICE_ACCOUNT}
+      - --cpu=1
+      - --memory=512Mi
+      - --max-retries=1
+      - --task-timeout=600s
+      - --labels=application=sgciu,component=migrations,environment=production
       - --quiet
 
   - id: migrate
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:df30191e2435b838d0d6e07c228ced843829703c9f966c0163175bad88b291be
     entrypoint: gcloud
+    waitFor: [configure-migration-job]
     args:
       - run
       - jobs
@@ -58,9 +120,10 @@ steps:
       - --region=${_REGION}
       - --wait
 
-  - id: deploy
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+  - id: deploy-backend
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:df30191e2435b838d0d6e07c228ced843829703c9f966c0163175bad88b291be
     entrypoint: gcloud
+    waitFor: [migrate]
     args:
       - run
       - deploy
@@ -68,16 +131,28 @@ steps:
       - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:${_IMAGE_TAG}
       - --region=${_REGION}
       - --platform=managed
+      - --port=8000
+      - --cpu=1
+      - --memory=512Mi
+      - --concurrency=80
+      - --min-instances=0
+      - --max-instances=20
+      - --timeout=300
+      - --cpu-boost
+      - --startup-probe=httpGet.path=/health,timeoutSeconds=2,periodSeconds=5,failureThreshold=12
+      - --readiness-probe=httpGet.path=/ready,timeoutSeconds=2,periodSeconds=10,failureThreshold=3
+      - --liveness-probe=httpGet.path=/health,initialDelaySeconds=10,timeoutSeconds=2,periodSeconds=30,failureThreshold=3
       - --set-cloudsql-instances=${_CLOUD_SQL_INSTANCE}
-      - --set-env-vars=APP_ENV=production,REQUIRE_ADMIN_AUTH=true
+      - --set-env-vars=APP_ENV=production,REQUIRE_ADMIN_AUTH=true,LOG_LEVEL=INFO,OPENAI_MODEL=gpt-5.4-mini,OPENAI_INTAKE_MODEL=gpt-5.6,OPENAI_EMBEDDING_MODEL=text-embedding-3-small,LEGAL_RAG_MODEL=gpt-5.4-mini,LEGAL_RAG_EMBEDDING_MODEL=text-embedding-3-large
       - --set-secrets=DATABASE_URL=sgciu-database-url:latest,OPENAI_API_KEY=sgciu-openai-key:latest
       - --service-account=${_RUNTIME_SERVICE_ACCOUNT}
-      - --allow-unauthenticated
+      - --labels=application=sgciu,component=backend,environment=production,image-tag=${_IMAGE_TAG}
       - --quiet
 
   - id: configure-auth-provisioning-job
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:df30191e2435b838d0d6e07c228ced843829703c9f966c0163175bad88b291be
     entrypoint: gcloud
+    waitFor: [migrate]
     args:
       - run
       - jobs
@@ -90,11 +165,17 @@ steps:
       - --set-cloudsql-instances=${_CLOUD_SQL_INSTANCE}
       - --set-secrets=DATABASE_URL=sgciu-database-url:latest,AUTH_BOOTSTRAP_POLICE_PASSWORD=sgciu-police-admin-password:latest,AUTH_BOOTSTRAP_ADMINISTRATIVE_PASSWORD=sgciu-administrative-admin-password:latest
       - --service-account=${_RUNTIME_SERVICE_ACCOUNT}
+      - --cpu=1
+      - --memory=512Mi
+      - --max-retries=1
+      - --task-timeout=600s
+      - --labels=application=sgciu,component=auth-provisioning,environment=production
       - --quiet
 
   - id: provision-auth-users
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:df30191e2435b838d0d6e07c228ced843829703c9f966c0163175bad88b291be
     entrypoint: gcloud
+    waitFor: [configure-auth-provisioning-job]
     args:
       - run
       - jobs
@@ -104,8 +185,9 @@ steps:
       - --wait
 
   - id: configure-legal-index-job
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:df30191e2435b838d0d6e07c228ced843829703c9f966c0163175bad88b291be
     entrypoint: gcloud
+    waitFor: [migrate]
     args:
       - run
       - jobs
@@ -116,15 +198,20 @@ steps:
       - --command=python
       - --args=-m,app.index_legal_corpus
       - --set-cloudsql-instances=${_CLOUD_SQL_INSTANCE}
+      - --set-env-vars=OPENAI_EMBEDDING_MODEL=text-embedding-3-small,LEGAL_RAG_EMBEDDING_MODEL=text-embedding-3-large
       - --set-secrets=DATABASE_URL=sgciu-database-url:latest,OPENAI_API_KEY=sgciu-openai-key:latest
       - --service-account=${_RUNTIME_SERVICE_ACCOUNT}
+      - --cpu=1
+      - --memory=1Gi
       - --max-retries=1
       - --task-timeout=1800s
+      - --labels=application=sgciu,component=legal-index,environment=production
       - --quiet
 
   - id: index-legal-corpus
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:df30191e2435b838d0d6e07c228ced843829703c9f966c0163175bad88b291be
     entrypoint: gcloud
+    waitFor: [configure-legal-index-job]
     args:
       - run
       - jobs
@@ -134,28 +221,32 @@ steps:
       - --wait
 
   - id: read-backend-url
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:df30191e2435b838d0d6e07c228ced843829703c9f966c0163175bad88b291be
     entrypoint: sh
+    waitFor: [deploy-backend]
     args:
-      - -c
+      - -ceu
       - gcloud run services describe ${_SERVICE} --region=${_REGION} --format='value(status.url)' > /workspace/backend-url
 
   - id: build-frontend
-    name: gcr.io/cloud-builders/docker
+    name: gcr.io/cloud-builders/docker@sha256:3d00b6c1a9b862621c30fc74d4f2abfc62bcbdee631ed3febd31e7edbdf6252c
     entrypoint: sh
+    waitFor: [read-backend-url, validate-frontend]
     args:
-      - -c
+      - -ceu
       - docker build --build-arg VITE_API_BASE_URL="$$(cat /workspace/backend-url)" --tag ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_FRONTEND_IMAGE}:${_IMAGE_TAG} frontend
 
   - id: push-frontend
-    name: gcr.io/cloud-builders/docker
+    name: gcr.io/cloud-builders/docker@sha256:3d00b6c1a9b862621c30fc74d4f2abfc62bcbdee631ed3febd31e7edbdf6252c
+    waitFor: [build-frontend]
     args:
       - push
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_FRONTEND_IMAGE}:${_IMAGE_TAG}
 
   - id: deploy-frontend
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:df30191e2435b838d0d6e07c228ced843829703c9f966c0163175bad88b291be
     entrypoint: gcloud
+    waitFor: [push-frontend]
     args:
       - run
       - deploy
@@ -164,26 +255,51 @@ steps:
       - --region=${_REGION}
       - --platform=managed
       - --port=8080
-      - --allow-unauthenticated
+      - --cpu=1
+      - --memory=512Mi
+      - --concurrency=80
+      - --min-instances=0
+      - --max-instances=20
+      - --timeout=60
+      - --cpu-boost
+      - --startup-probe=httpGet.path=/,timeoutSeconds=2,periodSeconds=5,failureThreshold=12
+      - --liveness-probe=httpGet.path=/,initialDelaySeconds=10,timeoutSeconds=2,periodSeconds=30,failureThreshold=3
+      - --labels=application=sgciu,component=frontend,environment=production,image-tag=${_IMAGE_TAG}
       - --quiet
 
   - id: read-frontend-url
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:df30191e2435b838d0d6e07c228ced843829703c9f966c0163175bad88b291be
     entrypoint: sh
+    waitFor: [deploy-frontend]
     args:
-      - -c
+      - -ceu
       - gcloud run services describe ${_FRONTEND_SERVICE} --region=${_REGION} --format='value(status.url)' > /workspace/frontend-url
 
   - id: configure-backend-cors
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:df30191e2435b838d0d6e07c228ced843829703c9f966c0163175bad88b291be
     entrypoint: sh
+    waitFor: [read-frontend-url]
     args:
-      - -c
+      - -ceu
       - |-
         FRONTEND_URL="$$(cat /workspace/frontend-url)"
         LEGACY_FRONTEND_URL="https://${_FRONTEND_SERVICE}-$PROJECT_NUMBER.${_REGION}.run.app"
         CORS_ORIGINS="$${FRONTEND_URL},$${LEGACY_FRONTEND_URL}"
         gcloud run services update ${_SERVICE} --region=${_REGION} --update-env-vars="^@^CORS_ORIGINS=$${CORS_ORIGINS}" --quiet
+
+  - id: smoke-production
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:df30191e2435b838d0d6e07c228ced843829703c9f966c0163175bad88b291be
+    entrypoint: bash
+    waitFor: [configure-backend-cors, provision-auth-users, index-legal-corpus]
+    args:
+      - -ceu
+      - |-
+        BACKEND_URL="$$(cat /workspace/backend-url)"
+        FRONTEND_URL="$$(cat /workspace/frontend-url)"
+        curl --fail --silent --show-error --retry 8 --retry-all-errors --retry-delay 5 "$${BACKEND_URL}/health"
+        curl --fail --silent --show-error --retry 8 --retry-all-errors --retry-delay 5 "$${BACKEND_URL}/ready"
+        curl --fail --silent --show-error --retry 8 --retry-all-errors --retry-delay 5 "$${BACKEND_URL}/metrics" | grep -q sgciu_http_requests_total
+        curl --fail --silent --show-error --retry 8 --retry-all-errors --retry-delay 5 "$${FRONTEND_URL}/" >/dev/null
 
 images:
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:${_IMAGE_TAG}

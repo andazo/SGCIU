@@ -33,6 +33,8 @@ por tokens opacos revocables cuyo hash es el único valor persistido.
 - CLI para ciudadanos y administradores.
 - Dataset sintético y métricas reproducibles para regresión del workflow.
 - Logs JSON con correlation IDs, latencia, tokens y auditoría de tools.
+- Métricas Prometheus por ruta y módulo de IA, estimación de costes por modelo y
+  observabilidad administrada en Google Cloud.
 
 ## Ejecución local reproducible
 
@@ -310,11 +312,19 @@ Los límites de la prueba, sus escenarios geográficos y la matriz de cobertura 
 reemplazan por dobles deterministas; la API, reglas de dominio y base de datos sí se ejecutan
 de extremo a extremo.
 
+La estimación mensual versionada se recalcula y valida con `make cost-report`. El escenario,
+sus supuestos y la diferencia entre estimación e importe facturado se explican en la
+[guía de costes](docs/costs.md). La API expone métricas sin PII en `/metrics`; los dashboards,
+uptime checks y alertas se describen en la [guía de monitorización](docs/monitoring.md).
+
 ## Documentación técnica
 
 - [Arquitectura](docs/architecture.md)
 - [Despliegue en Google Cloud](docs/gcp-deployment.md)
 - [Pruebas automatizadas](docs/testing.md)
+- [Monitorización](docs/monitoring.md)
+- [Estimación de costes](docs/costs.md)
+- [Flujo de ramas y despliegue](docs/development-workflow.md)
 - [Variables de entorno](.env.example)
 
 ## Estructura principal
