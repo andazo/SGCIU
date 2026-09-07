@@ -63,9 +63,15 @@ La pipeline realiza el orden siguiente:
 5. Provisiona los usuarios de Policía y Administrativo desde Secret Manager.
 6. Indexa de forma idempotente el corpus legal mediante `sgciu-index-legal-corpus`.
 7. Construye el frontend con la URL real del backend y lo despliega.
-8. Ajusta `CORS_ORIGINS` con el origen final del frontend.
-9. Ejecuta smoke tests de `/health`, `/ready`, `/metrics` y la página pública. Cualquier
+8. Ejecuta smoke tests de `/health`, `/ready`, `/metrics` y la página pública. Cualquier
    fallo marca el build como fallido.
+
+`_FRONTEND_ORIGIN` en `infra/cloudbuild.yaml` debe coincidir con la URL estable de Cloud Run
+del servicio frontend. Se inyecta durante el despliegue inicial del backend para configurar
+`CORS_ORIGINS`. Así no se requiere una actualización posterior ni permisos globales para listar
+revisiones de Cloud Run. Para una instalación nueva, despliegue una vez el frontend, consulte
+su URL con `gcloud run services describe sgciu-frontend --region=REGION --format='value(status.url)'`,
+actualice esa sustitución y ejecute el despliegue definitivo.
 
 El trigger regional `sgciu-production-main` escucha exclusivamente pushes a `main` desde el
 repositorio conectado `andazo/SGCIU`. `Develop` ejecuta CI, pero nunca despliega producción.
