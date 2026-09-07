@@ -12,6 +12,7 @@ from app.ai.guardrails import evaluate_analysis, evaluate_user_message
 from app.ai.temporal import current_local_datetime, normalize_temporal_data
 from app.config import Settings, get_settings
 from app.costs import estimate_llm_cost
+from app.monitoring import record_ai_call
 from app.schemas import (
     ChatMessage,
     ComplaintExtractedData,
@@ -428,12 +429,24 @@ class OpenAIIntakeProvider(IntakeProvider):
                 store=False,
             )
         except (OpenAIError, ValueError) as exc:
+            record_ai_call(
+                feature="citizen_intake",
+                model=self.model_name,
+                status="error",
+                duration_seconds=time.perf_counter() - started,
+            )
             raise RuntimeError(
                 "No se pudo obtener una extracción estructurada de OpenAI."
             ) from exc
         elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
         model_output = response.output_parsed
         if model_output is None:
+            record_ai_call(
+                feature="citizen_intake",
+                model=self.model_name,
+                status="error",
+                duration_seconds=time.perf_counter() - started,
+            )
             raise RuntimeError("OpenAI no devolvió una extracción estructurada válida.")
 
         data = merge_extracted_data(current_data, model_output.extracted_data)
@@ -491,6 +504,21 @@ class OpenAIIntakeProvider(IntakeProvider):
         usage = getattr(response, "usage", None)
         input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
         output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
+        estimated_cost_usd = estimate_llm_cost(
+            input_tokens,
+            output_tokens,
+            self.settings,
+            model_name=self.model_name,
+        )
+        record_ai_call(
+            feature="citizen_intake",
+            model=self.model_name,
+            status="success",
+            duration_seconds=elapsed_ms / 1000,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            estimated_cost_usd=estimated_cost_usd,
+        )
         logger.info(
             "Intake model call completed",
             extra={
@@ -501,7 +529,7 @@ class OpenAIIntakeProvider(IntakeProvider):
                 "latency_ms": elapsed_ms,
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
-                "estimated_cost_usd": estimate_llm_cost(input_tokens, output_tokens, self.settings),
+                "estimated_cost_usd": estimated_cost_usd,
             },
         )
         return ComplaintIntakeChatResponse(

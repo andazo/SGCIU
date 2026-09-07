@@ -1,0 +1,33 @@
+{
+  "displayName": "SGCIU - latencia p95 backend",
+  "combiner": "OR",
+  "enabled": true,
+  "documentation": {
+    "content": "La latencia p95 del backend superó 30 segundos durante cinco minutos. Revise llamadas OpenAI, saturación, tiempos de Cloud SQL y trazas por correlation_id.",
+    "mimeType": "text/markdown"
+  },
+  "userLabels": {
+    "application": "sgciu",
+    "severity": "warning"
+  },
+  "conditions": [
+    {
+      "displayName": "p95 mayor a 30 segundos",
+      "conditionThreshold": {
+        "filter": "resource.type = \"cloud_run_revision\" AND resource.labels.service_name = \"sgciu-backend\" AND metric.type = \"run.googleapis.com/request_latencies\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_PERCENTILE_95",
+            "crossSeriesReducer": "REDUCE_MAX",
+            "groupByFields": ["resource.labels.service_name"]
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 30000,
+        "duration": "300s",
+        "trigger": {"count": 1}
+      }
+    }
+  ]
+}

@@ -1,0 +1,227 @@
+{
+  "displayName": "SGCIU - Operación y costes",
+  "mosaicLayout": {
+    "columns": 12,
+    "tiles": [
+      {
+        "xPos": 0,
+        "yPos": 0,
+        "width": 12,
+        "height": 2,
+        "widget": {
+          "title": "Objetivos operativos",
+          "text": {
+            "format": "MARKDOWN",
+            "content": "**SGCIU producción** · disponibilidad objetivo ≥ 99% · errores 5xx < 1% · latencia p95 < 30 s · Cloud SQL CPU < 80% · advertencia mensual de coste: USD 75. Los datos de negocio y PII no se usan como etiquetas."
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 2,
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "Solicitudes Cloud Run por servicio y código",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "resource.type = \"cloud_run_revision\" AND metric.type = \"run.googleapis.com/request_count\"",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_RATE",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "resource.labels.service_name",
+                        "metric.labels.response_code_class"
+                      ]
+                    }
+                  }
+                }
+              }
+            ],
+            "yAxis": {"label": "requests/s", "scale": "LINEAR"}
+          }
+        }
+      },
+      {
+        "xPos": 6,
+        "yPos": 2,
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "Latencia p95 del backend",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "resource.type = \"cloud_run_revision\" AND resource.labels.service_name = \"sgciu-backend\" AND metric.type = \"run.googleapis.com/request_latencies\"",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_PERCENTILE_95",
+                      "crossSeriesReducer": "REDUCE_MAX"
+                    }
+                  }
+                }
+              }
+            ],
+            "thresholds": [
+              {"value": 30000}
+            ],
+            "yAxis": {"label": "ms", "scale": "LINEAR"}
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 6,
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "Coste p95 por operación de IA",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "resource.type = \"cloud_run_revision\" AND metric.type = \"logging.googleapis.com/user/sgciu_ai_estimated_cost_usd\"",
+                    "aggregation": {
+                      "alignmentPeriod": "3600s",
+                      "perSeriesAligner": "ALIGN_PERCENTILE_95",
+                      "crossSeriesReducer": "REDUCE_MAX",
+                      "groupByFields": ["metric.labels.feature", "metric.labels.model"]
+                    }
+                  }
+                }
+              }
+            ],
+            "yAxis": {"label": "USD/operación", "scale": "LINEAR"}
+          }
+        }
+      },
+      {
+        "xPos": 6,
+        "yPos": 6,
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "Tokens p95 por operación y funcionalidad",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "resource.type = \"cloud_run_revision\" AND metric.type = \"logging.googleapis.com/user/sgciu_ai_input_tokens\"",
+                    "aggregation": {
+                      "alignmentPeriod": "3600s",
+                      "perSeriesAligner": "ALIGN_PERCENTILE_95",
+                      "crossSeriesReducer": "REDUCE_MAX",
+                      "groupByFields": ["metric.labels.feature"]
+                    }
+                  }
+                }
+              },
+              {
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "resource.type = \"cloud_run_revision\" AND metric.type = \"logging.googleapis.com/user/sgciu_ai_output_tokens\"",
+                    "aggregation": {
+                      "alignmentPeriod": "3600s",
+                      "perSeriesAligner": "ALIGN_PERCENTILE_95",
+                      "crossSeriesReducer": "REDUCE_MAX",
+                      "groupByFields": ["metric.labels.feature"]
+                    }
+                  }
+                }
+              }
+            ],
+            "yAxis": {"label": "tokens/operación", "scale": "LINEAR"}
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 10,
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "CPU Cloud SQL",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "resource.type = \"cloudsql_database\" AND resource.labels.database_id = \"tfm-sgciu:sgciu-postgres\" AND metric.type = \"cloudsql.googleapis.com/database/cpu/utilization\"",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_MEAN"
+                    }
+                  }
+                }
+              }
+            ],
+            "thresholds": [
+              {"value": 0.8}
+            ],
+            "yAxis": {"label": "ratio", "scale": "LINEAR"}
+          }
+        }
+      },
+      {
+        "xPos": 6,
+        "yPos": 10,
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "Almacenamiento usado en Cloud SQL",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "resource.type = \"cloudsql_database\" AND resource.labels.database_id = \"tfm-sgciu:sgciu-postgres\" AND metric.type = \"cloudsql.googleapis.com/database/disk/bytes_used\"",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_MAX"
+                    }
+                  }
+                }
+              }
+            ],
+            "yAxis": {"label": "bytes", "scale": "LINEAR"}
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 14,
+        "width": 12,
+        "height": 4,
+        "widget": {
+          "title": "Logs recientes de advertencia y error",
+          "logsPanel": {
+            "filter": "resource.type=\"cloud_run_revision\" resource.labels.service_name=\"sgciu-backend\" severity>=WARNING",
+            "resourceNames": ["projects/tfm-sgciu"]
+          }
+        }
+      }
+    ]
+  }
+}

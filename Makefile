@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: bootstrap up down logs status smoke verify test e2e build
+.PHONY: bootstrap up down logs status smoke verify test e2e build cost-report monitoring-setup
 
 bootstrap:
 	@if [ ! -f .env ]; then cp .env.example .env; fi
@@ -40,3 +40,9 @@ e2e:
 
 build:
 	docker compose build
+
+cost-report:
+	cd backend && PYTHONPATH=. .venv/bin/python -m app.evaluation.cost_report --check
+
+monitoring-setup:
+	./infra/monitoring/setup.sh tfm-sgciu us-central1

@@ -12,6 +12,7 @@ from pydantic import Field, model_validator
 
 from app.config import Settings, get_settings
 from app.costs import estimate_llm_cost
+from app.monitoring import record_ai_call
 from app.schemas import ComplaintExtractedData, ReviewActionCode, ReviewType, StrictModel
 
 logger = logging.getLogger(__name__)
@@ -160,23 +161,51 @@ class OpenAIIncidentAssessmentProvider(IncidentAssessmentProvider):
                 store=False,
             )
         except (OpenAIError, ValueError) as exc:
+            record_ai_call(
+                feature="incident_assessment",
+                model=self.model_name,
+                status="error",
+                duration_seconds=time.perf_counter() - started,
+            )
             raise RuntimeError("No se pudo generar el análisis administrativo con OpenAI.") from exc
         assessment = response.output_parsed
         if assessment is None:
+            record_ai_call(
+                feature="incident_assessment",
+                model=self.model_name,
+                status="error",
+                duration_seconds=time.perf_counter() - started,
+            )
             raise RuntimeError("OpenAI no devolvió un análisis administrativo válido.")
         usage = getattr(response, "usage", None)
         input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
         output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
+        duration_seconds = time.perf_counter() - started
+        estimated_cost_usd = estimate_llm_cost(
+            input_tokens,
+            output_tokens,
+            self.settings,
+            model_name=self.model_name,
+        )
+        record_ai_call(
+            feature="incident_assessment",
+            model=self.model_name,
+            status="success",
+            duration_seconds=duration_seconds,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            estimated_cost_usd=estimated_cost_usd,
+        )
         logger.info(
             "Incident administrative assessment completed",
             extra={
                 "feature": "incident_assessment",
                 "model": self.model_name,
                 "prompt_version": ASSESSMENT_PROMPT_VERSION,
-                "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+                "latency_ms": round(duration_seconds * 1000, 2),
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
-                "estimated_cost_usd": estimate_llm_cost(input_tokens, output_tokens, self.settings),
+                "estimated_cost_usd": estimated_cost_usd,
             },
         )
         return assessment

@@ -1,0 +1,143 @@
+{
+  "version": "1.0.0",
+  "reviewed_at": "2026-09-06",
+  "pricing_valid_until": "2026-11-21",
+  "currency": "USD",
+  "description": "Escenario mensual de referencia para SGCIU basado en la infraestructura desplegada en tfm-sgciu y una carga inicial conservadora.",
+  "monthly_ai_workloads": [
+    {
+      "key": "citizen_intake",
+      "description": "500 denuncias ciudadanas, dos turnos de modelo por denuncia.",
+      "kind": "llm",
+      "model": "gpt-5.6",
+      "calls": 1000,
+      "input_tokens_per_call": 1500,
+      "output_tokens_per_call": 350,
+      "cached_input_tokens_per_call": 0
+    },
+    {
+      "key": "administrative_assessment",
+      "description": "Evaluación administrativa de 100 incidentes que requieren análisis adicional.",
+      "kind": "llm",
+      "model": "gpt-5.4-mini",
+      "calls": 100,
+      "input_tokens_per_call": 1800,
+      "output_tokens_per_call": 450,
+      "cached_input_tokens_per_call": 0
+    },
+    {
+      "key": "operational_agent",
+      "description": "300 consultas mensuales al agente administrativo.",
+      "kind": "llm",
+      "model": "gpt-5.4-mini",
+      "calls": 300,
+      "input_tokens_per_call": 3000,
+      "output_tokens_per_call": 500,
+      "cached_input_tokens_per_call": 0
+    },
+    {
+      "key": "legal_rag_generation",
+      "description": "150 consultas mensuales al módulo RAG normativo.",
+      "kind": "llm",
+      "model": "gpt-5.4-mini",
+      "calls": 150,
+      "input_tokens_per_call": 6500,
+      "output_tokens_per_call": 700,
+      "cached_input_tokens_per_call": 0
+    },
+    {
+      "key": "incident_embeddings",
+      "description": "Un embedding por cada una de 500 denuncias.",
+      "kind": "embedding",
+      "model": "text-embedding-3-small",
+      "calls": 500,
+      "input_tokens_per_call": 500
+    },
+    {
+      "key": "legal_query_embeddings",
+      "description": "Un embedding por cada consulta normativa.",
+      "kind": "embedding",
+      "model": "text-embedding-3-large",
+      "calls": 150,
+      "input_tokens_per_call": 200
+    }
+  ],
+  "one_time_ai_workloads": [
+    {
+      "key": "legal_corpus_initial_index",
+      "description": "Indexación inicial aproximada de 4.985 chunks del corpus legal.",
+      "kind": "embedding",
+      "model": "text-embedding-3-large",
+      "calls": 1,
+      "input_tokens_per_call": 2550000
+    }
+  ],
+  "monthly_infrastructure": [
+    {
+      "key": "cloud_sql_compute",
+      "description": "Cloud SQL PostgreSQL db-g1-small, activo 730 horas al mes.",
+      "quantity": 730,
+      "free_quantity": 0,
+      "unit": "hour",
+      "unit_price_usd": 0.035
+    },
+    {
+      "key": "cloud_sql_ssd",
+      "description": "20 GiB de almacenamiento SSD provisionado.",
+      "quantity": 20,
+      "free_quantity": 0,
+      "unit": "GiB-month",
+      "unit_price_usd": 0.17
+    },
+    {
+      "key": "cloud_run_cpu",
+      "description": "Dos servicios request-based, 1 vCPU y escala a cero; carga estimada combinada.",
+      "quantity": 12000,
+      "free_quantity": 180000,
+      "unit": "vCPU-second",
+      "unit_price_usd": 0.000024
+    },
+    {
+      "key": "cloud_run_memory",
+      "description": "Dos servicios de 512 MiB; carga estimada combinada.",
+      "quantity": 6000,
+      "free_quantity": 360000,
+      "unit": "GiB-second",
+      "unit_price_usd": 0.0000025
+    },
+    {
+      "key": "cloud_run_requests",
+      "description": "Solicitudes mensuales estimadas para frontend y backend.",
+      "quantity": 50000,
+      "free_quantity": 2000000,
+      "unit": "request",
+      "unit_price_usd": 0.0000004
+    },
+    {
+      "key": "artifact_registry",
+      "description": "1.5 GiB estimados conservando imágenes activas y recientes.",
+      "quantity": 1.5,
+      "free_quantity": 0.5,
+      "unit": "GiB-month",
+      "unit_price_usd": 0.10
+    },
+    {
+      "key": "cloud_logging",
+      "description": "Ingesta mensual inicial estimada de logs estructurados.",
+      "quantity": 2,
+      "free_quantity": 50,
+      "unit": "GiB",
+      "unit_price_usd": 0.50
+    }
+  ],
+  "budget": {
+    "monthly_warning_usd": 75.0
+  },
+  "sources": {
+    "openai": "https://openai.com/api/pricing/",
+    "cloud_run": "https://cloud.google.com/run/pricing",
+    "cloud_sql": "https://cloud.google.com/sql/pricing",
+    "artifact_registry": "https://cloud.google.com/artifact-registry/pricing",
+    "observability": "https://cloud.google.com/products/observability/pricing"
+  }
+}

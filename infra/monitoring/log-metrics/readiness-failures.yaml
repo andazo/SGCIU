@@ -1,0 +1,9 @@
+description: Fallos del chequeo de disponibilidad de PostgreSQL registrados por SGCIU.
+filter: >-
+  resource.type="cloud_run_revision"
+  resource.labels.service_name="sgciu-backend"
+  jsonPayload.message="Database readiness check failed"
+metricDescriptor:
+  metricKind: DELTA
+  valueType: INT64
+  unit: "1"

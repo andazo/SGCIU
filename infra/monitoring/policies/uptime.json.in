@@ -1,0 +1,32 @@
+{
+  "displayName": "__DISPLAY_NAME__",
+  "combiner": "OR",
+  "enabled": true,
+  "documentation": {
+    "content": "El uptime check __CHECK_LABEL__ falló en la mayoría de regiones durante dos minutos. Verifique la revisión de Cloud Run, dependencias y logs.",
+    "mimeType": "text/markdown"
+  },
+  "userLabels": {
+    "application": "sgciu",
+    "severity": "critical"
+  },
+  "conditions": [
+    {
+      "displayName": "Disponibilidad inferior al 50%",
+      "conditionThreshold": {
+        "filter": "resource.type = \"uptime_url\" AND metric.type = \"monitoring.googleapis.com/uptime_check/check_passed\" AND metric.labels.check_id = \"__CHECK_ID__\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "120s",
+            "perSeriesAligner": "ALIGN_FRACTION_TRUE",
+            "crossSeriesReducer": "REDUCE_MEAN"
+          }
+        ],
+        "comparison": "COMPARISON_LT",
+        "thresholdValue": 0.5,
+        "duration": "120s",
+        "trigger": {"count": 1}
+      }
+    }
+  ]
+}
