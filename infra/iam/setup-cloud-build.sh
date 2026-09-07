@@ -21,6 +21,10 @@ BUILD_SERVICE_ACCOUNT_RESOURCE="projects/${PROJECT_ID}/serviceAccounts/${BUILD_S
 COORDINATOR_ROLE="projects/${PROJECT_ID}/roles/${COORDINATOR_ROLE_ID}"
 RESOURCE_ROLE="projects/${PROJECT_ID}/roles/${RESOURCE_ROLE_ID}"
 
+gcloud services enable cloudbuild.googleapis.com containeranalysis.googleapis.com \
+  --project="$PROJECT_ID" \
+  --quiet
+
 ensure_role() {
   role_id=$1
   role_file=$2
@@ -108,6 +112,12 @@ gcloud iam service-accounts add-iam-policy-binding "$FRONTEND_SERVICE_ACCOUNT" \
 
 project_number=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
 cloud_build_service_agent="service-${project_number}@gcp-sa-cloudbuild.iam.gserviceaccount.com"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:$cloud_build_service_agent" \
+  --role="roles/cloudbuild.serviceAgent" \
+  --condition=None \
+  --quiet >/dev/null
+
 gcloud iam service-accounts add-iam-policy-binding "$BUILD_SERVICE_ACCOUNT" \
   --project="$PROJECT_ID" \
   --member="serviceAccount:$cloud_build_service_agent" \

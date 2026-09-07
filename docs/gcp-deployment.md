@@ -29,14 +29,16 @@ probar y enviar cambios a Git.
    usa `sgciu-runtime@PROJECT_ID.iam.gserviceaccount.com`. El instalador del paso siguiente
    crea además `sgciu-frontend@PROJECT_ID.iam.gserviceaccount.com` sin roles de proyecto,
    porque Nginx no llama APIs de GCP.
-7. Ejecutar `infra/iam/setup-cloud-build.sh PROJECT_ID REGION`. Este instalador crea una
+7. Ejecutar `infra/iam/setup-cloud-build.sh PROJECT_ID REGION`. Este instalador habilita
+   Cloud Build y Container Analysis, crea una
    cuenta exclusiva y dos roles personalizados: a nivel de proyecto solo puede iniciar el
    build y leer operaciones; la escritura se concede individualmente a `sgciu-backend`,
    `sgciu-frontend` y los tres jobs existentes. También obtiene `Artifact Registry Writer`
    solo sobre el repositorio, `Service Account User` solo sobre las dos identidades de
    runtime y `Logs Writer`. El agente de Cloud Build obtiene `Service Account Token Creator`
-   únicamente sobre la cuenta de build. No se utiliza la cuenta por defecto con rol
-   `Editor`.
+   únicamente sobre la cuenta de build y conserva su rol administrado
+   `roles/cloudbuild.serviceAgent`, que permite consumir Container Analysis durante la
+   verificación de procedencia. No se utiliza la cuenta por defecto con rol `Editor`.
 8. Conceder una sola vez `roles/run.invoker` a `allUsers` sobre los servicios frontend y
    backend. La pipeline conserva esta política y no puede modificar IAM de Cloud Run.
 9. Sustituir `_CLOUD_SQL_INSTANCE` y las demás variables de `infra/cloudbuild.yaml`.
