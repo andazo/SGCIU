@@ -5,6 +5,7 @@ substitutions:
   _SERVICE: sgciu-backend
   _FRONTEND_IMAGE: frontend
   _FRONTEND_SERVICE: sgciu-frontend
+  _FRONTEND_SERVICE_ACCOUNT: sgciu-frontend@tfm-sgciu.iam.gserviceaccount.com
   _MIGRATION_JOB: sgciu-migrate
   _AUTH_JOB: sgciu-provision-users
   _LEGAL_INDEX_JOB: sgciu-index-legal-corpus
@@ -264,6 +265,7 @@ steps:
       - --cpu-boost
       - --startup-probe=httpGet.path=/,timeoutSeconds=2,periodSeconds=5,failureThreshold=12
       - --liveness-probe=httpGet.path=/,initialDelaySeconds=10,timeoutSeconds=2,periodSeconds=30,failureThreshold=3
+      - --service-account=${_FRONTEND_SERVICE_ACCOUNT}
       - --labels=application=sgciu,component=frontend,environment=production,image-tag=${_IMAGE_TAG}
       - --quiet
 

@@ -7,6 +7,7 @@ REPOSITORY="${3:-sgciu}"
 TRIGGER_NAME="${4:-sgciu-production-main}"
 BUILD_SERVICE_ACCOUNT_ID="sgciu-cloud-build"
 RUNTIME_SERVICE_ACCOUNT_ID="sgciu-runtime"
+FRONTEND_SERVICE_ACCOUNT_ID="sgciu-frontend"
 COORDINATOR_ROLE_ID="sgciuCloudBuildCoordinator"
 RESOURCE_ROLE_ID="sgciuCloudRunResourceDeployer"
 SCRIPT_DIR=$(dirname -- "$0")
@@ -15,6 +16,7 @@ IMAGE_TAG_SUBSTITUTION="_IMAGE_TAG=\$SHORT_SHA"
 
 BUILD_SERVICE_ACCOUNT="${BUILD_SERVICE_ACCOUNT_ID}@${PROJECT_ID}.iam.gserviceaccount.com"
 RUNTIME_SERVICE_ACCOUNT="${RUNTIME_SERVICE_ACCOUNT_ID}@${PROJECT_ID}.iam.gserviceaccount.com"
+FRONTEND_SERVICE_ACCOUNT="${FRONTEND_SERVICE_ACCOUNT_ID}@${PROJECT_ID}.iam.gserviceaccount.com"
 BUILD_SERVICE_ACCOUNT_RESOURCE="projects/${PROJECT_ID}/serviceAccounts/${BUILD_SERVICE_ACCOUNT}"
 COORDINATOR_ROLE="projects/${PROJECT_ID}/roles/${COORDINATOR_ROLE_ID}"
 RESOURCE_ROLE="projects/${PROJECT_ID}/roles/${RESOURCE_ROLE_ID}"
@@ -40,6 +42,13 @@ if ! gcloud iam service-accounts describe "$BUILD_SERVICE_ACCOUNT" \
   gcloud iam service-accounts create "$BUILD_SERVICE_ACCOUNT_ID" \
     --project="$PROJECT_ID" \
     --display-name="SGCIU Cloud Build deployer"
+fi
+
+if ! gcloud iam service-accounts describe "$FRONTEND_SERVICE_ACCOUNT" \
+  --project="$PROJECT_ID" >/dev/null 2>&1; then
+  gcloud iam service-accounts create "$FRONTEND_SERVICE_ACCOUNT_ID" \
+    --project="$PROJECT_ID" \
+    --display-name="SGCIU frontend runtime"
 fi
 
 ensure_role "$COORDINATOR_ROLE_ID" "$SCRIPT_DIR/cloud-build-coordinator-role.yaml"
@@ -84,6 +93,13 @@ gcloud artifacts repositories add-iam-policy-binding "$REPOSITORY" \
   --quiet >/dev/null
 
 gcloud iam service-accounts add-iam-policy-binding "$RUNTIME_SERVICE_ACCOUNT" \
+  --project="$PROJECT_ID" \
+  --member="serviceAccount:$BUILD_SERVICE_ACCOUNT" \
+  --role="roles/iam.serviceAccountUser" \
+  --condition=None \
+  --quiet >/dev/null
+
+gcloud iam service-accounts add-iam-policy-binding "$FRONTEND_SERVICE_ACCOUNT" \
   --project="$PROJECT_ID" \
   --member="serviceAccount:$BUILD_SERVICE_ACCOUNT" \
   --role="roles/iam.serviceAccountUser" \
