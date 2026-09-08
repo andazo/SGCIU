@@ -91,6 +91,29 @@ el manifiesto/checksum en Git y mantener la indexación mediante el Cloud Run Jo
 `sgciu-index-legal-corpus`. El endpoint de indexación no debe exponerse públicamente ni
 ejecutarse en cada arranque del servicio.
 
+## Evaluación de calidad y costes
+
+Después de desplegar la revisión que incorpora las métricas, configure una vez el Job
+`sgciu-evaluate-metrics` mediante `infra/evaluation/deploy-job.sh`. El script toma la imagen
+inmutable y la conexión Cloud SQL ya desplegadas en `sgciu-backend`; no modifica Cloud Build ni
+amplía sus permisos. El job ejecuta el dataset sintético versionado de 50 denuncias de Flores y
+los datasets de RAG y agente, persiste cada corrida en `evaluation_runs` y conserva el hash del
+dataset, modelos, latencias,
+tokens, coste estimado, métricas de calidad y resultados por caso. Sus denuncias sintéticas se
+fechan de manera determinista dentro del intervalo 2026-01-01 a 2026-09-07 para hacer
+verificables filtros, agregaciones y patrones temporales.
+
+Como invoca modelos de pago y añade los datos sintéticos a Cloud SQL, se inicia manualmente:
+
+```bash
+./infra/evaluation/deploy-job.sh tfm-sgciu us-central1
+gcloud run jobs execute sgciu-evaluate-metrics --project=tfm-sgciu \
+  --region=us-central1 --wait
+```
+
+No es una migración ni una tarea de cada entrega: ejecútelo una vez para obtener la línea base
+de la memoria y otra vez únicamente cuando cambie un modelo, prompt, corpus o dataset.
+
 El backend se expone públicamente solo a nivel de invocación para permitir el intake ciudadano;
 la autorización de las rutas institucionales ocurre en la aplicación mediante sesiones Bearer.
 Para una implantación institucional posterior se recomienda añadir Identity-Aware Proxy o SSO
