@@ -15,6 +15,7 @@ COPY alembic.ini ./
 COPY migrations ./migrations
 COPY app ./app
 COPY corpus ./corpus
+COPY evaluation ./evaluation
 
 USER sgciu
 EXPOSE 8000
