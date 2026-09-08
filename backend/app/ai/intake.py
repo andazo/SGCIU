@@ -20,6 +20,7 @@ from app.schemas import (
     IncidentEntities,
     IntakeCompletionReason,
     IntakeFieldObservation,
+    ModelUsage,
     StrictModel,
 )
 
@@ -349,6 +350,11 @@ def _partial_review_reason(data: ComplaintExtractedData) -> str | None:
 class IntakeProvider(ABC):
     model_name: str
 
+    @property
+    def last_usage(self) -> ModelUsage:
+        """Usage from the most recent sequential evaluation call, if available."""
+        return ModelUsage()
+
     @abstractmethod
     def analyze(
         self,
@@ -371,6 +377,11 @@ class OpenAIIntakeProvider(IntakeProvider):
         )
         self.settings = settings
         self.model_name = settings.openai_intake_model
+        self._last_usage = ModelUsage()
+
+    @property
+    def last_usage(self) -> ModelUsage:
+        return self._last_usage
 
     def analyze(
         self,
@@ -509,6 +520,11 @@ class OpenAIIntakeProvider(IntakeProvider):
             output_tokens,
             self.settings,
             model_name=self.model_name,
+        )
+        self._last_usage = ModelUsage(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            estimated_cost_usd=estimated_cost_usd,
         )
         record_ai_call(
             feature="citizen_intake",

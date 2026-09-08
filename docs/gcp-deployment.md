@@ -66,12 +66,14 @@ La pipeline realiza el orden siguiente:
 8. Ejecuta smoke tests de `/health`, `/ready`, `/metrics` y la página pública. Cualquier
    fallo marca el build como fallido.
 
-`_FRONTEND_ORIGIN` en `infra/cloudbuild.yaml` debe coincidir con la URL estable de Cloud Run
-del servicio frontend. Se inyecta durante el despliegue inicial del backend para configurar
-`CORS_ORIGINS`. Así no se requiere una actualización posterior ni permisos globales para listar
-revisiones de Cloud Run. Para una instalación nueva, despliegue una vez el frontend, consulte
-su URL con `gcloud run services describe sgciu-frontend --region=REGION --format='value(status.url)'`,
-actualice esa sustitución y ejecute el despliegue definitivo.
+`_FRONTEND_ORIGINS` en `infra/cloudbuild.yaml` enumera, separado por comas, todos los dominios
+públicos de Cloud Run que sirven el frontend. Se inyecta durante el despliegue inicial del
+backend para configurar `CORS_ORIGINS`; la opción `^@^` de `--set-env-vars` conserva el CSV
+como un único valor. Esto evita una actualización posterior y permisos globales para listar
+revisiones. Para una instalación nueva, despliegue una vez el frontend, consulte su URL con
+`gcloud run services describe sgciu-frontend --region=REGION --format='value(status.url)'`,
+agregue también el hostname legado si está publicado y actualice la sustitución antes del
+despliegue definitivo.
 
 El trigger regional `sgciu-production-main` escucha exclusivamente pushes a `main` desde el
 repositorio conectado `andazo/SGCIU`. `Develop` ejecuta CI, pero nunca despliega producción.
@@ -88,6 +90,29 @@ transición a GCP conviene moverlos a un bucket privado con versionado y retenci
 el manifiesto/checksum en Git y mantener la indexación mediante el Cloud Run Job
 `sgciu-index-legal-corpus`. El endpoint de indexación no debe exponerse públicamente ni
 ejecutarse en cada arranque del servicio.
+
+## Evaluación de calidad y costes
+
+Después de desplegar la revisión que incorpora las métricas, configure una vez el Job
+`sgciu-evaluate-metrics` mediante `infra/evaluation/deploy-job.sh`. El script toma la imagen
+inmutable y la conexión Cloud SQL ya desplegadas en `sgciu-backend`; no modifica Cloud Build ni
+amplía sus permisos. El job ejecuta el dataset sintético versionado de 50 denuncias de Flores y
+los datasets de RAG y agente, persiste cada corrida en `evaluation_runs` y conserva el hash del
+dataset, modelos, latencias,
+tokens, coste estimado, métricas de calidad y resultados por caso. Sus denuncias sintéticas se
+fechan de manera determinista dentro del intervalo 2026-01-01 a 2026-09-07 para hacer
+verificables filtros, agregaciones y patrones temporales.
+
+Como invoca modelos de pago y añade los datos sintéticos a Cloud SQL, se inicia manualmente:
+
+```bash
+./infra/evaluation/deploy-job.sh tfm-sgciu us-central1
+gcloud run jobs execute sgciu-evaluate-metrics --project=tfm-sgciu \
+  --region=us-central1 --wait
+```
+
+No es una migración ni una tarea de cada entrega: ejecútelo una vez para obtener la línea base
+de la memoria y otra vez únicamente cuando cambie un modelo, prompt, corpus o dataset.
 
 El backend se expone públicamente solo a nivel de invocación para permitir el intake ciudadano;
 la autorización de las rutas institucionales ocurre en la aplicación mediante sesiones Bearer.

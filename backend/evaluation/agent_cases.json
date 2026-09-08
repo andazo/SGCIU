@@ -1,0 +1,106 @@
+{
+  "version": "1.0.0",
+  "description": "Consultas sintéticas y reproducibles para evaluar selección de herramientas, evidencia, latencia y coste del agente operativo. Todos los incidentes solicitados son datos sintéticos del cantón de Flores.",
+  "cases": [
+    {
+      "case_id": "AGT-001",
+      "query": "¿Cuántos incidentes sintéticos hay en cada distrito de Flores?",
+      "expected_tools": ["aggregate_incidents"]
+    },
+    {
+      "case_id": "AGT-002",
+      "query": "¿Cuántas denuncias sintéticas de ruido existen en Barrantes?",
+      "expected_tools": ["aggregate_incidents"]
+    },
+    {
+      "case_id": "AGT-003",
+      "query": "Agrupa las denuncias sintéticas por categoría en San Joaquín.",
+      "expected_tools": ["aggregate_incidents"]
+    },
+    {
+      "case_id": "AGT-004",
+      "query": "¿Cuántos casos sintéticos se registraron en Flores entre el 1 de enero y el 30 de abril de 2026?",
+      "expected_tools": ["aggregate_incidents"]
+    },
+    {
+      "case_id": "AGT-005",
+      "query": "Compara por distrito la cantidad de casos sintéticos de vandalismo en Flores.",
+      "expected_tools": ["aggregate_incidents"]
+    },
+    {
+      "case_id": "AGT-006",
+      "query": "Lista las denuncias sintéticas de ruido en Barrantes, con sus IDs y fecha de registro.",
+      "expected_tools": ["search_incidents"]
+    },
+    {
+      "case_id": "AGT-007",
+      "query": "Muéstrame los incidentes sintéticos de vandalismo en San Joaquín.",
+      "expected_tools": ["search_incidents"]
+    },
+    {
+      "case_id": "AGT-008",
+      "query": "Busca las denuncias sintéticas de seguridad vial registradas en Llorente.",
+      "expected_tools": ["search_incidents"]
+    },
+    {
+      "case_id": "AGT-009",
+      "query": "¿Qué incidentes sintéticos se registraron entre junio y septiembre de 2026?",
+      "expected_tools": ["search_incidents"]
+    },
+    {
+      "case_id": "AGT-010",
+      "query": "Muestra los casos sintéticos de mascotas o animales reportados en Flores.",
+      "expected_tools": ["search_incidents"]
+    },
+    {
+      "case_id": "AGT-011",
+      "query": "¿Existen patrones recurrentes entre los incidentes sintéticos de los últimos 365 días?",
+      "expected_tools": ["get_recurrent_patterns"]
+    },
+    {
+      "case_id": "AGT-012",
+      "query": "Consulta los patrones recurrentes detectados durante los últimos 90 días.",
+      "expected_tools": ["get_recurrent_patterns"]
+    },
+    {
+      "case_id": "AGT-013",
+      "query": "¿Qué patrones recurrentes han sido identificados para apoyar el análisis preventivo?",
+      "expected_tools": ["get_recurrent_patterns"]
+    },
+    {
+      "case_id": "AGT-014",
+      "query": "¿Cuál es la base normativa de las funciones de la Policía Municipal en Costa Rica?",
+      "expected_tools": ["search_legal_sources"]
+    },
+    {
+      "case_id": "AGT-015",
+      "query": "¿Qué procedimiento recomendado aplica para atender una denuncia por ruido?",
+      "expected_tools": ["search_legal_sources"]
+    },
+    {
+      "case_id": "AGT-016",
+      "query": "Busca normativa sobre protección de datos personales para el tratamiento de denuncias municipales.",
+      "expected_tools": ["search_legal_sources"]
+    },
+    {
+      "case_id": "AGT-017",
+      "query": "¿Qué norma regula las competencias generales de las municipalidades costarricenses?",
+      "expected_tools": ["search_legal_sources"]
+    },
+    {
+      "case_id": "AGT-018",
+      "query": "¿Cómo se debe clasificar jurídicamente una recomendación de protocolo policial?",
+      "expected_tools": ["search_legal_sources"]
+    },
+    {
+      "case_id": "AGT-019",
+      "query": "¿Qué fuentes normativas respaldan la coordinación municipal para prevención comunitaria?",
+      "expected_tools": ["search_legal_sources"]
+    },
+    {
+      "case_id": "AGT-020",
+      "query": "Indica el estado actual del corpus jurídico versionado de SGCIU.",
+      "expected_tools": ["get_legal_corpus_status"]
+    }
+  ]
+}

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from pydantic import Field, model_validator
@@ -32,6 +34,8 @@ DEFAULT_DATASET = (
     Path(__file__).resolve().parents[2] / "evaluation" / "flores_synthetic_incidents.json"
 )
 SYNTHETIC_SOURCE = "flores_synthetic_admin_seed"
+SYNTHETIC_DATE_START = datetime(2026, 1, 1, tzinfo=UTC)
+SYNTHETIC_DATE_END = datetime(2026, 9, 7, 23, 59, 59, tzinfo=UTC)
 
 
 class SyntheticIncidentRecord(StrictModel):
@@ -81,6 +85,7 @@ class SeedResult:
     indexed: int
     pending_embeddings: int
     candidate_clusters_in_database: int
+    dates_normalized: int
     incident_ids: list[int]
 
 
@@ -142,6 +147,22 @@ def _summary(record: SyntheticIncidentRecord) -> str:
     )
 
 
+def synthetic_created_at(case_id: str) -> datetime:
+    """Map a stable synthetic identifier uniformly into the agreed evaluation window."""
+    digest = hashlib.sha256(case_id.encode("utf-8")).digest()
+    span_seconds = int((SYNTHETIC_DATE_END - SYNTHETIC_DATE_START).total_seconds())
+    offset_seconds = int.from_bytes(digest[:8], "big") % (span_seconds + 1)
+    return SYNTHETIC_DATE_START + timedelta(seconds=offset_seconds)
+
+
+def _same_instant(left: datetime | None, right: datetime) -> bool:
+    """Compare UTC instants while supporting SQLite's timezone-naive test values."""
+    if left is None:
+        return False
+    normalized_left = left.replace(tzinfo=UTC) if left.tzinfo is None else left.astimezone(UTC)
+    return normalized_left == right
+
+
 def _existing_seed_incidents(db: Session) -> dict[str, ComplaintSubmission]:
     existing: dict[str, ComplaintSubmission] = {}
     for incident in db.scalars(select(ComplaintSubmission)):
@@ -163,6 +184,7 @@ def seed_incidents(
     existing = _existing_seed_incidents(db)
     created = 0
     skipped = 0
+    dates_normalized = 0
     incidents: list[ComplaintSubmission] = []
     service = IncidentService(db)
 
@@ -170,6 +192,12 @@ def seed_incidents(
         incident = existing.get(record.case_id)
         if incident is not None:
             skipped += 1
+            expected_created_at = synthetic_created_at(record.case_id)
+            if not _same_instant(incident.created_at, expected_created_at):
+                incident.created_at = expected_created_at
+                db.commit()
+                db.refresh(incident)
+                dates_normalized += 1
             incidents.append(incident)
             continue
         incident = service.create(
@@ -190,6 +218,11 @@ def seed_incidents(
                 data_usage_consent=True,
             )
         )
+        expected_created_at = synthetic_created_at(record.case_id)
+        incident.created_at = expected_created_at
+        db.commit()
+        db.refresh(incident)
+        dates_normalized += 1
         created += 1
         incidents.append(incident)
 
@@ -225,6 +258,7 @@ def seed_incidents(
         indexed=indexed,
         pending_embeddings=len(incident_ids) - indexed,
         candidate_clusters_in_database=cluster_count,
+        dates_normalized=dates_normalized,
         incident_ids=incident_ids,
     )
 

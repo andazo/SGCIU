@@ -5,10 +5,10 @@ substitutions:
   _SERVICE: sgciu-backend
   _FRONTEND_IMAGE: frontend
   _FRONTEND_SERVICE: sgciu-frontend
-  # Cloud Run assigns this service URL once and keeps it stable across revisions.
-  # Keep it explicit so the backend receives its CORS policy in its initial deploy,
-  # without a project-wide permission to list Cloud Run revisions.
-  _FRONTEND_ORIGIN: https://sgciu-frontend-edoinmx35a-uc.a.run.app
+  # Cloud Run can expose both its current and legacy public hostnames. Keep every
+  # public frontend origin here so the backend accepts either entry point without
+  # a project-wide permission to list Cloud Run revisions.
+  _FRONTEND_ORIGINS: https://sgciu-frontend-edoinmx35a-uc.a.run.app,https://sgciu-frontend-909952273875.us-central1.run.app
   _FRONTEND_SERVICE_ACCOUNT: sgciu-frontend@tfm-sgciu.iam.gserviceaccount.com
   _MIGRATION_JOB: sgciu-migrate
   _AUTH_JOB: sgciu-provision-users
@@ -73,6 +73,7 @@ steps:
           python -m json.tool "$${policy}" >/dev/null
         done
         sh -n infra/monitoring/setup.sh
+        sh -n infra/evaluation/deploy-job.sh
 
   - id: build-backend
     name: gcr.io/cloud-builders/docker@sha256:3d00b6c1a9b862621c30fc74d4f2abfc62bcbdee631ed3febd31e7edbdf6252c
@@ -148,7 +149,7 @@ steps:
       - --readiness-probe=httpGet.path=/ready,timeoutSeconds=2,periodSeconds=10,failureThreshold=3
       - --liveness-probe=httpGet.path=/health,initialDelaySeconds=10,timeoutSeconds=2,periodSeconds=30,failureThreshold=3
       - --set-cloudsql-instances=${_CLOUD_SQL_INSTANCE}
-      - --set-env-vars=APP_ENV=production,REQUIRE_ADMIN_AUTH=true,LOG_LEVEL=INFO,OPENAI_MODEL=gpt-5.4-mini,OPENAI_INTAKE_MODEL=gpt-5.6,OPENAI_EMBEDDING_MODEL=text-embedding-3-small,LEGAL_RAG_MODEL=gpt-5.4-mini,LEGAL_RAG_EMBEDDING_MODEL=text-embedding-3-large,CORS_ORIGINS=${_FRONTEND_ORIGIN}
+      - --set-env-vars=^@^APP_ENV=production@REQUIRE_ADMIN_AUTH=true@LOG_LEVEL=INFO@OPENAI_MODEL=gpt-5.4-mini@OPENAI_INTAKE_MODEL=gpt-5.6@OPENAI_EMBEDDING_MODEL=text-embedding-3-small@LEGAL_RAG_MODEL=gpt-5.4-mini@LEGAL_RAG_EMBEDDING_MODEL=text-embedding-3-large@CORS_ORIGINS=${_FRONTEND_ORIGINS}
       - --set-secrets=DATABASE_URL=sgciu-database-url:latest,OPENAI_API_KEY=sgciu-openai-key:latest
       - --service-account=${_RUNTIME_SERVICE_ACCOUNT}
       - --labels=application=sgciu,component=backend,environment=production,image-tag=${_IMAGE_TAG}
