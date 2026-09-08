@@ -16,7 +16,7 @@ BACKEND_IMAGE=$(gcloud run services describe "$BACKEND_SERVICE" \
 CLOUD_SQL_INSTANCE=$(gcloud run services describe "$BACKEND_SERVICE" \
   --project="$PROJECT_ID" \
   --region="$REGION" \
-  --format='value(spec.template.metadata.annotations.run.googleapis.com/cloudsql-instances)')
+  --format="value(spec.template.metadata.annotations.'run.googleapis.com/cloudsql-instances')")
 
 test -n "$BACKEND_IMAGE"
 test -n "$CLOUD_SQL_INSTANCE"
