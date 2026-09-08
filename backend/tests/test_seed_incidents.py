@@ -2,7 +2,13 @@ from collections import Counter
 
 from sqlalchemy import func, select
 
-from app.evaluation.seed_incidents import load_seed_dataset, seed_incidents
+from app.evaluation.seed_incidents import (
+    SYNTHETIC_DATE_END,
+    SYNTHETIC_DATE_START,
+    load_seed_dataset,
+    seed_incidents,
+    synthetic_created_at,
+)
 from app.models import ComplaintSubmission, HumanReview, IncidentEmbedding
 from app.tools.incidents import build_incident_tool_registry
 
@@ -35,6 +41,8 @@ def test_seed_is_idempotent_and_indexes_every_incident(db_session):
     assert second.created == 0
     assert second.skipped_existing == 50
     assert second.indexed == 50
+    assert first.dates_normalized == 50
+    assert second.dates_normalized == 0
     assert db_session.scalar(select(func.count(ComplaintSubmission.id))) == 50
     assert db_session.scalar(select(func.count(IncidentEmbedding.id))) == 50
     assert db_session.scalar(select(func.count(HumanReview.id))) == 5
@@ -43,6 +51,17 @@ def test_seed_is_idempotent_and_indexes_every_incident(db_session):
     assert all(incident.name is None for incident in incidents)
     assert all(incident.email is None for incident in incidents)
     assert all(incident.analysis_metadata["synthetic"] is True for incident in incidents)
+    assert all(
+        SYNTHETIC_DATE_START
+        <= synthetic_created_at(incident.analysis_metadata["synthetic_case_id"])
+        <= SYNTHETIC_DATE_END
+        for incident in incidents
+    )
+    assert all(
+        incident.created_at.replace(tzinfo=SYNTHETIC_DATE_START.tzinfo)
+        == synthetic_created_at(incident.analysis_metadata["synthetic_case_id"])
+        for incident in incidents
+    )
 
     aggregate = build_incident_tool_registry().call(
         db_session,

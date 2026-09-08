@@ -73,6 +73,7 @@ steps:
           python -m json.tool "$${policy}" >/dev/null
         done
         sh -n infra/monitoring/setup.sh
+        sh -n infra/evaluation/deploy-job.sh
 
   - id: build-backend
     name: gcr.io/cloud-builders/docker@sha256:3d00b6c1a9b862621c30fc74d4f2abfc62bcbdee631ed3febd31e7edbdf6252c

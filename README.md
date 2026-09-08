@@ -299,6 +299,25 @@ Para medir Hit@k y MRR de la recuperación legal con 12 consultas sintéticas:
 PYTHONPATH=. .venv/bin/python -m app.evaluation.legal_rag_runner
 ```
 
+Para generar una evidencia completa y persistente por módulo (intake ciudadano, RAG,
+agente operativo, clusterización e indexación) se usa el runner unificado. El dataset de
+50 denuncias sintéticas se añade de manera idempotente y cada registro recibe una fecha
+determinista, distribuida entre el 1 de enero y el 7 de septiembre de 2026. El runner
+guarda métricas agregadas y resultados por caso en `evaluation_runs`, junto al hash del
+dataset, modelos y revisión desplegada.
+
+```bash
+PYTHONPATH=. .venv/bin/python -m app.evaluation.module_runner --modules all --seed-incidents
+```
+
+En producción, la evaluación requiere una confirmación explícita y se ejecuta de forma
+manual en el Job `sgciu-evaluate-metrics`; nunca forma parte del despliegue:
+
+```bash
+./infra/evaluation/deploy-job.sh tfm-sgciu us-central1
+gcloud run jobs execute sgciu-evaluate-metrics --region=us-central1 --wait
+```
+
 La suite E2E recorre por HTTP los módulos ciudadano y administrativo, incluyendo
 autenticación, persistencia, anonimización, intake interno, búsqueda semántica, clusters,
 revisiones, resaltados, agente operativo, feedback y RAG normativo:
