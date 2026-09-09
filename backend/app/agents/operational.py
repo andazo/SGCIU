@@ -34,10 +34,10 @@ Si existe historial de la conversación, úsalo únicamente para resolver refere
 como "ese distrito" o "los anteriores"; verifica siempre los hechos y conteos actuales
 con una herramienta en cada respuesta. Un resultado vacío significa cero sólo después
 de que la herramienta haya aplicado filtros normalizados y debes explicitar dichos filtros.
-Para buscar por fecha usa created_from y created_to en formato YYYY-MM-DD. Esas fechas
-corresponden a created_at, el momento en que SGCIU registró el incidente; no confundas
-esa fecha con fecha_hora_aproximada, que actualmente es evidencia textual del momento
-del hecho y no permite una comparación cronológica exacta.
+Para buscar por fecha usa created_from y created_to en formato YYYY-MM-DD y elige
+date_basis="occurrence" cuando la pregunta diga cuándo ocurrió el hecho, o
+date_basis="registration" cuando pregunte cuándo ingresó a SGCIU. Si la fecha del hecho
+no está disponible, occurrence usa created_at como fallback y la herramienta lo declara.
 Para consultas sobre normativa, competencias o protocolos usa search_legal_sources,
 limítate a sus fragmentos y cita los identificadores [F#], el documento y la página
 PDF exacta. Aclara que la orientación no sustituye criterio jurídico institucional.
@@ -141,15 +141,12 @@ def _append_legal_source_details(
     for source_id in sorted(
         sources,
         key=lambda value: (
-            (0, int(value[1:]))
-            if value.startswith("F") and value[1:].isdigit()
-            else (1, value)
+            (0, int(value[1:])) if value.startswith("F") and value[1:].isdigit() else (1, value)
         ),
     ):
         source = sources[source_id]
         allowed = ", ".join(
-            labels.get(value, str(value))
-            for value in source.get("allowed_classifications", [])
+            labels.get(value, str(value)) for value in source.get("allowed_classifications", [])
         )
         articles = ", ".join(source.get("article_references", []))
         locator = f"página PDF {source.get('pdf_page')}"
@@ -221,7 +218,7 @@ class OperationalAgent:
                 "estimated_cost_usd": response.usage.estimated_cost_usd,
             },
         )
-        return response
+        return response.model_copy(update={"latency_ms": round(duration_seconds * 1000, 2)})
 
     async def _run_openai(
         self,
@@ -239,9 +236,7 @@ class OperationalAgent:
         )
         gateway_tools = await self.gateway.list_tools()
         tools = [self._openai_tool(tool) for tool in gateway_tools]
-        conversation = [
-            message.model_dump() for message in (history or [])[-12:]
-        ]
+        conversation = [message.model_dump() for message in (history or [])[-12:]]
         conversation.append({"role": "user", "content": query})
         response = await client.responses.create(
             model=self.settings.openai_model,

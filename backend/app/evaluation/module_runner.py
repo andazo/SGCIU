@@ -56,6 +56,7 @@ from app.models import (
 from app.rag.corpus import LegalCorpusIndexer
 from app.schemas import ChatMessage, ComplaintExtractedData, ModelUsage
 from app.services.legal_rag import LegalRAGService
+from app.services.semantic import SemanticIncidentService
 
 DEFAULT_AGENT_DATASET = Path(__file__).resolve().parents[2] / "evaluation" / "agent_cases.json"
 
@@ -158,14 +159,45 @@ def evaluate_intake(
     usages: list[ModelUsage] = []
     cases: list[dict[str, Any]] = []
 
+    single_turn_complete = 0
     for record in dataset.incidents:
-        started = time.perf_counter()
-        response = provider.analyze(
-            [ChatMessage(role="user", content=record.descripcion_detallada)],
-            ComplaintExtractedData(),
-        )
-        latency_ms = round((time.perf_counter() - started) * 1000, 2)
-        usage = provider.last_usage
+        messages = [ChatMessage(role="user", content=record.descripcion_detallada)]
+        current_data = ComplaintExtractedData()
+        turn_latencies: list[float] = []
+        turn_usages: list[ModelUsage] = []
+        response = None
+        first_turn_response = None
+        for turn in range(2):
+            started = time.perf_counter()
+            response = provider.analyze(
+                messages,
+                current_data,
+                follow_up_count=turn,
+            )
+            turn_latencies.append(round((time.perf_counter() - started) * 1000, 2))
+            turn_usages.append(provider.last_usage)
+            if first_turn_response is None:
+                first_turn_response = response
+                single_turn_complete += int(response.is_complete)
+            if response.is_complete:
+                break
+            current_data = response.extracted_data
+            messages.extend(
+                [
+                    ChatMessage(role="assistant", content=response.assistant_message),
+                    ChatMessage(
+                        role="user",
+                        content=(
+                            f"Para completar: mi relación es {record.relacion_incidente}; "
+                            f"ocurrió {record.fecha_hora_aproximada}, en el distrito "
+                            f"{record.distrito}, específicamente {record.direccion_exacta}. "
+                            f"El lugar es {record.tipo_lugar}. La descripción inicial se mantiene."
+                        ),
+                    ),
+                ]
+            )
+        assert response is not None and first_turn_response is not None
+        latency_ms = round(sum(turn_latencies), 2)
         expected_categories.append(record.categoria_preliminar)
         predicted_categories.append(response.extracted_data.categoria_preliminar or "missing")
         expected_relations.append(record.relacion_incidente)
@@ -174,31 +206,50 @@ def evaluate_intake(
         predicted_districts.append(response.extracted_data.distrito or "missing")
         expected_places.append(record.tipo_lugar)
         predicted_places.append(response.extracted_data.tipo_lugar or "missing")
-        expected_entities.append(set(record.vehicles + record.objects + record.establishments))
+        expected_entities.append(
+            set(
+                record.vehicles
+                + record.objects
+                + record.establishments
+                + record.landmarks
+            )
+        )
         predicted_entities.append(
             set(
                 response.extracted_data.entities.vehicles
                 + response.extracted_data.entities.objects
                 + response.extracted_data.entities.establishments
+                + response.extracted_data.entities.landmarks
             )
         )
         expected_reviews.append(record.requires_human_review)
-        predicted_reviews.append(response.requires_human_review)
+        predicted_reviews.append(first_turn_response.requires_human_review)
         latencies.append(latency_ms)
-        usages.append(usage)
+        usages.extend(turn_usages)
         cases.append(
             {
                 "case_id": record.case_id,
                 "latency_ms": latency_ms,
-                "input_tokens": usage.input_tokens,
-                "output_tokens": usage.output_tokens,
-                "estimated_cost_usd": usage.estimated_cost_usd,
+                "turns": len(turn_latencies),
+                "turn_latencies_ms": turn_latencies,
+                "input_tokens": sum(item.input_tokens for item in turn_usages),
+                "output_tokens": sum(item.output_tokens for item in turn_usages),
+                "estimated_cost_usd": round(
+                    sum(item.estimated_cost_usd for item in turn_usages), 8
+                ),
+                "first_turn": {
+                    "is_complete": first_turn_response.is_complete,
+                    "category": first_turn_response.extracted_data.categoria_preliminar,
+                    "district": first_turn_response.extracted_data.distrito,
+                    "relation": first_turn_response.extracted_data.relacion_incidente,
+                },
                 "expected_category": record.categoria_preliminar,
                 "predicted_category": response.extracted_data.categoria_preliminar,
                 "expected_district": record.distrito,
                 "predicted_district": response.extracted_data.distrito,
                 "expected_human_review": record.requires_human_review,
-                "predicted_human_review": response.requires_human_review,
+                "predicted_human_review": first_turn_response.requires_human_review,
+                "final_human_review": response.requires_human_review,
                 "is_complete": response.is_complete,
             }
         )
@@ -214,6 +265,7 @@ def evaluate_intake(
         },
         "entities": entity_scores(expected_entities, predicted_entities),
         "human_review": _binary_scores(expected_reviews, predicted_reviews),
+        "single_turn_completion_rate": round(single_turn_complete / len(cases), 4),
         "completion_rate": round(sum(case["is_complete"] for case in cases) / len(cases), 4),
         "latency_ms": {
             "average": round(sum(latencies) / len(latencies), 2),
@@ -250,7 +302,8 @@ def evaluate_legal_rag(
         started = time.perf_counter()
         response = service.answer(case.query, audience="administrative")
         latency_ms = round((time.perf_counter() - started) * 1000, 2)
-        retrieved = [citation.document_key for citation in response.citations]
+        retrieved = [citation.document_key for citation in response.retrieved_sources]
+        cited = [citation.document_key for citation in response.citations]
         expected = set(case.expected_document_keys)
         rank = next((index for index, key in enumerate(retrieved, 1) if key in expected), None)
         for limit in hit_at:
@@ -265,9 +318,11 @@ def evaluate_legal_rag(
                 "latency_ms": latency_ms,
                 "expected_documents": sorted(expected),
                 "retrieved_documents": retrieved,
+                "cited_documents": cited,
                 "first_relevant_rank": rank,
                 "insufficient_evidence": response.insufficient_evidence,
                 "citation_count": len(response.citations),
+                "retrieved_source_count": len(response.retrieved_sources),
                 "input_tokens": response.usage.input_tokens,
                 "output_tokens": response.usage.output_tokens,
                 "estimated_cost_usd": response.usage.estimated_cost_usd,
@@ -275,8 +330,11 @@ def evaluate_legal_rag(
         )
     total = len(cases)
     citation_valid = sum(
-        bool(set(case["retrieved_documents"]) & set(case["expected_documents"])) for case in cases
+        bool(set(case["cited_documents"]) & set(case["expected_documents"]))
+        for case in cases
+        if case["citation_count"] > 0
     )
+    cases_with_citations = sum(case["citation_count"] > 0 for case in cases)
     return ModuleReport(
         module="legal_rag",
         dataset_name=dataset_path.name,
@@ -290,7 +348,9 @@ def evaluate_legal_rag(
             "hit_rate_at_3": round(hit_at[3] / total, 4),
             "hit_rate_at_8": round(hit_at[8] / total, 4),
             "mean_reciprocal_rank": round(sum(reciprocal_ranks) / total, 4),
-            "citation_relevance_rate": round(citation_valid / total, 4),
+            "citation_relevance_rate": round(citation_valid / cases_with_citations, 4)
+            if cases_with_citations
+            else 0.0,
             "grounded_response_rate": round(
                 sum(
                     not case["insufficient_evidence"] and case["citation_count"] > 0
@@ -333,9 +393,8 @@ def evaluate_clustering(
         incident = by_case.get(record.case_id)
         if incident is None:
             continue
-        expected_groups.setdefault(
-            f"{record.distrito}:{record.categoria_preliminar}", set()
-        ).add(incident.id)
+        if record.cluster_group:
+            expected_groups.setdefault(record.cluster_group, set()).add(incident.id)
     expected_pairs = {
         tuple(sorted((left, right)))
         for members in expected_groups.values()
@@ -362,6 +421,35 @@ def evaluate_clustering(
     precision = true_positive / len(actual_pairs) if actual_pairs else 0.0
     recall = true_positive / len(expected_pairs) if expected_pairs else 0.0
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+    pair_scores: dict[tuple[int, int], float] = {}
+    semantic_service = SemanticIncidentService(db)
+    for incident in by_case.values():
+        for related in semantic_service.find_related(
+            incident,
+            top_k=max(1, len(synthetic_ids) - 1),
+            minimum_score=0.0,
+            candidate_incident_ids=synthetic_ids,
+        ):
+            pair = tuple(sorted((incident.id, related.incident.id)))
+            pair_scores[pair] = max(pair_scores.get(pair, 0.0), related.similarity_score)
+
+    threshold_analysis: dict[str, dict[str, float | int]] = {}
+    for threshold in (0.60, 0.65, 0.70, 0.75, 0.78, 0.80, 0.85):
+        predicted = {pair for pair, score in pair_scores.items() if score >= threshold}
+        threshold_true_positive = len(expected_pairs & predicted)
+        threshold_precision = threshold_true_positive / len(predicted) if predicted else 0.0
+        threshold_recall = threshold_true_positive / len(expected_pairs) if expected_pairs else 0.0
+        threshold_f1 = (
+            2 * threshold_precision * threshold_recall / (threshold_precision + threshold_recall)
+            if threshold_precision + threshold_recall
+            else 0.0
+        )
+        threshold_analysis[f"{threshold:.2f}"] = {
+            "predicted_pairs": len(predicted),
+            "precision": round(threshold_precision, 4),
+            "recall": round(threshold_recall, 4),
+            "f1": round(threshold_f1, 4),
+        }
     return ModuleReport(
         module="semantic_clustering",
         dataset_name=dataset_path.name,
@@ -371,12 +459,15 @@ def evaluate_clustering(
         completed_at=datetime.now(UTC),
         metrics={
             "incidents_evaluated": len(by_case),
-            "gold_pair_definition": "same synthetic district and preliminary category",
+            "gold_pair_definition": "explicit expert-authored semantic cluster_group",
             "expected_pairs": len(expected_pairs),
             "retrieved_pairs": len(actual_pairs),
             "pairwise_precision": round(precision, 4),
             "pairwise_recall": round(recall, 4),
             "pairwise_f1": round(f1, 4),
+            "configured_threshold": semantic_service.settings.similarity_threshold,
+            "threshold_analysis": threshold_analysis,
+            "scored_candidate_pairs": len(pair_scores),
             "clusters_with_synthetic_members": len(actual_groups),
             "latency_ms": round((datetime.now(UTC) - started_at).total_seconds() * 1000, 2),
             "usage": _usage_totals([]),
@@ -461,7 +552,10 @@ async def evaluate_operational_agent(
                 "tool_expectation_met": expected_tools.issubset(actual_tools),
                 "successful_tool_steps": sum(step.success for step in response.steps),
                 "total_tool_steps": len(response.steps),
-                "has_evidence": bool(response.incident_citations or response.legal_citations),
+                "has_traceable_evidence": any(step.success for step in response.steps),
+                "has_citations": bool(
+                    response.incident_citations or response.legal_citations
+                ),
                 "requires_human_review": response.requires_human_review,
                 "input_tokens": response.usage.input_tokens,
                 "output_tokens": response.usage.output_tokens,
@@ -481,7 +575,15 @@ async def evaluate_operational_agent(
             "tool_selection_success_rate": round(
                 sum(case["tool_expectation_met"] for case in cases) / total, 4
             ),
-            "evidence_rate": round(sum(case["has_evidence"] for case in cases) / total, 4),
+            "traceable_evidence_rate": round(
+                sum(case["has_traceable_evidence"] for case in cases) / total, 4
+            ),
+            "evidence_rate": round(
+                sum(case["has_traceable_evidence"] for case in cases) / total, 4
+            ),
+            "citation_rate": round(
+                sum(case["has_citations"] for case in cases) / total, 4
+            ),
             "successful_tool_step_rate": round(
                 sum(case["successful_tool_steps"] for case in cases)
                 / max(1, sum(case["total_tool_steps"] for case in cases)),
@@ -546,12 +648,12 @@ def main() -> None:
             reports.append(evaluate_clustering(db, incident_dataset, args.incident_dataset))
         if "indexing" in selected:
             reports.append(evaluate_indexing(db, settings))
-        persisted = [_persist(db, report, settings) for report in reports]
+        persisted_ids = [_persist(db, report, settings).id for report in reports]
     print(
         json.dumps(
             {
                 "seed": asdict(seed_result) if seed_result else None,
-                "evaluation_run_ids": [record.id for record in persisted],
+                "evaluation_run_ids": persisted_ids,
                 "reports": [asdict(report) for report in reports],
                 "git_revision": os.getenv("K_REVISION") or os.getenv("COMMIT_SHA") or "unknown",
             },

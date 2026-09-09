@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from .ai_service import run_complaint_intake_chat
 from .api.dependencies import AdminRole
 from .api.routes.auth import router as auth_router
+from .api.routes.evaluation import router as evaluation_router
 from .api.routes.incidents import router as incidents_router
 from .api.routes.intake import router as intake_router
 from .api.routes.internal_intake import router as internal_intake_router
@@ -52,6 +53,7 @@ app.include_router(operational_router, prefix="/v1")
 app.include_router(reviews_router, prefix="/v1")
 app.include_router(legal_rag_router, prefix="/v1")
 app.include_router(auth_router, prefix="/v1")
+app.include_router(evaluation_router, prefix="/v1")
 
 app.add_middleware(
     CORSMiddleware,

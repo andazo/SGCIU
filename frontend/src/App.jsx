@@ -344,7 +344,12 @@ function RecurrentPatternsPanel({ patterns, isLoading, error }) {
                 {pattern.members.map((member) => (
                   <tr key={member.incident_id}>
                     <td><span className="idBadge">#{member.incident_id}</span></td>
-                    <td>{formatDateTime(member.created_at)}</td>
+                    <td>
+                      {formatDateTime(member.occurred_at || member.created_at)}
+                      {member.temporal_basis === 'created_at_fallback' && (
+                        <span className="mutedInline"> · fecha de registro</span>
+                      )}
+                    </td>
                     <td>{member.address || 'Sin dirección registrada'}</td>
                     <td>
                       {(member.similarity_score * 100).toFixed(0)}% · {member.match_reason}
@@ -745,7 +750,9 @@ function IncidentDetail({ incident, related, isLoadingRelated, onFindRelated, on
         <div><dt>Distrito</dt><dd>{normalizeValue(data.distrito)}</dd></div>
         <div><dt>Ubicación</dt><dd>{data.direccion_exacta || 'Pendiente'}</dd></div>
         <div><dt>Momento</dt><dd>{data.fecha_hora_aproximada || 'Pendiente'}</dd></div>
+        <div><dt>Fecha normalizada</dt><dd>{incident.occurred_at ? formatDateTime(incident.occurred_at) : 'No determinada'}</dd></div>
         <div><dt>Relación temporal</dt><dd>{normalizeValue(data.temporal_relation)}</dd></div>
+        <div><dt>Recurrencia</dt><dd>{data.is_recurring ? data.recurrence_pattern || 'Sí' : 'No indicada'}</dd></div>
         <div><dt>Estado del embedding</dt><dd>{incident.analysis_metadata?.embedding_status || 'Pendiente'}</dd></div>
       </dl>
       <div className="detailActions">
@@ -766,7 +773,11 @@ function IncidentDetail({ incident, related, isLoadingRelated, onFindRelated, on
               {related.map((item) => (
                 <li key={item.incident_id}>
                   <strong>#{item.incident_id}</strong>
-                  <span>{(item.similarity_score * 100).toFixed(0)}% · {item.match_reasons.join(', ')}</span>
+                  <span>
+                    {(item.similarity_score * 100).toFixed(0)}% · {item.match_reasons.join(', ')}
+                    {' · '}{formatDateTime(item.occurred_at)}
+                    {item.temporal_basis === 'created_at_fallback' ? ' (fecha de registro)' : ''}
+                  </span>
                 </li>
               ))}
             </ul>

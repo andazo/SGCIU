@@ -391,6 +391,7 @@ class OpenAIIntakeProvider(IntakeProvider):
         follow_up_count: int = 0,
         emergency_guidance_already_shown: bool = False,
     ) -> ComplaintIntakeChatResponse:
+        self._last_usage = ModelUsage()
         latest_user = next(
             (message.content for message in reversed(messages) if message.role == "user"), ""
         )
@@ -446,9 +447,7 @@ class OpenAIIntakeProvider(IntakeProvider):
                 status="error",
                 duration_seconds=time.perf_counter() - started,
             )
-            raise RuntimeError(
-                "No se pudo obtener una extracción estructurada de OpenAI."
-            ) from exc
+            raise RuntimeError("No se pudo obtener una extracción estructurada de OpenAI.") from exc
         elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
         model_output = response.output_parsed
         if model_output is None:
@@ -497,9 +496,8 @@ class OpenAIIntakeProvider(IntakeProvider):
             or analysis_guardrail.review_reason
             or partial_review_reason
         )
-        emergency_guidance = (
-            not emergency_guidance_already_shown
-            and (message_guardrail.emergency_guidance or analysis_guardrail.emergency_guidance)
+        emergency_guidance = not emergency_guidance_already_shown and (
+            message_guardrail.emergency_guidance or analysis_guardrail.emergency_guidance
         )
         assistant_message = (
             _completion_message(completion_reason)

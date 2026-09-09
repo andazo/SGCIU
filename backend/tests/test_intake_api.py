@@ -22,6 +22,28 @@ def test_versioned_intake_api_flow():
     )
     assert analyzed.status_code == 200
     assert analyzed.json()["is_complete"] is True
+    trace_id = analyzed.json()["trace_id"]
+    assert trace_id
+
+    labeled = client.put(
+        f"/v1/evaluation/interactions/{trace_id}/label",
+        json={
+            "expected_output": {"category": "ruido", "district": "Llorente"},
+            "quality_scores": {"classification": 1.0, "response_quality": 0.9},
+            "notes": "Validación manual de prueba.",
+        },
+    )
+    assert labeled.status_code == 200
+    assert labeled.json()["manual_label"]["quality_scores"]["classification"] == 1.0
+
+    summary = client.get("/v1/evaluation/summary")
+    assert summary.status_code == 200
+    assert summary.json()["interactions"] == 1
+    assert summary.json()["labeled_interactions"] == 1
+    assert summary.json()["quality_metrics"]["intake_field_accuracy"] == {
+        "category": 1.0,
+        "district": 1.0,
+    }
 
     submitted = client.post(
         f"/v1/intake/sessions/{session_id}/submit",

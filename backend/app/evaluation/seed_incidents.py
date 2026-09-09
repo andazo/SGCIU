@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.ai.intake import DESIRED_FIELDS
+from app.ai.temporal import LOCAL_TIMEZONE, normalize_temporal_data
 from app.db import SessionLocal
 from app.models import ComplaintSubmission, IncidentCluster, IncidentEmbedding
 from app.schemas import (
@@ -54,6 +55,7 @@ class SyntheticIncidentRecord(StrictModel):
     landmarks: list[str] = Field(default_factory=list)
     requires_human_review: bool = False
     review_reason: str | None = None
+    cluster_group: str | None = None
 
     @model_validator(mode="after")
     def review_cases_require_a_reason(self):
@@ -135,7 +137,11 @@ def _extracted_data(record: SyntheticIncidentRecord) -> ComplaintExtractedData:
             IntakeFieldObservation(status="known", confidence=1.0, evidence=str(value)),
         )
         setattr(data.confidence_by_field, field, 1.0)
-    return data
+    return normalize_temporal_data(
+        data,
+        reference=synthetic_created_at(record.case_id).astimezone(LOCAL_TIMEZONE),
+        source_text=record.fecha_hora_aproximada,
+    )
 
 
 def _summary(record: SyntheticIncidentRecord) -> str:
@@ -193,13 +199,23 @@ def seed_incidents(
         if incident is not None:
             skipped += 1
             expected_created_at = synthetic_created_at(record.case_id)
+            normalized_data = _extracted_data(record)
+            incident.ai_extracted_data = normalized_data.model_dump()
+            incident.occurred_at = service._parse_occurred_at(normalized_data.incident_datetime)
+            incident.occurred_at_precision = normalized_data.incident_datetime_precision
+            incident.occurred_at_source = normalized_data.incident_datetime_source
+            incident.analysis_metadata = {
+                **(incident.analysis_metadata or {}),
+                "dataset_version": dataset.version,
+            }
             if not _same_instant(incident.created_at, expected_created_at):
                 incident.created_at = expected_created_at
-                db.commit()
-                db.refresh(incident)
                 dates_normalized += 1
+            db.commit()
+            db.refresh(incident)
             incidents.append(incident)
             continue
+        expected_created_at = synthetic_created_at(record.case_id)
         incident = service.create(
             ComplaintSubmissionCreate(
                 ai_extracted_data=_extracted_data(record),
@@ -216,30 +232,24 @@ def seed_incidents(
                 prompt_version=f"synthetic-seed-{dataset.version}",
                 truth_confirmation=True,
                 data_usage_consent=True,
-            )
+            ),
+            recorded_at=expected_created_at,
         )
-        expected_created_at = synthetic_created_at(record.case_id)
-        incident.created_at = expected_created_at
-        db.commit()
-        db.refresh(incident)
         dates_normalized += 1
         created += 1
         incidents.append(incident)
 
     incident_ids = [incident.id for incident in incidents]
     if ensure_semantic_index:
-        indexed_ids = set(
-            db.scalars(
-                select(IncidentEmbedding.incident_id).where(
-                    IncidentEmbedding.incident_id.in_(incident_ids)
-                )
-            )
-        )
-        pending = [incident for incident in incidents if incident.id not in indexed_ids]
-        if pending:
-            semantic_service = SemanticIncidentService(db)
-            for incident in pending:
-                semantic_service.process_incident(incident)
+        semantic_service = SemanticIncidentService(db)
+        for incident in incidents:
+            semantic_service.index_incident(incident)
+            incident.analysis_metadata = {
+                **(incident.analysis_metadata or {}),
+                "embedding_status": "indexed",
+            }
+            db.commit()
+        semantic_service.rebuild_clusters()
 
     indexed = int(
         db.scalar(

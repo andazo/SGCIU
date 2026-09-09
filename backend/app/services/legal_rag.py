@@ -7,7 +7,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
-from app.models import AuditEvent, LegalQueryTrace
+from app.models import AIInteractionTrace, AuditEvent, LegalQueryTrace
 from app.rag.corpus import LegalCorpusIndexer, load_manifest
 from app.rag.generation import (
     LEGAL_RAG_PROMPT_VERSION,
@@ -114,9 +114,7 @@ class LegalRAGService:
         indexed_embeddings = self.retriever.indexed_embedding_count()
         manifest = load_manifest(self.settings.legal_rag_corpus_path)
         context_label = (
-            "personal administrativo"
-            if audience == "administrative"
-            else "personal policial"
+            "personal administrativo" if audience == "administrative" else "personal policial"
         )
         context_value = (
             operational_context.strip().rstrip(".") if operational_context else "no especificada"
@@ -136,6 +134,7 @@ class LegalRAGService:
                     "criterio jurídico institucional."
                 ),
                 citations=[],
+                retrieved_sources=[],
                 retrieved_embeddings=0,
                 indexed_embeddings=indexed_embeddings,
                 trace_id=trace_id,
@@ -163,32 +162,35 @@ class LegalRAGService:
             )
             raise
         valid_sources = {source.source_id: source for source in sources}
+        retrieved_citations = [source_to_citation(source) for source in sources]
         findings: list[LegalFinding] = []
         invalid_attribution = False
         cited_ids: list[str] = []
         for generated_finding in generated.findings:
             source_ids = list(dict.fromkeys(generated_finding.source_ids))
-            finding_sources = [valid_sources.get(source_id) for source_id in source_ids]
-            compatible = bool(finding_sources) and all(
-                source is not None
+            compatible_ids = [
+                source_id
+                for source_id in source_ids
+                if source_id in valid_sources
                 and generated_finding.classification
-                in (source.document.document_metadata or {}).get(
+                in (valid_sources[source_id].document.document_metadata or {}).get(
                     "allowed_classifications", []
                 )
-                for source in finding_sources
-            )
-            if not compatible:
+            ]
+            if not compatible_ids:
                 invalid_attribution = True
                 continue
+            if len(compatible_ids) != len(source_ids):
+                invalid_attribution = True
             findings.append(
                 LegalFinding(
                     classification=generated_finding.classification,
                     statement=generated_finding.statement,
-                    source_ids=source_ids,
+                    source_ids=compatible_ids,
                     applicability_note=generated_finding.applicability_note,
                 )
             )
-            cited_ids.extend(source_ids)
+            cited_ids.extend(compatible_ids)
         cited_ids = list(dict.fromkeys(cited_ids))
         caveats = list(generated.caveats)
         operational_guidance = [
@@ -217,6 +219,7 @@ class LegalRAGService:
             answer=answer,
             findings=findings,
             citations=citations,
+            retrieved_sources=retrieved_citations,
             retrieved_embeddings=len(sources),
             indexed_embeddings=indexed_embeddings,
             trace_id=trace_id,
@@ -239,11 +242,13 @@ class LegalRAGService:
         response: LegalQueryResponse,
         started: float,
     ) -> None:
+        latency_ms = round((time.perf_counter() - started) * 1000, 2)
         self.db.add(
             LegalQueryTrace(
                 trace_id=response.trace_id,
                 query_hash=hashlib.sha256(query.encode("utf-8")).hexdigest(),
                 cited_chunk_ids=[citation.chunk_id for citation in response.citations],
+                retrieved_chunk_ids=[citation.chunk_id for citation in response.retrieved_sources],
                 retrieved_embeddings=response.retrieved_embeddings,
                 indexed_embeddings=response.indexed_embeddings,
                 model_name=response.model_name,
@@ -252,8 +257,31 @@ class LegalRAGService:
                 corpus_version=response.corpus_version,
                 input_tokens=response.usage.input_tokens,
                 output_tokens=response.usage.output_tokens,
-                latency_ms=round((time.perf_counter() - started) * 1000, 2),
+                latency_ms=latency_ms,
                 success=True,
+            )
+        )
+        self.db.add(
+            AIInteractionTrace(
+                trace_id=response.trace_id,
+                feature="legal_rag",
+                model_name=response.model_name,
+                prompt_version=response.prompt_version,
+                input_hash=hashlib.sha256(query.encode("utf-8")).hexdigest(),
+                latency_ms=latency_ms,
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                estimated_cost_usd=response.usage.estimated_cost_usd,
+                result_metadata={
+                    "retrieved_document_keys": [
+                        source.document_key for source in response.retrieved_sources
+                    ],
+                    "cited_document_keys": [source.document_key for source in response.citations],
+                    "finding_classifications": [
+                        finding.classification for finding in response.findings
+                    ],
+                    "insufficient_evidence": response.insufficient_evidence,
+                },
             )
         )
         self.db.add(
@@ -265,6 +293,9 @@ class LegalRAGService:
                 details={
                     "retrieved_embeddings": response.retrieved_embeddings,
                     "cited_chunk_ids": [citation.chunk_id for citation in response.citations],
+                    "retrieved_chunk_ids": [
+                        citation.chunk_id for citation in response.retrieved_sources
+                    ],
                     "insufficient_evidence": response.insufficient_evidence,
                     "success": True,
                 },
@@ -281,20 +312,35 @@ class LegalRAGService:
         started: float,
         error: Exception,
     ) -> None:
+        latency_ms = round((time.perf_counter() - started) * 1000, 2)
+        query_hash = hashlib.sha256(query.encode("utf-8")).hexdigest()
         self.db.add(
             LegalQueryTrace(
                 trace_id=trace_id,
-                query_hash=hashlib.sha256(query.encode("utf-8")).hexdigest(),
+                query_hash=query_hash,
                 cited_chunk_ids=[],
+                retrieved_chunk_ids=[],
                 retrieved_embeddings=0,
                 indexed_embeddings=indexed_embeddings,
                 model_name=self.settings.legal_rag_model,
                 embedding_model=self.settings.legal_rag_embedding_model,
                 prompt_version=LEGAL_RAG_PROMPT_VERSION,
                 corpus_version=corpus_version,
-                latency_ms=round((time.perf_counter() - started) * 1000, 2),
+                latency_ms=latency_ms,
                 success=False,
                 error_type=type(error).__name__,
+            )
+        )
+        self.db.add(
+            AIInteractionTrace(
+                trace_id=trace_id,
+                feature="legal_rag",
+                model_name=self.settings.legal_rag_model,
+                prompt_version=LEGAL_RAG_PROMPT_VERSION,
+                input_hash=query_hash,
+                latency_ms=latency_ms,
+                success=False,
+                result_metadata={"error_type": type(error).__name__},
             )
         )
         self.db.commit()

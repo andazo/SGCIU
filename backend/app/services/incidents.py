@@ -21,14 +21,21 @@ class IncidentService:
     def __init__(self, db: Session):
         self.db = db
 
-    def create(self, payload: ComplaintSubmissionCreate) -> ComplaintSubmission:
+    def create(
+        self,
+        payload: ComplaintSubmissionCreate,
+        *,
+        recorded_at: datetime | None = None,
+    ) -> ComplaintSubmission:
+        extracted = payload.ai_extracted_data
+        occurred_at = self._parse_occurred_at(extracted.incident_datetime)
         incident = ComplaintSubmission(
             name=payload.name,
             identification=payload.identification,
             entered_by_badge=payload.entered_by_badge,
             email=str(payload.email) if payload.email else None,
             phone=payload.phone,
-            ai_extracted_data=payload.ai_extracted_data.model_dump(),
+            ai_extracted_data=extracted.model_dump(),
             ai_summary_text=payload.ai_summary_text,
             analysis_metadata=payload.analysis_metadata,
             police_input=payload.police_input,
@@ -38,6 +45,10 @@ class IncidentService:
             prompt_version=payload.prompt_version,
             truth_confirmation=payload.truth_confirmation,
             data_usage_consent=payload.data_usage_consent,
+            created_at=recorded_at,
+            occurred_at=occurred_at,
+            occurred_at_precision=extracted.incident_datetime_precision,
+            occurred_at_source=extracted.incident_datetime_source,
         )
         self.db.add(incident)
         self.db.commit()
@@ -95,6 +106,16 @@ class IncidentService:
                 self.request_human_review(incident, initial_review_reason)
         return incident
 
+    @staticmethod
+    def _parse_occurred_at(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed
+
     def request_human_review(
         self,
         incident: ComplaintSubmission,
@@ -122,6 +143,7 @@ class IncidentService:
         synthetic_only: bool | None = None,
         created_from: date | None = None,
         created_to: date | None = None,
+        date_basis: str = "registration",
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[ComplaintSubmission], int]:
@@ -135,9 +157,9 @@ class IncidentService:
         if category:
             values = filter_values(category, kind="category") or (category,)
             condition = (
-                ComplaintSubmission.ai_extracted_data["categoria_preliminar"].as_string().in_(
-                    values
-                )
+                ComplaintSubmission.ai_extracted_data["categoria_preliminar"]
+                .as_string()
+                .in_(values)
             )
             query = query.where(condition)
             count_query = count_query.where(condition)
@@ -147,14 +169,17 @@ class IncidentService:
             )
             query = query.where(condition)
             count_query = count_query.where(condition)
+        date_expression = (
+            func.coalesce(ComplaintSubmission.occurred_at, ComplaintSubmission.created_at)
+            if date_basis == "occurrence"
+            else ComplaintSubmission.created_at
+        )
         if created_from:
-            condition = ComplaintSubmission.created_at >= datetime.combine(
-                created_from, time.min, tzinfo=UTC
-            )
+            condition = date_expression >= datetime.combine(created_from, time.min, tzinfo=UTC)
             query = query.where(condition)
             count_query = count_query.where(condition)
         if created_to:
-            condition = ComplaintSubmission.created_at < datetime.combine(
+            condition = date_expression < datetime.combine(
                 created_to + timedelta(days=1), time.min, tzinfo=UTC
             )
             query = query.where(condition)

@@ -138,9 +138,7 @@ def _add_legal_chunk(
         document_metadata={
             "source_category": source_category,
             "legal_force": (
-                "operational_guidance"
-                if source_category == "operational_protocol"
-                else "binding"
+                "operational_guidance" if source_category == "operational_protocol" else "binding"
             ),
             "authority_scope": (
                 "issuing_institution_only"
@@ -357,6 +355,7 @@ def test_answer_fails_closed_when_model_cites_an_unretrieved_source(db_session):
 
     assert response.insufficient_evidence is True
     assert response.citations == []
+    assert len(response.retrieved_sources) == 1
     assert "atribución verificable" in response.answer
 
 

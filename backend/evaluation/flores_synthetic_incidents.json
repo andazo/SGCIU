@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Dataset completamente sintético para probar el panel administrativo de SGCIU. No representa hechos reales ni contiene datos personales.",
   "sources": [
     "https://flores.go.cr/",
@@ -9,6 +9,7 @@
   "incidents": [
     {
       "case_id": "FLO-SJ-001",
+      "cluster_group": "san_joaquin_parque_noise_august_2026",
       "descripcion_detallada": "Varias personas mantienen música con parlantes a volumen muy alto junto al parque central durante la noche y el ruido afecta las viviendas cercanas.",
       "relacion_incidente": "vecino",
       "categoria_preliminar": "ruido",
@@ -21,6 +22,7 @@
     },
     {
       "case_id": "FLO-SJ-002",
+      "cluster_group": "san_joaquin_parque_noise_august_2026",
       "descripcion_detallada": "Se reporta nuevamente música y gritos después de las diez de la noche en las inmediaciones del parque central, con grupos que permanecen en la acera.",
       "relacion_incidente": "vecino",
       "categoria_preliminar": "ruido",
@@ -251,6 +253,7 @@
     },
     {
       "case_id": "FLO-SJ-020",
+      "cluster_group": "san_joaquin_parque_noise_august_2026",
       "descripcion_detallada": "Una actividad con parlantes mantiene música fuerte y gritos pasada la medianoche, situación similar a otros reportes recientes del centro.",
       "relacion_incidente": "vecino",
       "categoria_preliminar": "ruido",
@@ -263,6 +266,7 @@
     },
     {
       "case_id": "FLO-BA-001",
+      "cluster_group": "barrantes_residential_noise_august_2026",
       "descripcion_detallada": "Una vivienda mantiene música de bajos fuertes durante varias horas y no permite descansar a las casas cercanas.",
       "relacion_incidente": "vecino",
       "categoria_preliminar": "ruido",
@@ -275,6 +279,7 @@
     },
     {
       "case_id": "FLO-BA-002",
+      "cluster_group": "barrantes_residential_noise_august_2026",
       "descripcion_detallada": "Por segundo fin de semana se escuchan parlantes y gritos hasta la madrugada desde la misma zona residencial.",
       "relacion_incidente": "vecino",
       "categoria_preliminar": "ruido",

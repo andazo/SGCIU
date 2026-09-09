@@ -3,8 +3,13 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 
 from app.config import get_settings
-from app.evaluation.module_runner import _percentile, _persist, evaluate_intake
-from app.evaluation.seed_incidents import DEFAULT_DATASET, load_seed_dataset
+from app.evaluation.module_runner import (
+    _percentile,
+    _persist,
+    evaluate_clustering,
+    evaluate_intake,
+)
+from app.evaluation.seed_incidents import DEFAULT_DATASET, load_seed_dataset, seed_incidents
 from app.models import EvaluationRun
 from tests.fakes import CompleteIntakeProvider
 
@@ -41,3 +46,22 @@ def test_evaluation_run_persists_dataset_provenance(db_session):
     assert stored.dataset_sha256 == report.dataset_sha256
     assert stored.metrics["cases"] == 50
     assert stored.started_at.replace(tzinfo=UTC) <= datetime.now(UTC)
+
+
+def test_clustering_evaluation_uses_explicit_gold_groups_and_threshold_sweep(db_session):
+    dataset = load_seed_dataset()
+    seed_incidents(db_session, dataset)
+
+    report = evaluate_clustering(db_session, dataset, DEFAULT_DATASET)
+
+    assert report.metrics["expected_pairs"] == 4
+    assert report.metrics["gold_pair_definition"].startswith("explicit expert-authored")
+    assert set(report.metrics["threshold_analysis"]) == {
+        "0.60",
+        "0.65",
+        "0.70",
+        "0.75",
+        "0.78",
+        "0.80",
+        "0.85",
+    }

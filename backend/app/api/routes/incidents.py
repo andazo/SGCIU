@@ -19,7 +19,7 @@ from app.schemas import (
     SemanticRecalculationResponse,
 )
 from app.services.incidents import IncidentNotFoundError, IncidentService
-from app.services.semantic import SemanticIncidentService, _is_recent
+from app.services.semantic import SemanticIncidentService, incident_time_reference
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 DbSession = Annotated[Session, Depends(get_db)]
@@ -76,6 +76,8 @@ def get_related_incidents(
                 similarity_score=item.similarity_score,
                 semantic_score=item.semantic_score,
                 match_reasons=list(item.match_reasons),
+                occurred_at=incident_time_reference(item.incident).value,
+                temporal_basis=incident_time_reference(item.incident).basis,
             )
             for item in items
         ],
@@ -113,28 +115,28 @@ def list_candidate_clusters(db: DbSession, _actor: AdminRole):
 
 
 @router.get("/clusters/recurrent", response_model=list[RecurrentPatternResponse])
-def list_recurrent_patterns(db: DbSession, _actor: AdminRole):
+def list_recurrent_patterns(
+    db: DbSession,
+    _actor: AdminRole,
+    window_days: Annotated[int, Query(ge=1, le=365)] = 30,
+):
     cutoff_service = SemanticIncidentService(db)
-    cutoff = cutoff_service.settings.cluster_time_window_days
     patterns = []
-    for cluster in cutoff_service.list_recurrent_patterns():
-        threshold = datetime.now(UTC) - timedelta(days=cutoff)
+    for cluster in cutoff_service.list_recurrent_patterns(window_days=window_days):
+        threshold = datetime.now(UTC) - timedelta(days=window_days)
         members = sorted(
             [
                 member
                 for member in cluster.members
-                if member.incident
-                and _is_recent(member.incident.created_at, threshold)
+                if member.incident and incident_time_reference(member.incident).value >= threshold
             ],
-            key=lambda member: member.incident.created_at,
+            key=lambda member: incident_time_reference(member.incident).value,
         )
         incidents = [member.incident for member in members]
         data = [incident.ai_extracted_data or {} for incident in incidents]
         districts = [item.get("distrito") for item in data if item.get("distrito")]
         categories = [
-            item.get("categoria_preliminar")
-            for item in data
-            if item.get("categoria_preliminar")
+            item.get("categoria_preliminar") for item in data if item.get("categoria_preliminar")
         ]
         signals = sorted(
             {
@@ -149,8 +151,8 @@ def list_recurrent_patterns(db: DbSession, _actor: AdminRole):
                 id=cluster.id,
                 title=cluster.label,
                 incident_count=len(members),
-                first_seen=members[0].incident.created_at,
-                last_seen=members[-1].incident.created_at,
+                first_seen=incident_time_reference(members[0].incident).value,
+                last_seen=incident_time_reference(members[-1].incident).value,
                 district=max(set(districts), key=districts.count) if districts else None,
                 category=max(set(categories), key=categories.count) if categories else None,
                 average_similarity=round(
@@ -161,6 +163,8 @@ def list_recurrent_patterns(db: DbSession, _actor: AdminRole):
                     RecurrentPatternMemberResponse(
                         incident_id=member.incident_id,
                         created_at=member.incident.created_at,
+                        occurred_at=incident_time_reference(member.incident).value,
+                        temporal_basis=incident_time_reference(member.incident).basis,
                         category=(member.incident.ai_extracted_data or {}).get(
                             "categoria_preliminar"
                         ),

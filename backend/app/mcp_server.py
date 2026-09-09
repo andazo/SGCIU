@@ -45,6 +45,7 @@ def search_incidents(
     created_to: date | None = None,
     limit: int = 20,
     offset: int = 0,
+    date_basis: str = "registration",
 ) -> str:
     """Busca incidentes por filtros operativos y fecha de registro, sin datos de contacto."""
     return _execute(
@@ -57,6 +58,7 @@ def search_incidents(
             "created_to": created_to,
             "limit": limit,
             "offset": offset,
+            "date_basis": date_basis,
         },
     )
 
@@ -69,6 +71,7 @@ def aggregate_incidents(
     synthetic_only: bool | None = None,
     created_from: date | None = None,
     created_to: date | None = None,
+    date_basis: str = "registration",
 ) -> str:
     """Agrupa y cuenta incidentes por categoria_preliminar o distrito."""
     return _execute(
@@ -80,6 +83,7 @@ def aggregate_incidents(
             "synthetic_only": synthetic_only,
             "created_from": created_from,
             "created_to": created_to,
+            "date_basis": date_basis,
         },
     )
 
@@ -131,8 +135,7 @@ def capabilities() -> str:
         {
             "server": "sgciu-incident-intelligence",
             "scope": (
-                "incidentes urbanos, clusters candidatos, patrones recurrentes "
-                "y corpus normativo"
+                "incidentes urbanos, clusters candidatos, patrones recurrentes y corpus normativo"
             ),
             "pii": "Los tools no devuelven nombre, correo ni teléfono.",
             "limitations": [

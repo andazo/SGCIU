@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from typing import Literal
 
@@ -29,6 +30,8 @@ Distrito = Literal["San Joaquin", "Barrantes", "Llorente"]
 TipoLugar = Literal["establecimiento", "casa", "parque", "escuela", "otro"]
 Urgencia = Literal["baja", "media", "alta", "inmediata"]
 TemporalRelation = Literal["pasado", "en_curso", "futuro", "desconocido"]
+TemporalPrecision = Literal["exact", "day", "relative", "approximate", "unknown"]
+TemporalSource = Literal["explicit", "inferred", "unknown"]
 RegistrationMode = Literal["complete", "anonymous"]
 AuthRole = Literal["police", "administrative"]
 IntakeFieldStatus = Literal["known", "missing", "ambiguous", "unknown", "declined"]
@@ -204,9 +207,13 @@ class ComplaintExtractedData(StrictModel):
     tipo_lugar: TipoLugar | None = None
     fecha_hora_aproximada: str | None = None
     incident_datetime: str | None = None
+    incident_datetime_precision: TemporalPrecision = "unknown"
+    incident_datetime_source: TemporalSource = "unknown"
     reference_datetime: str | None = None
     temporal_relation: TemporalRelation = "desconocido"
     is_currently_occurring: bool = False
+    is_recurring: bool = False
+    recurrence_pattern: str | None = None
     entities: IncidentEntities = Field(default_factory=IncidentEntities)
     urgency: Urgencia = "media"
     confidence_by_field: FieldConfidence = Field(default_factory=FieldConfidence)
@@ -283,6 +290,7 @@ class IntakeSessionResponse(StrictModel):
     follow_up_count: int
     model_name: str | None
     prompt_version: str
+    trace_id: str | None = None
 
 
 class ComplaintSubmissionCreate(BaseModel):
@@ -385,6 +393,9 @@ class ComplaintSubmissionResponse(BaseModel):
     truth_confirmation: bool
     data_usage_consent: bool
     created_at: datetime
+    occurred_at: datetime | None = None
+    occurred_at_precision: str = "unknown"
+    occurred_at_source: str = "unknown"
     updated_at: datetime | None = None
 
 
@@ -438,6 +449,8 @@ class RelatedIncident(StrictModel):
     similarity_score: float
     semantic_score: float
     match_reasons: list[str]
+    occurred_at: datetime | None = None
+    temporal_basis: str = "created_at_fallback"
 
 
 class RelatedIncidentList(StrictModel):
@@ -462,6 +475,8 @@ class IncidentClusterResponse(StrictModel):
 class RecurrentPatternMemberResponse(StrictModel):
     incident_id: int
     created_at: datetime
+    occurred_at: datetime | None = None
+    temporal_basis: str = "created_at_fallback"
     category: str | None
     district: str | None
     address: str | None
@@ -521,6 +536,41 @@ class OperationalQueryResponse(StrictModel):
     requires_human_review: bool = False
     usage: ModelUsage = Field(default_factory=ModelUsage)
     session_id: str | None = None
+    latency_ms: float = 0.0
+
+
+class ManualEvaluationLabelRequest(StrictModel):
+    expected_output: dict[str, object] = Field(default_factory=dict)
+    quality_scores: dict[str, float] = Field(default_factory=dict)
+    notes: str | None = Field(default=None, max_length=4_000)
+
+    @model_validator(mode="after")
+    def validate_quality_scores(self):
+        if any(
+            not math.isfinite(value) or value < 0 or value > 1
+            for value in self.quality_scores.values()
+        ):
+            raise ValueError("Las puntuaciones manuales deben estar entre 0 y 1.")
+        return self
+
+
+class AIInteractionTraceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    trace_id: str
+    session_id: str | None
+    incident_id: int | None
+    feature: str
+    model_name: str
+    prompt_version: str
+    latency_ms: float
+    input_tokens: int
+    output_tokens: int
+    estimated_cost_usd: float
+    success: bool
+    result_metadata: dict[str, object]
+    created_at: datetime
+    manual_label: dict[str, object] | None = None
 
 
 class OperationalSessionCreateResponse(StrictModel):
@@ -564,9 +614,7 @@ class LegalCitation(StrictModel):
 
 
 class LegalFinding(StrictModel):
-    classification: Literal[
-        "legal_obligation", "municipal_authority", "recommended_procedure"
-    ]
+    classification: Literal["legal_obligation", "municipal_authority", "recommended_procedure"]
     statement: str
     source_ids: list[str] = Field(min_length=1)
     applicability_note: str | None = None
@@ -576,6 +624,7 @@ class LegalQueryResponse(StrictModel):
     answer: str
     findings: list[LegalFinding] = Field(default_factory=list)
     citations: list[LegalCitation]
+    retrieved_sources: list[LegalCitation] = Field(default_factory=list)
     retrieved_embeddings: int
     indexed_embeddings: int
     trace_id: str

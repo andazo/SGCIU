@@ -69,10 +69,29 @@ class LocalToolGateway(ToolGateway):
         *,
         trace_id: str | None = None,
     ) -> dict[str, object]:
-        result = self.registry.call(self.db, name, arguments, actor_role=self.actor_role)
+        audit_trace_id = trace_id or str(uuid.uuid4())
+        try:
+            result = self.registry.call(self.db, name, arguments, actor_role=self.actor_role)
+        except Exception as exc:
+            self.db.rollback()
+            self.db.add(
+                AuditEvent(
+                    trace_id=audit_trace_id,
+                    actor_role=self.actor_role,
+                    action=f"tool:{name}",
+                    resource_type="agent_tool",
+                    details={
+                        "argument_keys": sorted(arguments),
+                        "success": False,
+                        "error_type": type(exc).__name__,
+                    },
+                )
+            )
+            self.db.commit()
+            raise
         self.db.add(
             AuditEvent(
-                trace_id=trace_id or str(uuid.uuid4()),
+                trace_id=audit_trace_id,
                 actor_role=self.actor_role,
                 action=f"tool:{name}",
                 resource_type="agent_tool",

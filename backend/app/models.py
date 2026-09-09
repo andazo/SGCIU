@@ -106,6 +106,9 @@ class ComplaintSubmission(Base):
     truth_confirmation = Column(Boolean, nullable=False)
     data_usage_consent = Column(Boolean, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    occurred_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    occurred_at_precision = Column(String(24), nullable=False, default="unknown")
+    occurred_at_source = Column(String(24), nullable=False, default="unknown")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     embedding_record = relationship("IncidentEmbedding", back_populates="incident", uselist=False)
@@ -131,6 +134,7 @@ class IntakeSession(Base):
     is_complete = Column(Boolean, nullable=False, default=False)
     model_name = Column(String(120), nullable=True)
     prompt_version = Column(String(40), nullable=False, default="intake-v1")
+    last_trace_id = Column(String(36), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -218,6 +222,7 @@ class LegalQueryTrace(Base):
     trace_id = Column(String(36), nullable=False, unique=True, index=True)
     query_hash = Column(String(64), nullable=False)
     cited_chunk_ids = Column(JSON_TYPE, nullable=False, default=list)
+    retrieved_chunk_ids = Column(JSON_TYPE, nullable=False, default=list)
     retrieved_embeddings = Column(Integer, nullable=False, default=0)
     indexed_embeddings = Column(Integer, nullable=False, default=0)
     model_name = Column(String(120), nullable=False)
@@ -352,3 +357,37 @@ class EvaluationRun(Base):
     started_at = Column(DateTime(timezone=True), nullable=False)
     completed_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class AIInteractionTrace(Base):
+    """Privacy-conscious telemetry for manual and automated AI evaluation."""
+
+    __tablename__ = "ai_interaction_traces"
+
+    id = Column(Integer, primary_key=True)
+    trace_id = Column(String(36), nullable=False, unique=True, index=True)
+    session_id = Column(String(36), nullable=True, index=True)
+    incident_id = Column(Integer, nullable=True, index=True)
+    feature = Column(String(64), nullable=False, index=True)
+    model_name = Column(String(120), nullable=False)
+    prompt_version = Column(String(64), nullable=False)
+    input_hash = Column(String(64), nullable=False)
+    latency_ms = Column(Float, nullable=False)
+    input_tokens = Column(Integer, nullable=False, default=0)
+    output_tokens = Column(Integer, nullable=False, default=0)
+    estimated_cost_usd = Column(Float, nullable=False, default=0)
+    success = Column(Boolean, nullable=False, default=True)
+    result_metadata = Column(JSON_TYPE, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class ManualEvaluationLabel(Base):
+    __tablename__ = "manual_evaluation_labels"
+
+    id = Column(Integer, primary_key=True)
+    trace_id = Column(String(36), nullable=False, unique=True, index=True)
+    expected_output = Column(JSON_TYPE, nullable=False, default=dict)
+    quality_scores = Column(JSON_TYPE, nullable=False, default=dict)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

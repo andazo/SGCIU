@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import time
 import uuid
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.intake import (
@@ -12,7 +15,7 @@ from app.ai.intake import (
     reconcile_field_states,
     unresolved_fields,
 )
-from app.models import AuditEvent, IntakeSession
+from app.models import AIInteractionTrace, AuditEvent, IntakeSession
 from app.schemas import (
     ChatMessage,
     ComplaintExtractedData,
@@ -71,21 +74,45 @@ class IntakeService:
         return session
 
     def add_user_message(self, session_id: str, content: str) -> IntakeSessionResponse:
-        session = self.get(session_id)
+        session = self.db.scalar(
+            select(IntakeSession).where(IntakeSession.id == session_id).with_for_update()
+        )
+        if session is None:
+            raise IntakeSessionNotFoundError(session_id)
         messages = [ChatMessage.model_validate(message) for message in session.messages]
         messages.append(ChatMessage(role="user", content=content))
         stored_data = dict(session.extracted_data)
         previous_workflow = stored_data.pop("_workflow", {})
         current_data = reconcile_field_states(ComplaintExtractedData.model_validate(stored_data))
         previous_follow_ups = int(previous_workflow.get("follow_up_count", 0))
-        result = self.provider.analyze(
-            messages,
-            current_data,
-            follow_up_count=previous_follow_ups,
-            emergency_guidance_already_shown=bool(
-                previous_workflow.get("emergency_guidance_shown")
-            ),
-        )
+        trace_id = str(uuid.uuid4())
+        started = time.perf_counter()
+        try:
+            result = self.provider.analyze(
+                messages,
+                current_data,
+                follow_up_count=previous_follow_ups,
+                emergency_guidance_already_shown=bool(
+                    previous_workflow.get("emergency_guidance_shown")
+                ),
+            )
+        except Exception as exc:
+            self.db.add(
+                AIInteractionTrace(
+                    trace_id=trace_id,
+                    session_id=session.id,
+                    feature="citizen_intake",
+                    model_name=self.provider.model_name,
+                    prompt_version=session.prompt_version,
+                    input_hash=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+                    latency_ms=round((time.perf_counter() - started) * 1000, 2),
+                    success=False,
+                    result_metadata={"error_type": type(exc).__name__},
+                )
+            )
+            self.db.commit()
+            raise
+        latency_ms = round((time.perf_counter() - started) * 1000, 2)
         messages.append(ChatMessage(role="assistant", content=result.assistant_message))
 
         session.messages = [message.model_dump() for message in messages]
@@ -94,6 +121,7 @@ class IntakeService:
         session.is_complete = result.is_complete
         session.model_name = result.model_name
         session.prompt_version = result.prompt_version
+        session.last_trace_id = trace_id
         follow_up_count = previous_follow_ups + (0 if result.is_complete else 1)
         metadata = dict(session.extracted_data)
         metadata["_workflow"] = {
@@ -111,6 +139,39 @@ class IntakeService:
             "unresolved_fields": unresolved_fields(result.extracted_data),
         }
         session.extracted_data = metadata
+        usage = self.provider.last_usage
+        self.db.add(
+            AIInteractionTrace(
+                trace_id=trace_id,
+                session_id=session.id,
+                feature="citizen_intake",
+                model_name=result.model_name or self.provider.model_name,
+                prompt_version=result.prompt_version,
+                input_hash=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+                latency_ms=latency_ms,
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+                estimated_cost_usd=usage.estimated_cost_usd,
+                result_metadata={
+                    "is_complete": result.is_complete,
+                    "completion_reason": result.completion_reason,
+                    "follow_up_number": follow_up_count,
+                    "missing_fields": result.missing_fields,
+                    "category": result.extracted_data.categoria_preliminar,
+                    "district": result.extracted_data.distrito,
+                    "relation": result.extracted_data.relacion_incidente,
+                    "place_type": result.extracted_data.tipo_lugar,
+                    "incident_datetime": result.extracted_data.incident_datetime,
+                    "incident_datetime_precision": (
+                        result.extracted_data.incident_datetime_precision
+                    ),
+                    "is_recurring": result.extracted_data.is_recurring,
+                    "recurrence_pattern": result.extracted_data.recurrence_pattern,
+                    "requires_human_review": result.requires_human_review,
+                    "emergency_guidance": result.emergency_guidance,
+                },
+            )
+        )
         self.db.commit()
         self.db.refresh(session)
         return self.to_response(session)
@@ -231,4 +292,5 @@ class IntakeService:
             follow_up_count=int(workflow.get("follow_up_count", 0)),
             model_name=session.model_name,
             prompt_version=session.prompt_version,
+            trace_id=session.last_trace_id,
         )

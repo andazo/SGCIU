@@ -17,6 +17,7 @@ from app.schemas import (
 from app.services.operational import (
     OperationalSessionNotFoundError,
     OperationalSessionService,
+    record_operational_interaction,
 )
 
 router = APIRouter(prefix="/operational", tags=["operational-agent"])
@@ -76,7 +77,11 @@ async def query_operational_agent(
     try:
         if get_settings().tool_transport == "mcp":
             async with connect_mcp_gateway() as gateway:
-                return await OperationalAgent(gateway).run(payload.query)
-        return await OperationalAgent(LocalToolGateway(db)).run(payload.query)
+                response = await OperationalAgent(gateway).run(payload.query)
+        else:
+            response = await OperationalAgent(LocalToolGateway(db)).run(payload.query)
+        record_operational_interaction(db, payload.query, response)
+        db.commit()
+        return response
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models import ComplaintSubmission, IncidentCluster
 from app.services.incidents import IncidentNotFoundError, IncidentService
 from app.services.normalization import canonical_category, canonical_district, filter_values
-from app.services.semantic import SemanticIncidentService, _is_recent
+from app.services.semantic import SemanticIncidentService, incident_time_reference
 from app.tools.legal import legal_tool_definitions
 from app.tools.registry import ToolDefinition, ToolRegistry
 
@@ -26,6 +26,7 @@ class GetIncidentInput(ToolInput):
 class DateRangeInput(ToolInput):
     created_from: date | None = None
     created_to: date | None = None
+    date_basis: Literal["registration", "occurrence"] = "registration"
 
     @model_validator(mode="after")
     def validate_date_range(self):
@@ -64,9 +65,13 @@ class GetRecurrentPatternsInput(ToolInput):
 
 def _safe_incident(incident: ComplaintSubmission) -> dict[str, object]:
     data = incident.ai_extracted_data or {}
+    temporal = incident_time_reference(incident)
     return {
         "incident_id": incident.id,
         "created_at": incident.created_at.isoformat() if incident.created_at else None,
+        "occurred_at": temporal.value.isoformat(),
+        "temporal_basis": temporal.basis,
+        "temporal_precision": temporal.precision,
         "status": incident.status,
         "category": data.get("categoria_preliminar"),
         "district": data.get("distrito"),
@@ -96,6 +101,7 @@ def search_incidents(db: Session, arguments: SearchIncidentsInput) -> dict[str, 
         synthetic_only=arguments.synthetic_only,
         created_from=arguments.created_from,
         created_to=arguments.created_to,
+        date_basis=arguments.date_basis,
         limit=arguments.limit,
         offset=arguments.offset,
     )
@@ -111,6 +117,7 @@ def search_incidents(db: Session, arguments: SearchIncidentsInput) -> dict[str, 
             "synthetic_only": arguments.synthetic_only,
             "created_from": arguments.created_from.isoformat() if arguments.created_from else None,
             "created_to": arguments.created_to.isoformat() if arguments.created_to else None,
+            "date_basis": arguments.date_basis,
         },
         "incidents": [_safe_incident(incident) for incident in incidents],
     }
@@ -133,21 +140,27 @@ def aggregate_incidents(db: Session, arguments: AggregateIncidentsInput) -> dict
             normalized_category,
         )
         query = query.where(
-            ComplaintSubmission.ai_extracted_data["categoria_preliminar"].as_string().in_(category_values)
+            ComplaintSubmission.ai_extracted_data["categoria_preliminar"]
+            .as_string()
+            .in_(category_values)
         )
     if arguments.synthetic_only is not None:
         query = query.where(
             ComplaintSubmission.analysis_metadata["synthetic"].as_boolean()
             == arguments.synthetic_only
         )
+    date_expression = (
+        func.coalesce(ComplaintSubmission.occurred_at, ComplaintSubmission.created_at)
+        if arguments.date_basis == "occurrence"
+        else ComplaintSubmission.created_at
+    )
     if arguments.created_from:
         query = query.where(
-            ComplaintSubmission.created_at
-            >= datetime.combine(arguments.created_from, time.min, tzinfo=UTC)
+            date_expression >= datetime.combine(arguments.created_from, time.min, tzinfo=UTC)
         )
     if arguments.created_to:
         query = query.where(
-            ComplaintSubmission.created_at
+            date_expression
             < datetime.combine(arguments.created_to + timedelta(days=1), time.min, tzinfo=UTC)
         )
     rows = db.execute(query.order_by(func.count().desc())).all()
@@ -166,6 +179,7 @@ def aggregate_incidents(db: Session, arguments: AggregateIncidentsInput) -> dict
             "synthetic_only": arguments.synthetic_only,
             "created_from": arguments.created_from.isoformat() if arguments.created_from else None,
             "created_to": arguments.created_to.isoformat() if arguments.created_to else None,
+            "date_basis": arguments.date_basis,
         },
         "groups": [
             {"value": value, "count": count}
@@ -223,18 +237,16 @@ def get_incident_cluster(db: Session, arguments: GetClusterInput) -> dict[str, o
     }
 
 
-def get_recurrent_patterns(
-    db: Session, arguments: GetRecurrentPatternsInput
-) -> dict[str, object]:
+def get_recurrent_patterns(db: Session, arguments: GetRecurrentPatternsInput) -> dict[str, object]:
     service = SemanticIncidentService(db)
     window_days = arguments.window_days
     threshold = datetime.now(UTC) - timedelta(days=window_days)
     patterns: list[dict[str, object]] = []
-    for cluster in service.list_recurrent_patterns():
+    for cluster in service.list_recurrent_patterns(window_days=window_days):
         members = [
             member
             for member in cluster.members
-            if member.incident and _is_recent(member.incident.created_at, threshold)
+            if member.incident and incident_time_reference(member.incident).value >= threshold
         ]
         if not members:
             continue
@@ -252,6 +264,8 @@ def get_recurrent_patterns(
                         "created_at": member.incident.created_at.isoformat()
                         if member.incident.created_at
                         else None,
+                        "occurred_at": incident_time_reference(member.incident).value.isoformat(),
+                        "temporal_basis": incident_time_reference(member.incident).basis,
                         "category": (member.incident.ai_extracted_data or {}).get(
                             "categoria_preliminar"
                         ),
@@ -264,7 +278,7 @@ def get_recurrent_patterns(
                     }
                     for member in sorted(
                         members,
-                        key=lambda item: item.incident.created_at,
+                        key=lambda item: incident_time_reference(item.incident).value,
                     )
                 ],
             }

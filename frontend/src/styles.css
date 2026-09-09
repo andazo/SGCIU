@@ -1923,3 +1923,7 @@ pre {
     width: 100%;
   }
 }
+.mutedInline {
+  color: var(--muted);
+  font-size: 0.85em;
+}

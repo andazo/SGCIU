@@ -62,6 +62,7 @@ class Settings:
     legal_rag_chunk_tokens: int
     legal_rag_chunk_overlap_tokens: int
     legal_rag_min_semantic_score: float
+    legal_rag_min_lexical_score: float
     legal_rag_corpus_path: Path
     llm_input_cost_per_million: float
     llm_output_cost_per_million: float
@@ -70,6 +71,7 @@ class Settings:
     tool_transport: str
     similarity_threshold: float
     cluster_time_window_days: int
+    cluster_candidate_k: int
     admin_api_key: str | None
     require_admin_auth: bool
     auth_session_ttl_hours: int
@@ -124,21 +126,16 @@ def get_settings() -> Settings:
             {"none", "low", "medium", "high", "xhigh"},
             "LEGAL_RAG_REASONING_EFFORT",
         ),
-        legal_rag_embedding_model=os.getenv(
-            "LEGAL_RAG_EMBEDDING_MODEL", "text-embedding-3-large"
-        ),
-        legal_rag_embedding_dimensions=int(
-            os.getenv("LEGAL_RAG_EMBEDDING_DIMENSIONS", "1536")
-        ),
+        legal_rag_embedding_model=os.getenv("LEGAL_RAG_EMBEDDING_MODEL", "text-embedding-3-large"),
+        legal_rag_embedding_dimensions=int(os.getenv("LEGAL_RAG_EMBEDDING_DIMENSIONS", "1536")),
         legal_rag_top_k=max(1, int(os.getenv("LEGAL_RAG_TOP_K", "8"))),
         legal_rag_candidate_k=max(8, int(os.getenv("LEGAL_RAG_CANDIDATE_K", "40"))),
         legal_rag_chunk_tokens=max(128, int(os.getenv("LEGAL_RAG_CHUNK_TOKENS", "512"))),
         legal_rag_chunk_overlap_tokens=max(
             0, int(os.getenv("LEGAL_RAG_CHUNK_OVERLAP_TOKENS", "77"))
         ),
-        legal_rag_min_semantic_score=float(
-            os.getenv("LEGAL_RAG_MIN_SEMANTIC_SCORE", "0.25")
-        ),
+        legal_rag_min_semantic_score=float(os.getenv("LEGAL_RAG_MIN_SEMANTIC_SCORE", "0.25")),
+        legal_rag_min_lexical_score=float(os.getenv("LEGAL_RAG_MIN_LEXICAL_SCORE", "0.08")),
         legal_rag_corpus_path=Path(
             os.getenv("LEGAL_RAG_CORPUS_PATH", str(APP_ROOT / "corpus/legal"))
         ).expanduser(),
@@ -149,6 +146,7 @@ def get_settings() -> Settings:
         tool_transport=os.getenv("TOOL_TRANSPORT", "local").lower(),
         similarity_threshold=float(os.getenv("SIMILARITY_THRESHOLD", "0.78")),
         cluster_time_window_days=int(os.getenv("CLUSTER_TIME_WINDOW_DAYS", "30")),
+        cluster_candidate_k=max(20, int(os.getenv("CLUSTER_CANDIDATE_K", "200"))),
         admin_api_key=admin_api_key,
         require_admin_auth=require_admin_auth,
         auth_session_ttl_hours=max(1, int(os.getenv("AUTH_SESSION_TTL_HOURS", "8"))),

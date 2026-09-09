@@ -44,3 +44,42 @@ def test_normalization_persists_authoritative_reference():
     assert data.reference_datetime == REFERENCE.isoformat()
     assert data.temporal_relation == "pasado"
     assert data.incident_datetime == "2026-07-27T12:00:00-06:00"
+
+
+def test_named_date_preserves_reported_clock_time_and_precision():
+    data = normalize_temporal_data(
+        ComplaintExtractedData(fecha_hora_aproximada="viernes 14 de agosto de 2026 a las 22:40"),
+        reference=REFERENCE,
+    )
+
+    assert data.incident_datetime == "2026-08-14T22:40:00-06:00"
+    assert data.incident_datetime_precision == "exact"
+    assert data.incident_datetime_source == "explicit"
+
+
+def test_relative_weeks_and_approximate_months_are_normalized():
+    weeks = normalize_temporal_data(
+        ComplaintExtractedData(fecha_hora_aproximada="hace 3 semanas"),
+        reference=REFERENCE,
+    )
+    approximate = normalize_temporal_data(
+        ComplaintExtractedData(fecha_hora_aproximada="a finales de junio de 2026"),
+        reference=REFERENCE,
+    )
+
+    assert weeks.incident_datetime == "2026-07-07T12:00:00-06:00"
+    assert weeks.incident_datetime_precision == "relative"
+    assert approximate.incident_datetime == "2026-06-25T00:00:00-06:00"
+    assert approximate.incident_datetime_precision == "approximate"
+
+
+def test_recurrence_is_preserved_as_structured_temporal_context():
+    data = normalize_temporal_data(
+        ComplaintExtractedData(
+            fecha_hora_aproximada="todos los fines de semana durante la noche"
+        ),
+        reference=REFERENCE,
+    )
+
+    assert data.is_recurring is True
+    assert data.recurrence_pattern == "todos los fines de semana"

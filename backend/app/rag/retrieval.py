@@ -6,7 +6,7 @@ import unicodedata
 from collections import Counter
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import func, literal_column, select
 from sqlalchemy.orm import Session
 
 from app.ai.embeddings import EmbeddingProvider, get_legal_embedding_provider
@@ -92,9 +92,7 @@ def _bm25(query: str, rows: list[tuple[int, str]]) -> dict[int, float]:
             inverse_frequency = math.log(
                 1 + (total_documents - document_frequency + 0.5) / (document_frequency + 0.5)
             )
-            denominator = frequency + k1 * (
-                1 - b + b * (len(tokens) / average_length)
-            )
+            denominator = frequency + k1 * (1 - b + b * (len(tokens) / average_length))
             score += inverse_frequency * (frequency * (k1 + 1)) / denominator
         if score > 0:
             scores[chunk_id] = score
@@ -129,17 +127,7 @@ class HybridLegalRetriever:
         if document_keys:
             filters.append(LegalDocument.document_key.in_(document_keys))
         semantic_scores = self._semantic_candidates(query_vector, filters, candidate_k)
-        lexical_rows = list(
-            self.db.execute(
-                select(LegalChunk.id, LegalChunk.content)
-                .join(LegalDocument)
-                .where(*filters)
-            ).all()
-        )
-        raw_lexical = _bm25(query, lexical_rows)
-        lexical_scores = dict(
-            sorted(raw_lexical.items(), key=lambda item: item[1], reverse=True)[:candidate_k]
-        )
+        lexical_scores = self._lexical_candidates(query, filters, candidate_k)
         semantic_rank = {
             chunk_id: rank
             for rank, (chunk_id, _) in enumerate(
@@ -187,7 +175,11 @@ class HybridLegalRetriever:
                 continue
             semantic = semantic_scores.get(chunk_id, 0.0)
             lexical = lexical_scores.get(chunk_id, 0.0)
-            if semantic < self.settings.legal_rag_min_semantic_score and lexical <= 0:
+            normalized_lexical = lexical / max_lexical
+            if (
+                semantic < self.settings.legal_rag_min_semantic_score
+                and normalized_lexical < self.settings.legal_rag_min_lexical_score
+            ):
                 continue
             chunk, document = by_id[chunk_id]
             if chunk.content_hash in content_hashes or per_document[document.id] >= 3:
@@ -200,13 +192,43 @@ class HybridLegalRetriever:
                     chunk=chunk,
                     document=document,
                     semantic_score=round(semantic, 6),
-                    lexical_score=round(lexical / max_lexical, 6),
+                    lexical_score=round(normalized_lexical, 6),
                     fusion_score=round(fusion[chunk_id] * 61, 6),
                 )
             )
             if len(selected) >= top_k:
                 break
         return selected
+
+    def _lexical_candidates(
+        self,
+        query: str,
+        filters: list[object],
+        candidate_k: int,
+    ) -> dict[int, float]:
+        if self.db.bind is not None and self.db.bind.dialect.name == "postgresql":
+            language = literal_column("'spanish'::regconfig")
+            vector = func.to_tsvector(language, LegalChunk.content)
+            query_expression = func.plainto_tsquery(language, query)
+            rank = func.ts_rank_cd(vector, query_expression)
+            rows = self.db.execute(
+                select(LegalChunk.id, rank.label("rank"))
+                .join(LegalDocument)
+                .where(*filters)
+                .where(vector.op("@@")(query_expression))
+                .order_by(rank.desc())
+                .limit(candidate_k)
+            ).all()
+            return {chunk_id: float(score) for chunk_id, score in rows}
+        lexical_rows = list(
+            self.db.execute(
+                select(LegalChunk.id, LegalChunk.content).join(LegalDocument).where(*filters)
+            ).all()
+        )
+        raw_lexical = _bm25(query, lexical_rows)
+        return dict(
+            sorted(raw_lexical.items(), key=lambda item: item[1], reverse=True)[:candidate_k]
+        )
 
     def _semantic_candidates(
         self,
@@ -225,26 +247,24 @@ class HybridLegalRetriever:
             ).all()
             return {chunk_id: 1.0 - float(distance_value) for chunk_id, distance_value in rows}
         rows = self.db.execute(
-            select(LegalChunk.id, LegalChunk.embedding)
-            .join(LegalDocument)
-            .where(*filters)
+            select(LegalChunk.id, LegalChunk.embedding).join(LegalDocument).where(*filters)
         ).all()
         scores = {
             chunk_id: _cosine(list(embedding), query_vector)
             for chunk_id, embedding in rows
             if embedding
         }
-        return dict(
-            sorted(scores.items(), key=lambda item: item[1], reverse=True)[:candidate_k]
-        )
+        return dict(sorted(scores.items(), key=lambda item: item[1], reverse=True)[:candidate_k])
 
     def indexed_embedding_count(self) -> int:
-        return self.db.scalar(
-            select(func.count(LegalChunk.id))
-            .join(LegalDocument)
-            .where(
-                LegalDocument.status == "active",
-                LegalChunk.embedding_model == self.embedding_provider.model_name,
+        return (
+            self.db.scalar(
+                select(func.count(LegalChunk.id))
+                .join(LegalDocument)
+                .where(
+                    LegalDocument.status == "active",
+                    LegalChunk.embedding_model == self.embedding_provider.model_name,
+                )
             )
-        ) or 0
-
+            or 0
+        )

@@ -12,7 +12,7 @@ from app.evaluation.legal_rag_runner import (
     LegalRetrievalDataset,
     evaluate_retrieval,
 )
-from app.evaluation.metrics import accuracy, macro_f1, recall_at_k, reciprocal_rank
+from app.evaluation.metrics import accuracy, entity_scores, macro_f1, recall_at_k, reciprocal_rank
 from app.evaluation.runner import evaluate_intake, load_dataset
 from tests.fakes import QueueIntakeProvider, extracted_data, intake_response
 
@@ -22,6 +22,7 @@ def test_quality_metrics_cover_classification_and_retrieval():
     assert macro_f1(["a", "b"], ["a", "b"]) == 1.0
     assert recall_at_k([4, 2, 8], {2, 9}, 2) == 0.5
     assert reciprocal_rank([4, 2, 8], {2}) == 0.5
+    assert entity_scores([{"Parque Central"}], [{"parque-central"}])["f1"] == 1.0
 
 
 def test_versioned_intake_dataset_runs_reproducibly():
