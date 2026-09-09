@@ -28,7 +28,7 @@ gcloud run jobs deploy "$EVALUATION_JOB" \
   --command=python \
   --args=-m,app.evaluation.module_runner,--modules,all,--seed-incidents,--confirm-production \
   --set-cloudsql-instances="$CLOUD_SQL_INSTANCE" \
-  --set-env-vars=APP_ENV=production,OPENAI_MODEL=gpt-5.4-mini,OPENAI_INTAKE_MODEL=gpt-5.6,OPENAI_EMBEDDING_MODEL=text-embedding-3-small,LEGAL_RAG_MODEL=gpt-5.4-mini,LEGAL_RAG_EMBEDDING_MODEL=text-embedding-3-large \
+  --set-env-vars=APP_ENV=production,OPENAI_MODEL=gpt-5.4-mini,OPENAI_INTAKE_MODEL=gpt-5.6,OPENAI_EMBEDDING_MODEL=text-embedding-3-small,LEGAL_RAG_MODEL=gpt-5.4-mini,LEGAL_RAG_EMBEDDING_MODEL=text-embedding-3-large,LEGAL_RAG_MIN_SEMANTIC_SCORE=0.25,LEGAL_RAG_MIN_LEXICAL_SCORE=0.08,SIMILARITY_THRESHOLD=0.78,CLUSTER_TIME_WINDOW_DAYS=30,CLUSTER_CANDIDATE_K=200 \
   --set-secrets=DATABASE_URL=sgciu-database-url:latest,OPENAI_API_KEY=sgciu-openai-key:latest \
   --service-account="$RUNTIME_SERVICE_ACCOUNT" \
   --cpu=1 \

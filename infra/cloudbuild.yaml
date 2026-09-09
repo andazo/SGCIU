@@ -149,7 +149,7 @@ steps:
       - --readiness-probe=httpGet.path=/ready,timeoutSeconds=2,periodSeconds=10,failureThreshold=3
       - --liveness-probe=httpGet.path=/health,initialDelaySeconds=10,timeoutSeconds=2,periodSeconds=30,failureThreshold=3
       - --set-cloudsql-instances=${_CLOUD_SQL_INSTANCE}
-      - --set-env-vars=^@^APP_ENV=production@REQUIRE_ADMIN_AUTH=true@LOG_LEVEL=INFO@OPENAI_MODEL=gpt-5.4-mini@OPENAI_INTAKE_MODEL=gpt-5.6@OPENAI_EMBEDDING_MODEL=text-embedding-3-small@LEGAL_RAG_MODEL=gpt-5.4-mini@LEGAL_RAG_EMBEDDING_MODEL=text-embedding-3-large@CORS_ORIGINS=${_FRONTEND_ORIGINS}
+      - --set-env-vars=^@^APP_ENV=production@REQUIRE_ADMIN_AUTH=true@LOG_LEVEL=INFO@OPENAI_MODEL=gpt-5.4-mini@OPENAI_INTAKE_MODEL=gpt-5.6@OPENAI_EMBEDDING_MODEL=text-embedding-3-small@LEGAL_RAG_MODEL=gpt-5.4-mini@LEGAL_RAG_EMBEDDING_MODEL=text-embedding-3-large@LEGAL_RAG_MIN_SEMANTIC_SCORE=0.25@LEGAL_RAG_MIN_LEXICAL_SCORE=0.08@SIMILARITY_THRESHOLD=0.78@CLUSTER_TIME_WINDOW_DAYS=30@CLUSTER_CANDIDATE_K=200@CORS_ORIGINS=${_FRONTEND_ORIGINS}
       - --set-secrets=DATABASE_URL=sgciu-database-url:latest,OPENAI_API_KEY=sgciu-openai-key:latest
       - --service-account=${_RUNTIME_SERVICE_ACCOUNT}
       - --labels=application=sgciu,component=backend,environment=production,image-tag=${_IMAGE_TAG}

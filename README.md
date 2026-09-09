@@ -336,6 +336,10 @@ sus supuestos y la diferencia entre estimación e importe facturado se explican 
 [guía de costes](docs/costs.md). La API expone métricas sin PII en `/metrics`; los dashboards,
 uptime checks y alertas se describen en la [guía de monitorización](docs/monitoring.md).
 
+Las interacciones manuales de intake, RAG y agente operativo generan trazas sin texto libre
+ni datos personales. Se pueden consultar, etiquetar y resumir desde `/v1/evaluation` siguiendo
+la [guía de evaluación manual](docs/manual-evaluation.md).
+
 ## Documentación técnica
 
 - [Arquitectura](docs/architecture.md)
@@ -343,6 +347,7 @@ uptime checks y alertas se describen en la [guía de monitorización](docs/monit
 - [Pruebas automatizadas](docs/testing.md)
 - [Monitorización](docs/monitoring.md)
 - [Estimación de costes](docs/costs.md)
+- [Evaluación manual de IA](docs/manual-evaluation.md)
 - [Flujo de ramas y despliegue](docs/development-workflow.md)
 - [Variables de entorno](.env.example)
 
