@@ -64,6 +64,18 @@ app.add_middleware(
 )
 
 
+def _cors_headers_for_error(request: Request) -> dict[str, str]:
+    """Preserve CORS visibility when the outer observability middleware catches an error."""
+    origin = request.headers.get("origin")
+    if origin not in settings.cors_origins:
+        return {}
+    return {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Credentials": "true",
+        "Vary": "Origin",
+    }
+
+
 @app.middleware("http")
 async def request_observability(request: Request, call_next):
     correlation_id = request.headers.get("X-Correlation-ID") or str(uuid.uuid4())
@@ -79,7 +91,11 @@ async def request_observability(request: Request, call_next):
             "Unhandled request error",
             extra={"method": request.method, "path": request.url.path},
         )
-        response = JSONResponse(status_code=500, content={"detail": "Internal error"})
+        response = JSONResponse(
+            status_code=500,
+            content={"detail": "Internal error"},
+            headers=_cors_headers_for_error(request),
+        )
     finally:
         duration_seconds = time.perf_counter() - started
         elapsed_ms = round(duration_seconds * 1000, 2)
