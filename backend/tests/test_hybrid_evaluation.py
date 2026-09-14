@@ -7,6 +7,7 @@ from app.evaluation.hybrid import (
     build_hybrid_scenarios,
     scenario_dataset_hash,
 )
+from app.schemas import IntakeSubmissionRequest
 
 
 def test_hybrid_scenarios_are_balanced_and_chronologically_valid():
@@ -41,3 +42,17 @@ def test_hybrid_actor_context_excludes_gold_classification_labels():
     assert scenario.expected_category not in actor_context.values()
     assert len(scenario_dataset_hash([scenario])) == 64
     assert DATASET_VERSION == "hybrid-flores-v1"
+
+
+def test_synthetic_contacts_are_accepted_by_the_submission_schema():
+    scenario = next(
+        item for item in build_hybrid_scenarios() if item.channel == "identified_full"
+    )
+
+    submission = IntakeSubmissionRequest(
+        truth_confirmation=True,
+        data_usage_consent=True,
+        **scenario.contact,
+    )
+
+    assert submission.email == scenario.contact["email"]

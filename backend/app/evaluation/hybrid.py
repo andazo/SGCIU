@@ -293,7 +293,9 @@ def _contact(case_id: str, channel: str) -> dict[str, str | None]:
     values = {
         "name": f"Caso sintético {case_id}",
         "identification": f"EVAL-{case_id}",
-        "email": f"{case_id.casefold()}@example.invalid",
+        # example.com is a syntactically valid, reserved documentation domain.
+        # Pydantic intentionally rejects the special-use .invalid TLD.
+        "email": f"{case_id.casefold()}@example.com",
         "phone": f"+506 0000-{case_id[-4:]}",
     }
     if channel == "identified_partial":
