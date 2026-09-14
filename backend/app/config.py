@@ -49,6 +49,7 @@ class Settings:
     openai_timeout_seconds: float
     openai_model: str
     openai_intake_model: str
+    openai_evaluation_actor_model: str
     intake_reasoning_effort: str
     intake_max_follow_ups: int
     openai_embedding_model: str
@@ -112,6 +113,10 @@ def get_settings() -> Settings:
         openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "90")),
         openai_model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
         openai_intake_model=os.getenv("OPENAI_INTAKE_MODEL", "gpt-5.6"),
+        openai_evaluation_actor_model=os.getenv(
+            "OPENAI_EVALUATION_ACTOR_MODEL",
+            os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
+        ),
         intake_reasoning_effort=_as_choice(
             os.getenv("INTAKE_REASONING_EFFORT", "high"),
             {"none", "low", "medium", "high", "xhigh"},

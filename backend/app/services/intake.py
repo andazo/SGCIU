@@ -49,9 +49,16 @@ class IncompleteIntakeError(ValueError):
 
 
 class IntakeService:
-    def __init__(self, db: Session, provider: IntakeProvider | None = None):
+    def __init__(
+        self,
+        db: Session,
+        provider: IntakeProvider | None = None,
+        *,
+        process_semantic: bool = True,
+    ):
         self.db = db
         self.provider = provider or get_intake_provider()
+        self.process_semantic = process_semantic
 
     def start(self, registration_mode: RegistrationMode = "complete") -> IntakeSession:
         session = IntakeSession(
@@ -269,7 +276,10 @@ class IntakeService:
             data_usage_consent=data_usage_consent,
             police_input=police_input,
         )
-        return IncidentService(self.db).create(incident_payload)
+        return IncidentService(self.db).create(
+            incident_payload,
+            process_semantic=self.process_semantic,
+        )
 
     def to_response(self, session: IntakeSession) -> IntakeSessionResponse:
         extracted = dict(session.extracted_data or {})

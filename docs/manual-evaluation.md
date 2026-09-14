@@ -36,6 +36,10 @@ Las puntuaciones usan el intervalo de 0 a 1. Para comparabilidad en la memoria, 
 la misma rúbrica a todos los casos. La calidad necesita una etiqueta humana; latencia, tokens,
 coste, herramientas y fuentes se calculan automáticamente.
 
+Para una muestra controlada de 90 incidentes ciudadanos con conversaciones generadas de forma
+natural, consulte [la evaluación híbrida](hybrid-evaluation.md). Esa corrida separa el coste del
+actor de pruebas de las métricas de SGCIU y genera el libro Excel para la validación manual.
+
 Para RAG, use `expected_document_keys` dentro de `expected_output`; el resumen calculará
 hit-rate@1, @3 y @8 sobre las fuentes recuperadas. Para el agente operativo, use
 `expected_tool_names`; el resumen calculará selección de tools y éxito de sus pasos. Para

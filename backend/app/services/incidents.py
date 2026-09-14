@@ -26,6 +26,7 @@ class IncidentService:
         payload: ComplaintSubmissionCreate,
         *,
         recorded_at: datetime | None = None,
+        process_semantic: bool = True,
     ) -> ComplaintSubmission:
         extracted = payload.ai_extracted_data
         occurred_at = self._parse_occurred_at(extracted.incident_datetime)
@@ -53,26 +54,32 @@ class IncidentService:
         self.db.add(incident)
         self.db.commit()
         self.db.refresh(incident)
-        try:
-            from app.services.semantic import SemanticIncidentService
+        if process_semantic:
+            try:
+                from app.services.semantic import SemanticIncidentService
 
-            SemanticIncidentService(self.db).process_incident(incident)
+                SemanticIncidentService(self.db).process_incident(incident)
+                incident.analysis_metadata = {
+                    **(incident.analysis_metadata or {}),
+                    "embedding_status": "indexed",
+                }
+            except Exception as exc:
+                logger.warning(
+                    "Incident persisted without semantic index",
+                    extra={
+                        "feature": "semantic_incidents",
+                        "incident_id": incident.id,
+                        "error_type": type(exc).__name__,
+                    },
+                )
+                incident.analysis_metadata = {
+                    **(incident.analysis_metadata or {}),
+                    "embedding_status": "pending",
+                }
+        else:
             incident.analysis_metadata = {
                 **(incident.analysis_metadata or {}),
-                "embedding_status": "indexed",
-            }
-        except Exception as exc:
-            logger.warning(
-                "Incident persisted without semantic index",
-                extra={
-                    "feature": "semantic_incidents",
-                    "incident_id": incident.id,
-                    "error_type": type(exc).__name__,
-                },
-            )
-            incident.analysis_metadata = {
-                **(incident.analysis_metadata or {}),
-                "embedding_status": "pending",
+                "embedding_status": "pending_evaluation",
             }
         self.db.commit()
         self.db.refresh(incident)

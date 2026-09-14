@@ -10,6 +10,7 @@ __pycache__/
 .coverage
 htmlcov/
 .ruff_cache/
+artifacts/hybrid-evaluation/
 .mypy_cache/
 .venv/
 *.egg-info/

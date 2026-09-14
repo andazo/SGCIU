@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 from openai import OpenAI, OpenAIError
 
@@ -13,8 +14,18 @@ from app.monitoring import record_ai_call
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class EmbeddingUsage:
+    input_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+
+
 class EmbeddingProvider(ABC):
     model_name: str
+
+    @property
+    def last_usage(self) -> EmbeddingUsage:
+        return EmbeddingUsage()
 
     @abstractmethod
     def embed(self, text: str) -> list[float]: ...
@@ -44,11 +55,17 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         self.model_name = model_name or settings.openai_embedding_model
         self.dimensions = dimensions or settings.embedding_dimensions
         self.feature = feature
+        self._last_usage = EmbeddingUsage()
+
+    @property
+    def last_usage(self) -> EmbeddingUsage:
+        return self._last_usage
 
     def embed(self, text: str) -> list[float]:
         return self.embed_many([text])[0]
 
     def embed_many(self, texts: list[str]) -> list[list[float]]:
+        self._last_usage = EmbeddingUsage()
         if not texts:
             return []
         started = time.perf_counter()
@@ -72,6 +89,10 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
             input_tokens,
             self.settings,
             model_name=self.model_name,
+        )
+        self._last_usage = EmbeddingUsage(
+            input_tokens=input_tokens,
+            estimated_cost_usd=estimated_cost_usd,
         )
         record_ai_call(
             feature=self.feature,
