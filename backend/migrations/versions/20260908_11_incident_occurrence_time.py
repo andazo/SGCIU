@@ -90,7 +90,7 @@ def upgrade() -> None:
     if bind.dialect.name == "postgresql":
         op.execute(
             sa.text(
-                "CREATE INDEX ix_legal_chunks_content_fts ON legal_chunks "
+                "CREATE INDEX IF NOT EXISTS ix_legal_chunks_content_fts ON legal_chunks "
                 "USING gin (to_tsvector('spanish'::regconfig, content))"
             )
         )
