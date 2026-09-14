@@ -100,7 +100,7 @@ summary.getRange("B22:B24").format.numberFormat = "#,##0.00";
 summary.getRange("B25:B26").format.numberFormat = "0.000000";
 summary.getRange("B27").format.numberFormat = "0.0%";
 summary.getRange("A14:C16").format.fill = lightBlue;
-summary.getRange("A30:C34").values = [
+summary.getRange("A30:C35").values = [
   ["Clustering", "Valor", ""],
   ["Pares esperados", report.metrics.clustering.expected_pairs, ""],
   ["Pares predichos", report.metrics.clustering.predicted_pairs, ""],
@@ -267,6 +267,35 @@ rubric.getRange("B:C").format.columnWidth = 62;
 rubric.getRange("A6:C10").format.fill = muted;
 
 workbook.recalculate();
+const summaryCheck = await workbook.inspect({
+  kind: "table",
+  range: "Resumen!A5:C35",
+  include: "values,formulas",
+  tableMaxRows: 35,
+  tableMaxCols: 3,
+});
+console.log(summaryCheck.ndjson);
+const formulaErrors = await workbook.inspect({
+  kind: "match",
+  searchTerm: "#REF!|#DIV/0!|#VALUE!|#NAME\\?|#N/A|#NUM!|#NULL!|#SPILL!|#CALC!",
+  options: { useRegex: true, maxResults: 300 },
+  summary: "hybrid workbook formula error scan",
+});
+console.log(formulaErrors.ndjson);
 await fs.mkdir(path.dirname(outputPath), { recursive: true });
+for (const [sheetName, range, fileName] of [
+  ["Resumen", "A1:C35", "preview-resumen.png"],
+  ["Incidentes", "A1:AI15", "preview-incidentes.png"],
+  ["Conversaciones", "A1:E25", "preview-conversaciones.png"],
+  ["Clustering", "A1:F20", "preview-clustering.png"],
+  ["Metricas raw", "A1:C17", "preview-metricas.png"],
+  ["Rubrica", "A1:C10", "preview-rubrica.png"],
+]) {
+  const preview = await workbook.render({ sheetName, range, scale: 1, format: "png" });
+  await fs.writeFile(
+    path.join(path.dirname(outputPath), fileName),
+    new Uint8Array(await preview.arrayBuffer()),
+  );
+}
 const output = await SpreadsheetFile.exportXlsx(workbook);
 await output.save(outputPath);
