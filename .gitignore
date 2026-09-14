@@ -11,6 +11,7 @@ __pycache__/
 htmlcov/
 .ruff_cache/
 artifacts/hybrid-evaluation/
+outputs/
 .mypy_cache/
 .venv/
 *.egg-info/

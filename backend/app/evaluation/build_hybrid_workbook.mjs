@@ -16,6 +16,7 @@ if (!inputPath || !outputPath) {
 
 const report = JSON.parse(await fs.readFile(inputPath, "utf8"));
 const executions = report.executions ?? [];
+const incidentLastRow = 5 + executions.length;
 const font = "Arial";
 const headerFill = "#1F4E78";
 const lightBlue = "#D9EAF7";
@@ -70,11 +71,11 @@ summary.getRange("A5:B10").format.borders = { preset: "all", style: "thin", colo
 summary.getRange("A13:C13").values = [["Métrica", "Valor", "Definición"]];
 header(summary, "A13:C13");
 const metricRows = [
-  ["Casos", "=COUNTA(Incidentes!A2:A91)", "Escenarios ejecutados"],
-  ["Validaciones manuales de categoría", "=COUNTIFS(Incidentes!L2:L91,\"<>\")", "Filas revisadas por la persona evaluadora"],
+  ["Casos", `=COUNTA(Incidentes!A6:A${incidentLastRow})`, "Escenarios ejecutados"],
+  ["Validaciones manuales de categoría", `=COUNTIFS(Incidentes!L6:L${incidentLastRow},\"<>\")`, "Filas revisadas por la persona evaluadora"],
   [
     "Exactitud manual de categoría",
-    "=IF(COUNTIFS(Incidentes!L2:L91,\"<>\")=0,\"n.a.\",COUNTIFS(Incidentes!L2:L91,\"SÍ\")/COUNTIFS(Incidentes!L2:L91,\"<>\"))",
+    `=IF(COUNTIFS(Incidentes!L6:L${incidentLastRow},\"<>\")=0,\"n.a.\",COUNTIFS(Incidentes!L6:L${incidentLastRow},\"SÍ\")/COUNTIFS(Incidentes!L6:L${incidentLastRow},\"<>\"))`,
     "Solo sobre casos con SÍ o NO manual",
   ],
   ["Exactitud automática de categoría", report.metrics.field_accuracy.category, "Etiqueta esperada vs. extracción"],
