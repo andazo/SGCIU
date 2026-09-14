@@ -68,6 +68,8 @@ def _apply_reported_time(value: datetime | None, text: str) -> datetime | None:
 
 def _parse_event_date(value: str, reference: datetime) -> datetime | None:
     normalized = value.casefold()
+    if re.search(r"\bmañana\b", normalized):
+        return _apply_reported_time(reference + timedelta(days=1), normalized)
     if re.search(r"\bhoy\b", normalized):
         return _apply_reported_time(reference, normalized)
     if re.search(r"\banteayer\b", normalized):
@@ -85,8 +87,16 @@ def _parse_event_date(value: str, reference: datetime) -> datetime | None:
         return reference - timedelta(days=int(relative_months.group(1)) * 30)
     if "la semana pasada" in normalized:
         return reference - timedelta(days=7)
+    if "la próxima semana" in normalized or "la proxima semana" in normalized:
+        return reference + timedelta(days=7)
     if "el mes pasado" in normalized:
         return reference - timedelta(days=30)
+    if "el próximo mes" in normalized or "el proximo mes" in normalized:
+        return reference + timedelta(days=30)
+    if "última semana" in normalized or "ultima semana" in normalized:
+        # A week-long report has no precise timestamp. Keep the original phrase and
+        # use a stable midpoint solely as the temporal anchor for analysis.
+        return reference - timedelta(days=3, hours=12)
 
     iso_match = re.search(r"\b(20\d{2})-(\d{1,2})-(\d{1,2})\b", normalized)
     if iso_match:
@@ -145,7 +155,12 @@ def temporal_precision(text: str | None) -> TemporalPrecision:
     value = (text or "").casefold()
     if not value:
         return "unknown"
-    if re.search(r"\b(?:hoy|ayer|anoche|anteayer|hace\s+\d+|semana pasada|mes pasado)\b", value):
+    if re.search(
+        r"\b(?:hoy|mañana|ayer|anoche|anteayer|hace\s+\d+|"
+        r"(?:última|ultima|próxima|proxima)\s+semana|"
+        r"(?:mes|semana)\s+pasad[oa]|(?:próximo|proximo)\s+mes)\b",
+        value,
+    ):
         return "relative"
     if re.search(r"\b(?:principios|inicios|mediados|finales)\s+de\b", value):
         return "approximate"

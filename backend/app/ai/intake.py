@@ -258,6 +258,10 @@ def actionable_missing_fields(data: ComplaintExtractedData) -> list[str]:
         status = _observation(normalized, field).status
         if getattr(normalized, field) is None and status in {"missing", "ambiguous"}:
             missing.append(field)
+    # A future timestamp is not a completed incident. Preserve the expression for
+    # auditability, but request clarification instead of silently completing intake.
+    if normalized.temporal_relation == "futuro" and "fecha_hora_aproximada" not in missing:
+        missing.append("fecha_hora_aproximada")
     return missing
 
 

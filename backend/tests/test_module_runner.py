@@ -11,7 +11,17 @@ from app.evaluation.module_runner import (
 )
 from app.evaluation.seed_incidents import DEFAULT_DATASET, load_seed_dataset, seed_incidents
 from app.models import EvaluationRun
-from tests.fakes import CompleteIntakeProvider
+from app.schemas import ComplaintExtractedData
+from tests.fakes import CompleteIntakeProvider, intake_response
+
+
+class RecordingIntakeProvider(CompleteIntakeProvider):
+    def __init__(self):
+        self.user_turns: list[list[str]] = []
+
+    def analyze(self, messages, current_data, **kwargs):
+        self.user_turns.append([message.content for message in messages if message.role == "user"])
+        return intake_response(ComplaintExtractedData(descripcion_detallada="Reporte de prueba."))
 
 
 def test_percentile_uses_nearest_rank_for_small_datasets():
@@ -31,6 +41,17 @@ def test_intake_evaluation_reports_all_versioned_synthetic_cases():
     assert len(report.dataset_sha256) == 64
     assert len(report.case_results) == 50
     assert report.metrics["usage"]["estimated_cost_usd"] == 0.0
+    assert report.metrics["evaluation_protocol"] == "single_turn_observed_input_v1"
+
+
+def test_intake_evaluation_never_injects_gold_fields_in_follow_up():
+    dataset = load_seed_dataset()
+    provider = RecordingIntakeProvider()
+
+    evaluate_intake(provider, dataset, DEFAULT_DATASET)
+
+    assert len(provider.user_turns) == len(dataset.incidents)
+    assert all(len(turns) == 1 for turns in provider.user_turns)
 
 
 def test_evaluation_run_persists_dataset_provenance(db_session):

@@ -18,7 +18,7 @@ from app.services.incidents import IncidentNotFoundError, IncidentService
 from app.services.intake import EMERGENCY_NOTICE, IntakeService
 from app.services.legal_rag import LegalRAGService
 from app.services.reviews import HighlightNotFoundError, ReviewNotFoundError, ReviewService
-from app.services.semantic import SemanticIncidentService, _is_recent
+from app.services.semantic import SemanticIncidentService, incident_time_reference
 
 
 def _yes(prompt: str) -> bool:
@@ -193,7 +193,7 @@ def _print_recurrent_patterns(db) -> None:
         members = [
             member
             for member in pattern.members
-            if member.incident and _is_recent(member.incident.created_at, threshold)
+            if member.incident and incident_time_reference(member.incident).value >= threshold
         ]
         if not members:
             continue
@@ -202,11 +202,14 @@ def _print_recurrent_patterns(db) -> None:
         print(f"Incidentes relacionados: {len(members)}")
         print(f"Similitud promedio: {sum(scores) / len(scores):.3f}")
         print("Incidentes:")
-        for member in sorted(members, key=lambda item: item.incident.created_at):
+        for member in sorted(
+            members,
+            key=lambda item: incident_time_reference(item.incident).value,
+        ):
             incident = member.incident
             data = incident.ai_extracted_data or {}
             print(
-                f"  #{incident.id} | {incident.created_at} | "
+                f"  #{incident.id} | {incident_time_reference(incident).value} | "
                 f"{data.get('categoria_preliminar')} | "
                 f"{data.get('distrito')} | {data.get('direccion_exacta')} | "
                 f"score={member.similarity_score:.3f} | {member.match_reason}"

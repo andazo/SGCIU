@@ -246,3 +246,42 @@ def test_bridge_incident_merges_previously_separate_clusters(db_session):
     assert {member.incident_id for member in clusters[0].members} == {
         incident.id for incident in incidents
     }
+
+
+def test_partial_cluster_rebuild_preserves_unrelated_clusters(db_session):
+    incidents = [
+        IncidentService(db_session).create(
+            incident_payload(
+                f"Reporte aislado de clustering {index}.",
+                "Ubicación de prueba",
+                incident_datetime="2026-08-10T20:00:00-06:00",
+            )
+        )
+        for index in range(6)
+    ]
+    vectors = (
+        [1.0, 0.0],
+        [1.0, 0.0],
+        [0.0, 1.0],
+        [0.0, 1.0],
+        [-1.0, 0.0],
+        [-1.0, 0.0],
+    )
+    for incident, vector in zip(incidents, vectors, strict=True):
+        incident.embedding_record.embedding = vector
+        incident.embedding_record.location_embedding = vector
+    db_session.commit()
+    service = SemanticIncidentService(
+        db_session,
+        provider=LocalEmbeddingDouble(dimensions=2),
+        settings=replace(get_settings(), similarity_threshold=0.75),
+    )
+
+    service.rebuild_clusters()
+    service.rebuild_clusters(incidents[:4])
+
+    member_sets = {
+        frozenset(member.incident_id for member in cluster.members)
+        for cluster in service.list_clusters()
+    }
+    assert frozenset({incidents[4].id, incidents[5].id}) in member_sets

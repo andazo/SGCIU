@@ -167,7 +167,11 @@ def evaluate_intake(
         turn_usages: list[ModelUsage] = []
         response = None
         first_turn_response = None
-        for turn in range(2):
+        # The legacy runner measures only evidence supplied in the initial natural
+        # report. It must never inject the dataset labels in a follow-up, because doing
+        # so inflates extraction and completion results. Hybrid evaluation exercises
+        # the real endpoint with an independent hidden scenario instead.
+        for turn in range(1):
             started = time.perf_counter()
             response = provider.analyze(
                 messages,
@@ -179,23 +183,6 @@ def evaluate_intake(
             if first_turn_response is None:
                 first_turn_response = response
                 single_turn_complete += int(response.is_complete)
-            if response.is_complete:
-                break
-            current_data = response.extracted_data
-            messages.extend(
-                [
-                    ChatMessage(role="assistant", content=response.assistant_message),
-                    ChatMessage(
-                        role="user",
-                        content=(
-                            f"Para completar: mi relación es {record.relacion_incidente}; "
-                            f"ocurrió {record.fecha_hora_aproximada}, en el distrito "
-                            f"{record.distrito}, específicamente {record.direccion_exacta}. "
-                            f"El lugar es {record.tipo_lugar}. La descripción inicial se mantiene."
-                        ),
-                    ),
-                ]
-            )
         assert response is not None and first_turn_response is not None
         latency_ms = round(sum(turn_latencies), 2)
         expected_categories.append(record.categoria_preliminar)
@@ -256,6 +243,7 @@ def evaluate_intake(
 
     metrics: dict[str, Any] = {
         "cases": len(cases),
+        "evaluation_protocol": "single_turn_observed_input_v1",
         "category_accuracy": round(accuracy(expected_categories, predicted_categories), 4),
         "category_macro_f1": round(macro_f1(expected_categories, predicted_categories), 4),
         "field_accuracy": {

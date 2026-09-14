@@ -83,3 +83,22 @@ def test_recurrence_is_preserved_as_structured_temporal_context():
 
     assert data.is_recurring is True
     assert data.recurrence_pattern == "todos los fines de semana"
+
+
+def test_relative_interval_and_future_expression_are_normalized():
+    interval = normalize_temporal_data(
+        ComplaintExtractedData(
+            fecha_hora_aproximada="entre las 05:30 y 07:00 durante la última semana"
+        ),
+        reference=REFERENCE,
+    )
+    future = normalize_temporal_data(
+        ComplaintExtractedData(fecha_hora_aproximada="mañana a las 19:30"),
+        reference=REFERENCE,
+    )
+
+    assert interval.incident_datetime == "2026-07-25T00:00:00-06:00"
+    assert interval.incident_datetime_precision == "relative"
+    assert interval.temporal_relation == "pasado"
+    assert future.incident_datetime == "2026-07-29T19:30:00-06:00"
+    assert future.temporal_relation == "futuro"

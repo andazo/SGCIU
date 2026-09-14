@@ -1,4 +1,5 @@
 from collections import Counter
+from datetime import datetime
 
 from sqlalchemy import func, select
 
@@ -53,13 +54,27 @@ def test_seed_is_idempotent_and_indexes_every_incident(db_session):
     assert all(incident.analysis_metadata["synthetic"] is True for incident in incidents)
     assert all(
         SYNTHETIC_DATE_START
-        <= synthetic_created_at(incident.analysis_metadata["synthetic_case_id"])
+        <= synthetic_created_at(
+            incident.analysis_metadata["synthetic_case_id"],
+            occurred_at=datetime.fromisoformat(incident.ai_extracted_data["incident_datetime"]),
+        )
         <= SYNTHETIC_DATE_END
         for incident in incidents
     )
     assert all(
         incident.created_at.replace(tzinfo=SYNTHETIC_DATE_START.tzinfo)
-        == synthetic_created_at(incident.analysis_metadata["synthetic_case_id"])
+        == synthetic_created_at(
+            incident.analysis_metadata["synthetic_case_id"],
+            occurred_at=datetime.fromisoformat(incident.ai_extracted_data["incident_datetime"]),
+        )
+        for incident in incidents
+    )
+    assert all(
+        incident.ai_extracted_data.get("incident_datetime") is not None
+        and incident.created_at.replace(tzinfo=SYNTHETIC_DATE_START.tzinfo)
+        >= datetime.fromisoformat(incident.ai_extracted_data["incident_datetime"]).astimezone(
+            SYNTHETIC_DATE_START.tzinfo
+        )
         for incident in incidents
     )
 

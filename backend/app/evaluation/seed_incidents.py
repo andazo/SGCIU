@@ -110,7 +110,11 @@ def _entity_evidence(record: SyntheticIncidentRecord) -> list[EntityEvidence]:
     return evidence
 
 
-def _extracted_data(record: SyntheticIncidentRecord) -> ComplaintExtractedData:
+def _extracted_data(
+    record: SyntheticIncidentRecord,
+    *,
+    reference: datetime | None = None,
+) -> ComplaintExtractedData:
     data = ComplaintExtractedData(
         descripcion_detallada=record.descripcion_detallada,
         relacion_incidente=record.relacion_incidente,
@@ -139,7 +143,7 @@ def _extracted_data(record: SyntheticIncidentRecord) -> ComplaintExtractedData:
         setattr(data.confidence_by_field, field, 1.0)
     return normalize_temporal_data(
         data,
-        reference=synthetic_created_at(record.case_id).astimezone(LOCAL_TIMEZONE),
+        reference=(reference or synthetic_created_at(record.case_id)).astimezone(LOCAL_TIMEZONE),
         source_text=record.fecha_hora_aproximada,
     )
 
@@ -153,12 +157,39 @@ def _summary(record: SyntheticIncidentRecord) -> str:
     )
 
 
-def synthetic_created_at(case_id: str) -> datetime:
-    """Map a stable synthetic identifier uniformly into the agreed evaluation window."""
+def synthetic_created_at(
+    case_id: str,
+    *,
+    occurred_at: datetime | None = None,
+) -> datetime:
+    """Map an ID into the evaluation window without registering an event before it occurs."""
     digest = hashlib.sha256(case_id.encode("utf-8")).digest()
     span_seconds = int((SYNTHETIC_DATE_END - SYNTHETIC_DATE_START).total_seconds())
     offset_seconds = int.from_bytes(digest[:8], "big") % (span_seconds + 1)
-    return SYNTHETIC_DATE_START + timedelta(seconds=offset_seconds)
+    baseline = SYNTHETIC_DATE_START + timedelta(seconds=offset_seconds)
+    if occurred_at is None:
+        return baseline
+    event_time = (
+        occurred_at.astimezone(UTC)
+        if occurred_at.tzinfo
+        else occurred_at.replace(tzinfo=UTC)
+    )
+    if baseline >= event_time:
+        return baseline
+    if event_time >= SYNTHETIC_DATE_END:
+        return event_time
+    post_event_span = int((SYNTHETIC_DATE_END - event_time).total_seconds())
+    post_event_offset = int.from_bytes(digest[8:16], "big") % (post_event_span + 1)
+    return event_time + timedelta(seconds=post_event_offset)
+
+
+def _normalized_record(
+    record: SyntheticIncidentRecord,
+) -> tuple[datetime, ComplaintExtractedData]:
+    preliminary = _extracted_data(record)
+    occurred_at = IncidentService._parse_occurred_at(preliminary.incident_datetime)
+    recorded_at = synthetic_created_at(record.case_id, occurred_at=occurred_at)
+    return recorded_at, _extracted_data(record, reference=recorded_at)
 
 
 def _same_instant(left: datetime | None, right: datetime) -> bool:
@@ -198,8 +229,7 @@ def seed_incidents(
         incident = existing.get(record.case_id)
         if incident is not None:
             skipped += 1
-            expected_created_at = synthetic_created_at(record.case_id)
-            normalized_data = _extracted_data(record)
+            expected_created_at, normalized_data = _normalized_record(record)
             incident.ai_extracted_data = normalized_data.model_dump()
             incident.occurred_at = service._parse_occurred_at(normalized_data.incident_datetime)
             incident.occurred_at_precision = normalized_data.incident_datetime_precision
@@ -215,10 +245,10 @@ def seed_incidents(
             db.refresh(incident)
             incidents.append(incident)
             continue
-        expected_created_at = synthetic_created_at(record.case_id)
+        expected_created_at, normalized_data = _normalized_record(record)
         incident = service.create(
             ComplaintSubmissionCreate(
-                ai_extracted_data=_extracted_data(record),
+                ai_extracted_data=normalized_data,
                 ai_summary_text=_summary(record),
                 analysis_metadata={
                     "source": SYNTHETIC_SOURCE,

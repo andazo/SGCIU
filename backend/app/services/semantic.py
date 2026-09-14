@@ -562,7 +562,8 @@ class SemanticIncidentService:
         self,
         incidents: list[ComplaintSubmission] | None = None,
     ) -> tuple[int, int]:
-        """Rebuild deterministic connected candidate groups without new embeddings."""
+        """Rebuild candidate groups without deleting clusters outside a supplied subset."""
+        full_rebuild = incidents is None
         candidates = incidents or list(
             self.db.scalars(
                 select(ComplaintSubmission)
@@ -576,8 +577,38 @@ class SemanticIncidentService:
                 )
             )
         )
-        self.db.execute(delete(IncidentClusterMember))
-        self.db.execute(delete(IncidentCluster))
+        if full_rebuild:
+            self.db.execute(delete(IncidentClusterMember))
+            self.db.execute(delete(IncidentCluster))
+        else:
+            candidate_ids = {incident.id for incident in candidates}
+            memberships = list(
+                self.db.scalars(
+                    select(IncidentClusterMember).where(
+                        IncidentClusterMember.incident_id.in_(candidate_ids)
+                    )
+                )
+            )
+            affected_cluster_ids = {membership.cluster_id for membership in memberships}
+            for membership in memberships:
+                self.db.delete(membership)
+            self.db.flush()
+            for cluster_id in affected_cluster_ids:
+                remaining = int(
+                    self.db.scalar(
+                        select(func.count(IncidentClusterMember.id)).where(
+                            IncidentClusterMember.cluster_id == cluster_id
+                        )
+                    )
+                    or 0
+                )
+                if remaining < 2:
+                    self.db.execute(
+                        delete(IncidentClusterMember).where(
+                            IncidentClusterMember.cluster_id == cluster_id
+                        )
+                    )
+                    self.db.execute(delete(IncidentCluster).where(IncidentCluster.id == cluster_id))
         self.db.commit()
         candidate_ids = {incident.id for incident in candidates}
         for incident in candidates:

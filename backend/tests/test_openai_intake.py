@@ -5,6 +5,7 @@ from app.ai.intake import (
     SYSTEM_PROMPT,
     IntakeModelOutput,
     OpenAIIntakeProvider,
+    actionable_missing_fields,
     user_explicitly_finished,
 )
 from app.config import get_settings
@@ -167,3 +168,16 @@ def test_acknowledging_911_is_a_safe_finish_signal():
     assert result.user_wants_to_finish is True
     assert result.completion_reason == "user_finished"
     assert result.summary_text
+
+
+def test_future_event_requires_temporal_clarification():
+    data = extracted_data(
+        descripcion_detallada="Una fiesta ocurrirá mañana en el parque.",
+        categoria_preliminar="ruido",
+        distrito="Llorente",
+        direccion_exacta="parque central",
+        fecha_hora_aproximada="mañana a las 19:30",
+    )
+    data.temporal_relation = "futuro"
+
+    assert "fecha_hora_aproximada" in actionable_missing_fields(data)
