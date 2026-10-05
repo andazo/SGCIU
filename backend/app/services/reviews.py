@@ -57,29 +57,11 @@ class ReviewService:
             query = query.where(HumanReview.status == status)
         return list(self.db.scalars(query))
 
-    def list_active(self) -> list[HumanReview]:
-        return list(
-            self.db.scalars(
-                select(HumanReview)
-                .where(HumanReview.status.in_(ACTIVE_WORKFLOW_STATUSES))
-                .order_by(HumanReview.created_at.desc())
-            )
-        )
-
     def list_highlights(self, status: str | None = None) -> list[IncidentHighlight]:
         query = select(IncidentHighlight).order_by(IncidentHighlight.created_at.desc())
         if status:
             query = query.where(IncidentHighlight.status == status)
         return list(self.db.scalars(query))
-
-    def list_active_highlights(self) -> list[IncidentHighlight]:
-        return list(
-            self.db.scalars(
-                select(IncidentHighlight)
-                .where(IncidentHighlight.status.in_(ACTIVE_WORKFLOW_STATUSES))
-                .order_by(IncidentHighlight.created_at.desc())
-            )
-        )
 
     def request_quality_review(
         self,

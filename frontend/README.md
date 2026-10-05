@@ -1,25 +1,38 @@
 # SGCIU Frontend
 
-Frontend inicial construido con React y Vite.
+Interfaz React y Vite para el registro ciudadano y el espacio administrativo de SGCIU.
 
-## Comandos
+## Desarrollo local
+
+Desde esta carpeta, con Node.js 22:
 
 ```bash
-npm install
+npm ci
 npm run dev
-npm run build
 ```
 
-## Editar preguntas
+El backend debe estar disponible en `http://localhost:8000`. Para usar otra URL, configure
+`VITE_API_BASE_URL` al iniciar Vite o construir la imagen. Es una configuración pública
+del navegador; no coloque credenciales en variables `VITE_*`.
 
-Las preguntas del formulario estan en `src/formQuestions.js`. Para anadir una
-pregunta, agrega un objeto nuevo al arreglo `formQuestions`.
+## Construcción
 
-Tipos soportados inicialmente:
+```bash
+npm run build
+npm run preview
+```
 
-- `text`
-- `email`
-- `select`
-- `radio`
-- `range`
-- `textarea`
+Vite genera `dist/`. La imagen de producción sirve ese directorio mediante Nginx en
+el puerto 8080. El `Dockerfile` recibe `VITE_API_BASE_URL` como argumento de construcción.
+
+## Organización
+
+- `src/App.jsx`: flujos ciudadano y administrativo, formularios y paneles actuales.
+- `src/styles.css`: estilos de la interfaz.
+- `src/main.jsx`: entrada de React.
+- `branding/`: recursos gráficos utilizados por la interfaz.
+- `nginx.conf`: servicio de archivos y navegación de la aplicación en producción.
+
+Los formularios actuales se implementan en `App.jsx`; los datos conversacionales y su
+validación se gestionan en el backend. Consulte el README de la raíz para iniciar
+la solución completa con Docker Compose.

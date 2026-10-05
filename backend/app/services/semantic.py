@@ -106,14 +106,6 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
     return dot / (left_norm * right_norm)
 
 
-def _is_recent(created_at: datetime | None, cutoff: datetime) -> bool:
-    if created_at is None:
-        return False
-    if created_at.tzinfo is None:
-        created_at = created_at.replace(tzinfo=UTC)
-    return created_at >= cutoff
-
-
 def _aware_utc(value: datetime) -> datetime:
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 

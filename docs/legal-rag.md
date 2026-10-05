@@ -119,7 +119,6 @@ PYTHONPATH=. .venv/bin/python -m app.evaluation.legal_rag_runner
 ```
 
 El reporte calcula `Hit@1`, `Hit@3`, `Hit@8`, MRR y latencia sobre 21 preguntas sintéticas.
-La línea base de `2026.08.2` obtuvo `Hit@3=1.0`, `Hit@8=1.0` y cero omisiones en el top 8.
 Para la evaluación cualitativa del TFM se recomienda además revisar una muestra estratificada
 con estos criterios: exactitud jurídica, groundedness, cobertura de citas, utilidad operativa,
 abstención apropiada y claridad. Toda respuesta sensible debe ser validada por personal con

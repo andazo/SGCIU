@@ -181,7 +181,7 @@ recurrentes` muestra en la terminal los patrones que cumplen el mínimo de tres 
 recientes, incluyendo sus puntuaciones, ubicación, categoría y motivos de coincidencia. Esta
 consulta no modifica los datos ni requiere confirmación policial.
 
-La opción `6. Gestionar resaltados y revisiones de calidad` separa dos decisiones independientes:
+El panel web administrativo presenta dos señales independientes en el detalle de cada incidente:
 
 - Los **resaltados operativos** identifican hechos pasados o sin peligro de vida actual que
   merecen atención más pronta o precauciones especiales. Incluyen un resumen de IA, razones,
@@ -191,8 +191,8 @@ La opción `6. Gestionar resaltados y revisiones de calidad` separa dos decision
   `dismissed`, solo se descarta la revisión; la denuncia se conserva con estado
   `insufficient_information`.
 
-Un incidente puede aparecer en ambos apartados. Para analizar datos anteriores a esta función,
-utilice `3. Analizar con IA incidentes pendientes` dentro de la opción 6.
+Un incidente puede presentar ambas señales. Las evaluaciones y transiciones se gestionan
+mediante los servicios y endpoints de revisión del backend.
 
 El inicio ciudadano muestra siempre que SGCIU no sustituye al 9-1-1. Si durante la conversación
 se detecta peligro inmediato, el agente muestra esa orientación una sola vez y continúa con
@@ -201,7 +201,7 @@ la extracción, sin confundir la emergencia con una revisión de calidad adminis
 ### Consulta normativa RAG
 
 Después de aplicar las migraciones, abra el administrador y seleccione
-`7. Consultar normativa (RAG)`:
+`6. Consultar normativa (RAG)`:
 
 ```bash
 cd backend
