@@ -1392,13 +1392,6 @@ pre {
 }
 
 .agentAnswer p,
-.policyAnswerText {
-  margin: 0;
-  color: #334e68;
-  line-height: 1.6;
-  white-space: pre-line;
-}
-
 .answerHeader span {
   border-radius: 999px;
   background: #edf9ef;
@@ -1446,15 +1439,12 @@ pre {
   color: #52616f;
 }
 
-.candidateClusterList,
-.reviewList {
+.candidateClusterList {
   display: grid;
   gap: 12px;
 }
 
-.candidateClusterCard,
-.reviewCard,
-.highlightCard {
+.candidateClusterCard {
   display: grid;
   gap: 10px;
   border: 1px solid #d8e5dc;
@@ -1463,14 +1453,12 @@ pre {
   padding: 14px;
 }
 
-.candidateClusterCard h3,
-.reviewCard h3 {
+.candidateClusterCard h3 {
   margin: 3px 0 0;
   color: #184f34;
 }
 
-.candidateClusterCard p,
-.reviewCard p {
+.candidateClusterCard p {
   margin: 0;
   color: #52616f;
   line-height: 1.5;
@@ -1489,25 +1477,6 @@ pre {
   color: #226641;
   font-size: 0.78rem;
   font-weight: 800;
-}
-
-.reviewHeader {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.reviewCard ul {
-  margin: 0;
-  color: #52616f;
-}
-
-.highlightSection {
-  display: grid;
-  gap: 12px;
-  border-top: 1px solid #d8e5dc;
-  padding-top: 18px;
 }
 
 .policyQuery textarea {
@@ -1539,16 +1508,6 @@ pre {
   margin: 0;
   color: #52616f;
   font-size: 0.82rem;
-}
-
-.adminNotice {
-  margin: 0;
-  border: 1px solid #f2c94c;
-  border-radius: 8px;
-  background: #fff8d7;
-  color: #6b4b00;
-  font-weight: 800;
-  padding: 12px 14px;
 }
 
 .adminStats {
@@ -1824,7 +1783,6 @@ pre {
 
   .sectionIntro,
   .adminPanelHeader,
-  .reviewHeader,
   .incidentPagination {
     align-items: stretch;
     flex-direction: column;

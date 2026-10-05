@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.models import AIInteractionTrace, AuditEvent, LegalQueryTrace
-from app.rag.corpus import LegalCorpusIndexer, load_manifest
+from app.rag.corpus import load_manifest
 from app.rag.generation import (
     LEGAL_RAG_PROMPT_VERSION,
     LegalAnswerProvider,
@@ -344,7 +344,3 @@ class LegalRAGService:
             )
         )
         self.db.commit()
-
-
-def corpus_indexer(db: Session, settings: Settings | None = None) -> LegalCorpusIndexer:
-    return LegalCorpusIndexer(db, settings or get_settings())

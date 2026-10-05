@@ -233,29 +233,6 @@ asistente lo haya resumido, indica que deseas terminar.
         return response.output_parsed
 
 
-class DeterministicCitizenActor:
-    """Local actor for tests and dry runs; production measurements use OpenAICitizenActor."""
-
-    model_name = "deterministic-hybrid-actor"
-
-    def next_message(
-        self,
-        scenario: HybridScenario,
-        conversation: list[ChatMessage],
-        *,
-        turn: int,
-    ) -> CitizenActorOutput:
-        if turn == 0:
-            return CitizenActorOutput(message=scenario.facts)
-        return CitizenActorOutput(
-            message=(
-                f"Fue en {scenario.expected_address}, en {scenario.expected_district}, "
-                f"{scenario.expected_temporal_text}. Eso es todo."
-            ),
-            wants_to_finish=True,
-        )
-
-
 def _spanish_datetime(value: datetime) -> str:
     local = value.astimezone(LOCAL_TIMEZONE)
     months = (
