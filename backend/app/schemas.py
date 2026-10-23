@@ -128,9 +128,9 @@ class CitizenProfile(StrictModel):
 
 
 class FormSubmissionCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=2, max_length=120)
     email: EmailStr
-    message: str | None = None
+    message: str | None = Field(default=None, max_length=8_000)
 
 
 class FormSubmissionResponse(BaseModel):
@@ -222,7 +222,7 @@ class ComplaintExtractedData(StrictModel):
 
 class ChatMessage(StrictModel):
     role: Literal["user", "assistant"]
-    content: str
+    content: str = Field(min_length=1, max_length=8_000)
 
     @field_validator("content")
     @classmethod
@@ -233,7 +233,7 @@ class ChatMessage(StrictModel):
 
 
 class ComplaintIntakeChatRequest(StrictModel):
-    messages: list[ChatMessage]
+    messages: list[ChatMessage] = Field(max_length=41)
     current_extracted_data: ComplaintExtractedData | None = None
 
 
@@ -259,6 +259,7 @@ class IntakeSessionCreateRequest(StrictModel):
 
 class IntakeSessionCreateResponse(StrictModel):
     session_id: str
+    access_token: str | None = None
     emergency_notice: str
     assistant_message: str
     prompt_version: str
@@ -348,10 +349,10 @@ class ComplaintSubmissionCreate(BaseModel):
 
 
 class IntakeSubmissionRequest(StrictModel):
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=120)
     identification: str | None = Field(default=None, max_length=64)
     email: EmailStr | None = None
-    phone: str | None = None
+    phone: str | None = Field(default=None, max_length=40)
     truth_confirmation: bool
     data_usage_consent: bool
 

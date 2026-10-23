@@ -4,6 +4,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy import text
@@ -38,6 +39,7 @@ from .schemas import (
     FormSubmissionCreate,
     FormSubmissionResponse,
 )
+from .security import SecurityMiddleware
 from .services.incidents import IncidentService
 
 settings = get_settings()
@@ -45,7 +47,30 @@ configure_logging(settings.log_level)
 logger = logging.getLogger(__name__)
 DbSession = Annotated[Session, Depends(get_db)]
 
-app = FastAPI(title=settings.app_name, version="1.0.0")
+app = FastAPI(
+    title=settings.app_name,
+    version="1.0.0",
+    docs_url=None if settings.is_production else "/docs",
+    redoc_url=None if settings.is_production else "/redoc",
+    openapi_url=None if settings.is_production else "/openapi.json",
+)
+app.add_middleware(SecurityMiddleware)
+
+
+@app.exception_handler(RequestValidationError)
+async def private_validation_error(_request: Request, exc: RequestValidationError):
+    # FastAPI's default includes the rejected input (including passwords and PII).
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": [
+                {"loc": list(error["loc"]), "msg": "Entrada no válida.", "type": error["type"]}
+                for error in exc.errors()
+            ]
+        },
+    )
+
+
 app.include_router(intake_router, prefix="/v1")
 app.include_router(incidents_router, prefix="/v1")
 app.include_router(internal_intake_router, prefix="/v1")
@@ -78,7 +103,7 @@ def _cors_headers_for_error(request: Request) -> dict[str, str]:
 
 @app.middleware("http")
 async def request_observability(request: Request, call_next):
-    correlation_id = request.headers.get("X-Correlation-ID") or str(uuid.uuid4())
+    correlation_id = str(uuid.uuid4())
     token = correlation_id_context.set(correlation_id)
     started = time.perf_counter()
     status_code = 500
@@ -89,7 +114,7 @@ async def request_observability(request: Request, call_next):
     except Exception:
         logger.exception(
             "Unhandled request error",
-            extra={"method": request.method, "path": request.url.path},
+            extra={"method": request.method, "route": normalized_route(request.scope)},
         )
         response = JSONResponse(
             status_code=500,
@@ -111,7 +136,6 @@ async def request_observability(request: Request, call_next):
             "Request completed",
             extra={
                 "method": request.method,
-                "path": request.url.path,
                 "route": route,
                 "status_code": status_code,
                 "latency_ms": elapsed_ms,

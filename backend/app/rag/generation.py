@@ -145,6 +145,7 @@ class OpenAILegalAnswerProvider(LegalAnswerProvider):
                 text_format=GroundedLegalAnswer,
                 reasoning={"effort": self.settings.legal_rag_reasoning_effort},
                 store=False,
+                max_output_tokens=4096,
             )
         except (OpenAIError, ValueError) as exc:
             record_ai_call(

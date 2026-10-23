@@ -16,3 +16,17 @@ outputs/
 .mypy_cache/
 .venv/
 *.egg-info/
+# Credentials, local databases and exports never belong in a public source release.
+*.pem
+*.key
+*.p12
+*.pfx
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+*.log
+*.tfstate*
+credentials*.json
+service-account*.json
+frontend/nginx.runtime.conf

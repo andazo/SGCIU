@@ -10,6 +10,8 @@ def test_versioned_intake_api_flow():
     assert start.status_code == 201
     assert "no es un servicio de atención de emergencias" in start.json()["emergency_notice"]
     session_id = start.json()["session_id"]
+    if start.json().get("access_token"):
+        client.headers["X-Intake-Token"] = start.json()["access_token"]
 
     analyzed = client.post(
         f"/v1/intake/sessions/{session_id}/messages",
@@ -61,6 +63,8 @@ def test_internal_intake_api_marks_source_and_badge():
     start = client.post("/v1/internal-intake/sessions")
     assert start.status_code == 201
     session_id = start.json()["session_id"]
+    if start.json().get("access_token"):
+        client.headers["X-Intake-Token"] = start.json()["access_token"]
 
     analyzed = client.post(
         f"/v1/internal-intake/sessions/{session_id}/messages",
@@ -93,6 +97,8 @@ def test_anonymous_intake_session_never_persists_contact_fields():
     assert start.status_code == 201
     assert start.json()["registration_mode"] == "anonymous"
     session_id = start.json()["session_id"]
+    if start.json().get("access_token"):
+        client.headers["X-Intake-Token"] = start.json()["access_token"]
 
     analyzed = client.post(
         f"/v1/intake/sessions/{session_id}/messages",

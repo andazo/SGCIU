@@ -159,6 +159,7 @@ class OpenAIIncidentAssessmentProvider(IncidentAssessmentProvider):
                 text_format=IncidentAssessment,
                 reasoning={"effort": "low"},
                 store=False,
+                max_output_tokens=4096,
             )
         except (OpenAIError, ValueError) as exc:
             record_ai_call(

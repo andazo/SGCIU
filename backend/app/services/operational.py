@@ -56,9 +56,10 @@ class OperationalSessionService:
     def __init__(self, db: Session):
         self.db = db
 
-    def start(self, *, model_name: str) -> OperationalSession:
+    def start(self, *, model_name: str, owner_user_id: int | None = None) -> OperationalSession:
         session = OperationalSession(
             id=str(uuid.uuid4()),
+            owner_user_id=owner_user_id,
             messages=[],
             model_name=model_name,
             prompt_version=AGENT_PROMPT_VERSION,

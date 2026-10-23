@@ -4,6 +4,7 @@ import uuid
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     Column,
     DateTime,
@@ -27,6 +28,14 @@ from .config import get_settings
 from .db import Base
 
 JSON_TYPE = JSON().with_variant(JSONB(), "postgresql")
+
+
+class SecurityRequestBucket(Base):
+    __tablename__ = "security_request_buckets"
+
+    key = Column(String(64), primary_key=True)
+    count = Column(Integer, nullable=False)
+    expires_at = Column(BigInteger, nullable=False, index=True)
 
 
 def _vector_type():
@@ -125,6 +134,11 @@ class IntakeSession(Base):
     __tablename__ = "intake_sessions"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    access_token_hash = Column(String(64), nullable=True)
+    audience = Column(String(16), nullable=False, default="citizen", server_default="legacy")
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    submitted_incident_id = Column(Integer, ForeignKey("complaint_submissions.id"), nullable=True)
+    submitted_at = Column(DateTime(timezone=True), nullable=True)
     registration_mode = Column(
         String(16), nullable=False, default="complete", server_default="complete"
     )
@@ -143,6 +157,7 @@ class OperationalSession(Base):
     __tablename__ = "operational_sessions"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     messages = Column(JSON_TYPE, nullable=False, default=list)
     model_name = Column(String(120), nullable=True)
     prompt_version = Column(String(40), nullable=False, default="operational-react-v5")

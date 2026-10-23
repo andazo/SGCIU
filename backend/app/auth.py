@@ -64,6 +64,9 @@ def digest_session_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+_DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(32))
+
+
 class AuthenticationError(ValueError):
     pass
 
@@ -77,7 +80,8 @@ class AuthService:
         user = self.db.scalar(
             select(User).where(User.username == normalize_username(username))
         )
-        if user is None or not user.is_active or not verify_password(password, user.password_hash):
+        verified = verify_password(password, user.password_hash if user else _DUMMY_PASSWORD_HASH)
+        if user is None or not user.is_active or not verified:
             raise AuthenticationError("Usuario o contraseña inválidos.")
 
         now = datetime.now(UTC)

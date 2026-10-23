@@ -29,7 +29,9 @@ def index_legal_corpus(payload: LegalIndexingRequest, db: DbSession, _actor: Adm
     try:
         return LegalCorpusIndexer(db).index_all(force=payload.force)
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=503, detail="Servicio de IA temporalmente no disponible."
+        ) from exc
 
 
 @router.post("/query", response_model=LegalQueryResponse)
@@ -42,4 +44,6 @@ def query_legal_corpus(payload: LegalQueryRequest, db: DbSession, _actor: AdminR
             operational_context=payload.operational_context,
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=503, detail="Servicio de IA temporalmente no disponible."
+        ) from exc

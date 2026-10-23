@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import AdminRole
 from app.db import get_db
+from app.models import IntakeSession
 from app.schemas import (
     ComplaintSubmissionResponse,
     IntakeMessageRequest,
@@ -24,9 +25,25 @@ router = APIRouter(prefix="/internal-intake", tags=["internal-intake"])
 DbSession = Annotated[Session, Depends(get_db)]
 
 
+def require_internal_session(session_id: str, db: DbSession, actor: AdminRole):
+    session = db.get(IntakeSession, session_id)
+    if (
+        session is None
+        or session.audience != "internal"
+        or session.owner_user_id != (actor.id if actor else None)
+    ):
+        raise HTTPException(status_code=404, detail="Sesión interna no encontrada.")
+
+
+InternalSession = Annotated[None, Depends(require_internal_session)]
+
+
 @router.post("/sessions", response_model=IntakeSessionCreateResponse, status_code=201)
 def start_internal_intake(db: DbSession, _actor: AdminRole):
-    session = IntakeService(db).start()
+    session = IntakeService(db).start(
+        audience="internal",
+        owner_user_id=_actor.id if _actor else None,
+    )
     return IntakeSessionCreateResponse(
         session_id=session.id,
         emergency_notice=EMERGENCY_NOTICE,
@@ -45,13 +62,18 @@ def add_internal_intake_message(
     payload: IntakeMessageRequest,
     db: DbSession,
     _actor: AdminRole,
+    _session: InternalSession,
 ):
     try:
         return IntakeService(db).add_user_message(session_id, payload.content)
     except IntakeSessionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Sesión interna no encontrada.") from exc
+    except IncompleteIntakeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=503, detail="Servicio de IA temporalmente no disponible."
+        ) from exc
 
 
 @router.post(
@@ -64,6 +86,7 @@ def submit_internal_intake(
     payload: InternalIntakeSubmissionRequest,
     db: DbSession,
     _actor: AdminRole,
+    _session: InternalSession,
 ):
     try:
         return IntakeService(db).submit_internal(session_id, payload)
