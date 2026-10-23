@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1180" viewBox="0 0 1800 1180" role="img" aria-labelledby="title desc">
+  <title id="title">Diseño de datos y pipelines del SGCIU</title>
+  <desc id="desc">Dos flujos independientes y conectados en la capa operativa: el pipeline de incidentes ciudadanos y el pipeline jurídico RAG.</desc>
+  <defs>
+    <filter id="shadow" x="-15%" y="-20%" width="130%" height="150%">
+      <feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#16374A" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrowBlue" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto">
+      <path d="M0,0 L11,5.5 L0,11 Z" fill="#1677A5"/>
+    </marker>
+    <marker id="arrowPurple" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto">
+      <path d="M0,0 L11,5.5 L0,11 Z" fill="#7756A3"/>
+    </marker>
+    <style>
+      .title{font:700 42px Arial,sans-serif;fill:#123B55}.subtitle{font:400 21px Arial,sans-serif;fill:#506A79}
+      .lane-title{font:700 25px Arial,sans-serif}.step{font:700 16px Arial,sans-serif;letter-spacing:.5px}.box-title{font:700 22px Arial,sans-serif;fill:#123B55}.box-copy{font:400 17px Arial,sans-serif;fill:#355263}.box-code{font:600 16px Arial,sans-serif;fill:#355263}.note{font:600 17px Arial,sans-serif;fill:#355263}.footer{font:400 17px Arial,sans-serif;fill:#506A79}
+    </style>
+  </defs>
+
+  <rect width="1800" height="1180" fill="#FFFFFF"/>
+  <text class="title" x="80" y="73">Diseño de datos y pipelines del SGCIU</text>
+  <text class="subtitle" x="80" y="110">Ingesta, transformación, almacenamiento vectorial y consumo bajo supervisión humana</text>
+
+  <rect x="70" y="154" width="1660" height="430" rx="30" fill="#F4FAFD" stroke="#B8D9E8" stroke-width="2"/>
+  <rect x="70" y="154" width="315" height="54" rx="27" fill="#D9EEF7"/>
+  <text class="lane-title" x="102" y="190" fill="#0D668D">1. Incidentes ciudadanos</text>
+
+  <g filter="url(#shadow)">
+    <rect x="105" y="252" width="260" height="238" rx="22" fill="#FFFFFF" stroke="#65A9C7" stroke-width="3"/>
+    <circle cx="139" cy="286" r="19" fill="#1677A5"/><text class="step" x="134" y="292" fill="#FFFFFF">1</text>
+    <text class="box-title" x="170" y="293">Captura</text>
+    <text class="box-copy" x="132" y="337">
+      <tspan x="132" dy="0">• Modalidad identificada</tspan><tspan x="143" dy="25">o sin datos de contacto</tspan>
+      <tspan x="132" dy="31">• Nombre, identificación,</tspan><tspan x="143" dy="25">correo y teléfono</tspan>
+      <tspan x="132" dy="31">• Consentimiento y</tspan><tspan x="143" dy="25">declaración de veracidad</tspan>
+    </text>
+
+    <rect x="405" y="252" width="260" height="238" rx="22" fill="#FFFFFF" stroke="#65A9C7" stroke-width="3"/>
+    <circle cx="439" cy="286" r="19" fill="#1677A5"/><text class="step" x="434" y="292" fill="#FFFFFF">2</text>
+    <text class="box-title" x="470" y="293">Intake</text>
+    <text class="box-copy" x="432" y="337">
+      <tspan x="432" dy="0">• Relato conversacional</tspan>
+      <tspan x="432" dy="31">• Descripción, relación,</tspan><tspan x="443" dy="25">lugar, tiempo y recurrencia</tspan>
+      <tspan x="432" dy="31">• Entidades, urgencia,</tspan><tspan x="443" dy="25">evidencia y confianza</tspan>
+    </text>
+
+    <rect x="705" y="252" width="260" height="238" rx="22" fill="#FFFFFF" stroke="#65A9C7" stroke-width="3"/>
+    <circle cx="739" cy="286" r="19" fill="#1677A5"/><text class="step" x="734" y="292" fill="#FFFFFF">3</text>
+    <text class="box-title" x="770" y="293">Preparación</text>
+    <text class="box-copy" x="732" y="337">
+      <tspan x="732" dy="0">• Validación del esquema</tspan>
+      <tspan x="732" dy="31">• Correcciones entre turnos</tspan>
+      <tspan x="732" dy="31">• Normalización temporal,</tspan><tspan x="743" dy="25">distrito y categoría</tspan>
+      <tspan x="732" dy="31">• Contacto nulo en modo</tspan><tspan x="743" dy="25">anónimo</tspan>
+    </text>
+
+    <rect x="1005" y="252" width="260" height="238" rx="22" fill="#FFFFFF" stroke="#65A9C7" stroke-width="3"/>
+    <circle cx="1039" cy="286" r="19" fill="#1677A5"/><text class="step" x="1034" y="292" fill="#FFFFFF">4</text>
+    <text class="box-title" x="1070" y="293">Persistencia</text>
+    <text class="box-code" x="1032" y="340">
+      <tspan x="1032" dy="0">intake_sessions</tspan>
+      <tspan x="1032" dy="33">complaint_submissions</tspan>
+      <tspan x="1032" dy="33">• datos estructurados</tspan>
+      <tspan x="1032" dy="27">• resumen y metadatos</tspan>
+      <tspan x="1032" dy="27">• fecha del hecho</tspan>
+      <tspan x="1032" dy="27">• estado y trazabilidad</tspan>
+    </text>
+
+    <rect x="1305" y="252" width="390" height="238" rx="22" fill="#EAF5EF" stroke="#3D936E" stroke-width="3"/>
+    <circle cx="1339" cy="286" r="19" fill="#2C7A5A"/><text class="step" x="1334" y="292" fill="#FFFFFF">5</text>
+    <text class="box-title" x="1370" y="293">Datos derivados</text>
+    <text class="box-copy" x="1332" y="337">
+      <tspan x="1332" dy="0">Texto canónico sin campos de contacto</tspan>
+      <tspan x="1332" dy="31">Embedding general + ubicación</tspan>
+      <tspan x="1332" dy="31">Similitud híbrida y clusters candidatos</tspan>
+      <tspan x="1332" dy="31">Alertas y revisión humana separadas</tspan>
+      <tspan x="1332" dy="31">Panel institucional y agente operativo</tspan>
+    </text>
+  </g>
+
+  <path d="M365 371 H397" stroke="#1677A5" stroke-width="5" fill="none" marker-end="url(#arrowBlue)"/>
+  <path d="M665 371 H697" stroke="#1677A5" stroke-width="5" fill="none" marker-end="url(#arrowBlue)"/>
+  <path d="M965 371 H997" stroke="#1677A5" stroke-width="5" fill="none" marker-end="url(#arrowBlue)"/>
+  <path d="M1265 371 H1297" stroke="#1677A5" stroke-width="5" fill="none" marker-end="url(#arrowBlue)"/>
+
+  <rect x="70" y="620" width="1660" height="406" rx="30" fill="#FAF7FD" stroke="#D8C9E8" stroke-width="2"/>
+  <rect x="70" y="620" width="298" height="54" rx="27" fill="#ECE2F5"/>
+  <text class="lane-title" x="102" y="656" fill="#68468F">2. Corpus jurídico RAG</text>
+
+  <g filter="url(#shadow)">
+    <rect x="105" y="718" width="260" height="218" rx="22" fill="#FFFFFF" stroke="#A789C8" stroke-width="3"/>
+    <circle cx="139" cy="752" r="19" fill="#7756A3"/><text class="step" x="134" y="758" fill="#FFFFFF">1</text>
+    <text class="box-title" x="170" y="759">Fuentes</text>
+    <text class="box-copy" x="132" y="805">
+      <tspan x="132" dy="0">27 PDF normativos</tspan>
+      <tspan x="132" dy="31">Manifiesto versionado</tspan>
+      <tspan x="132" dy="31">Checksum SHA-256</tspan>
+      <tspan x="132" dy="31">Metadatos de autoridad</tspan>
+    </text>
+
+    <rect x="405" y="718" width="260" height="218" rx="22" fill="#FFFFFF" stroke="#A789C8" stroke-width="3"/>
+    <circle cx="439" cy="752" r="19" fill="#7756A3"/><text class="step" x="434" y="758" fill="#FFFFFF">2</text>
+    <text class="box-title" x="470" y="759">Preproceso</text>
+    <text class="box-copy" x="432" y="805">
+      <tspan x="432" dy="0">Extracción por página física</tspan>
+      <tspan x="432" dy="31">Limpieza y segmentación</tspan>
+      <tspan x="432" dy="31">Artículos y ruta de sección</tspan>
+      <tspan x="432" dy="31">Fragmentos con hash</tspan>
+    </text>
+
+    <rect x="705" y="718" width="260" height="218" rx="22" fill="#FFFFFF" stroke="#A789C8" stroke-width="3"/>
+    <circle cx="739" cy="752" r="19" fill="#7756A3"/><text class="step" x="734" y="758" fill="#FFFFFF">3</text>
+    <text class="box-title" x="770" y="759">Indexación</text>
+    <text class="box-copy" x="732" y="805">
+      <tspan x="732" dy="0">Embeddings legales</tspan>
+      <tspan x="732" dy="31">legal_documents</tspan>
+      <tspan x="732" dy="31">legal_chunks + pgvector</tspan>
+      <tspan x="732" dy="31">Versión de corpus y modelo</tspan>
+    </text>
+
+    <rect x="1005" y="718" width="260" height="218" rx="22" fill="#FFFFFF" stroke="#A789C8" stroke-width="3"/>
+    <circle cx="1039" cy="752" r="19" fill="#7756A3"/><text class="step" x="1034" y="758" fill="#FFFFFF">4</text>
+    <text class="box-title" x="1070" y="759">Recuperación</text>
+    <text class="box-copy" x="1032" y="805">
+      <tspan x="1032" dy="0">Consulta institucional</tspan>
+      <tspan x="1032" dy="31">Búsqueda densa + léxica</tspan>
+      <tspan x="1032" dy="31">Fusión RRF ponderada</tspan>
+      <tspan x="1032" dy="31">Deduplicación y diversidad</tspan>
+    </text>
+
+    <rect x="1305" y="718" width="390" height="218" rx="22" fill="#FFF5E8" stroke="#C5812B" stroke-width="3"/>
+    <circle cx="1339" cy="752" r="19" fill="#B56A1A"/><text class="step" x="1334" y="758" fill="#FFFFFF">5</text>
+    <text class="box-title" x="1370" y="759">Respuesta fundamentada</text>
+    <text class="box-copy" x="1332" y="805">
+      <tspan x="1332" dy="0">Contexto recuperado para generación</tspan>
+      <tspan x="1332" dy="31">Documento, página y artículo citados</tspan>
+      <tspan x="1332" dy="31">Validación jurídica o abstención</tspan>
+      <tspan x="1332" dy="31">Traza de consulta sin texto libre</tspan>
+    </text>
+  </g>
+
+  <path d="M365 827 H397" stroke="#7756A3" stroke-width="5" fill="none" marker-end="url(#arrowPurple)"/>
+  <path d="M665 827 H697" stroke="#7756A3" stroke-width="5" fill="none" marker-end="url(#arrowPurple)"/>
+  <path d="M965 827 H997" stroke="#7756A3" stroke-width="5" fill="none" marker-end="url(#arrowPurple)"/>
+  <path d="M1265 827 H1297" stroke="#7756A3" stroke-width="5" fill="none" marker-end="url(#arrowPurple)"/>
+
+  <rect x="70" y="1060" width="1660" height="70" rx="18" fill="#F3F5F6" stroke="#CDD7DC" stroke-width="2"/>
+  <circle cx="108" cy="1095" r="13" fill="#1677A5"/>
+  <text class="note" x="135" y="1101">PostgreSQL + pgvector conserva datos transaccionales, vectores y trazas en estructuras separadas.</text>
+  <circle cx="1000" cy="1095" r="13" fill="#7756A3"/>
+  <text class="note" x="1027" y="1101">Las denuncias no se incorporan al corpus jurídico.</text>
+  <text class="footer" x="80" y="1162">La IA estructura, relaciona y recupera evidencia; la decisión institucional permanece bajo supervisión humana.</text>
+</svg>
