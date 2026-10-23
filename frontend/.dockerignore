@@ -3,3 +3,7 @@ dist
 .pytest_cache
 .DS_Store
 npm-debug.log*
+.env
+.env.*
+*.key
+*.pem

@@ -443,6 +443,7 @@ class OpenAIIntakeProvider(IntakeProvider):
                 text_format=IntakeModelOutput,
                 reasoning={"effort": self.settings.intake_reasoning_effort},
                 store=False,
+                max_output_tokens=8192,
             )
         except (OpenAIError, ValueError) as exc:
             record_ai_call(

@@ -49,7 +49,7 @@ def require_admin(
         return user
 
     # Transitional compatibility for existing integrations. New clients must use Bearer auth.
-    if validate_admin_key(x_admin_key, settings):
+    if not settings.is_production and validate_admin_key(x_admin_key, settings):
         return None
     raise HTTPException(
         status_code=401,

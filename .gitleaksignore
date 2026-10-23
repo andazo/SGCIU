@@ -1,0 +1,16 @@
+# Reviewed false positives: public legal document identifiers, including test fixtures.
+610ede54ae9c4041995ac455de8f6690b38880f1:backend/tests/e2e/test_complete_journeys.py:generic-api-key:283
+dfafa289aeed44ab1b347cae90ab369e431aa131:backend/tests/e2e/test_complete_journeys.py:generic-api-key:283
+9a3c241c284a40afc158623c8f4174a7a17254cc:backend/corpus/legal/manifest.json:generic-api-key:216
+9a3c241c284a40afc158623c8f4174a7a17254cc:backend/corpus/legal/manifest.json:generic-api-key:228
+9a3c241c284a40afc158623c8f4174a7a17254cc:backend/corpus/legal/manifest.json:generic-api-key:240
+9a3c241c284a40afc158623c8f4174a7a17254cc:backend/corpus/legal/manifest.json:generic-api-key:252
+9a3c241c284a40afc158623c8f4174a7a17254cc:backend/corpus/legal/manifest.json:generic-api-key:301
+9a3c241c284a40afc158623c8f4174a7a17254cc:backend/corpus/legal/manifest.json:generic-api-key:314
+551ca543b44c54aca25b785eba14f421d649ee9a:backend/corpus/legal/manifest.json:generic-api-key:25
+551ca543b44c54aca25b785eba14f421d649ee9a:backend/corpus/legal/manifest.json:generic-api-key:35
+551ca543b44c54aca25b785eba14f421d649ee9a:backend/corpus/legal/manifest.json:generic-api-key:55
+551ca543b44c54aca25b785eba14f421d649ee9a:backend/corpus/legal/manifest.json:generic-api-key:75
+551ca543b44c54aca25b785eba14f421d649ee9a:backend/corpus/legal/manifest.json:generic-api-key:106
+551ca543b44c54aca25b785eba14f421d649ee9a:backend/corpus/legal/manifest.json:generic-api-key:136
+551ca543b44c54aca25b785eba14f421d649ee9a:backend/corpus/legal/manifest.json:generic-api-key:146

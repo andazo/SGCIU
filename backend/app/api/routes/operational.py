@@ -8,6 +8,7 @@ from app.agents.operational import OperationalAgent
 from app.api.dependencies import AdminRole
 from app.config import get_settings
 from app.db import get_db
+from app.models import OperationalSession
 from app.schemas import (
     OperationalQueryRequest,
     OperationalQueryResponse,
@@ -24,10 +25,22 @@ router = APIRouter(prefix="/operational", tags=["operational-agent"])
 DbSession = Annotated[Session, Depends(get_db)]
 
 
+def require_operational_session(session_id: str, db: DbSession, actor: AdminRole):
+    session = db.get(OperationalSession, session_id)
+    if session is None or session.owner_user_id != (actor.id if actor else None):
+        raise HTTPException(status_code=404, detail="Sesión operativa no encontrada.")
+
+
+OwnedSession = Annotated[None, Depends(require_operational_session)]
+
+
 @router.post("/sessions", response_model=OperationalSessionCreateResponse, status_code=201)
 async def start_operational_session(db: DbSession, _actor: AdminRole):
     settings = get_settings()
-    session = OperationalSessionService(db).start(model_name=settings.openai_model)
+    session = OperationalSessionService(db).start(
+        model_name=settings.openai_model,
+        owner_user_id=_actor.id if _actor else None,
+    )
     return OperationalSessionCreateResponse(
         session_id=session.id,
         messages=[],
@@ -37,7 +50,12 @@ async def start_operational_session(db: DbSession, _actor: AdminRole):
 
 
 @router.get("/sessions/{session_id}", response_model=OperationalSessionResponse)
-async def get_operational_session(session_id: str, db: DbSession, _actor: AdminRole):
+async def get_operational_session(
+    session_id: str,
+    db: DbSession,
+    _actor: AdminRole,
+    _session: OwnedSession,
+):
     service = OperationalSessionService(db)
     try:
         return service.to_response(service.get(session_id))
@@ -54,6 +72,7 @@ async def add_operational_message(
     payload: OperationalQueryRequest,
     db: DbSession,
     _actor: AdminRole,
+    _session: OwnedSession,
 ):
     service = OperationalSessionService(db)
     try:
@@ -65,7 +84,9 @@ async def add_operational_message(
     except OperationalSessionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Sesión operativa no encontrada.") from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=503, detail="Servicio de IA temporalmente no disponible."
+        ) from exc
 
 
 @router.post("/query", response_model=OperationalQueryResponse)
@@ -84,4 +105,6 @@ async def query_operational_agent(
         db.commit()
         return response
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=503, detail="Servicio de IA temporalmente no disponible."
+        ) from exc

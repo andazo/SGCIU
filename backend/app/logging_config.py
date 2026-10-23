@@ -27,7 +27,8 @@ class JsonFormatter(logging.Formatter):
             if key not in self._standard_fields and key not in {"message", "asctime"}:
                 payload[key] = value
         if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
+            # Provider/SQL exception text can include prompts, credentials or parameters.
+            payload["error_type"] = record.exc_info[0].__name__
         return json.dumps(payload, ensure_ascii=False, default=str)
 
 

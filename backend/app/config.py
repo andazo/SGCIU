@@ -76,6 +76,7 @@ class Settings:
     admin_api_key: str | None
     require_admin_auth: bool
     auth_session_ttl_hours: int
+    public_ai_daily_request_limit: int = 500
 
     @property
     def is_production(self) -> bool:
@@ -153,6 +154,9 @@ def get_settings() -> Settings:
         cluster_time_window_days=int(os.getenv("CLUSTER_TIME_WINDOW_DAYS", "30")),
         cluster_candidate_k=max(20, int(os.getenv("CLUSTER_CANDIDATE_K", "200"))),
         admin_api_key=admin_api_key,
+        public_ai_daily_request_limit=max(
+            1, int(os.getenv("PUBLIC_AI_DAILY_REQUEST_LIMIT", "500"))
+        ),
         require_admin_auth=require_admin_auth,
         auth_session_ttl_hours=max(1, int(os.getenv("AUTH_SESSION_TTL_HOURS", "8"))),
     )

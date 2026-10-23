@@ -10,3 +10,8 @@ openai==2.54.0
 mcp==1.30.0
 pypdf==6.21.1
 prometheus-client==0.26.0
+# Pin corrected transitive/runtime packages as well as direct application dependencies.
+certifi==2026.10.19
+msgpack==1.2.3
+urllib3==2.8.0
+setuptools==84.2.1

@@ -182,6 +182,7 @@ def _submit_public_intake(
     assert start.status_code == 201
     assert "9-1-1" in start.json()["emergency_notice"]
     session_id = start.json()["session_id"]
+    client.headers["X-Intake-Token"] = start.json()["access_token"]
 
     analyzed = client.post(
         f"/v1/intake/sessions/{session_id}/messages",

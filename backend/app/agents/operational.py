@@ -243,6 +243,8 @@ class OperationalAgent:
             instructions=SYSTEM_PROMPT,
             input=conversation,
             tools=tools,
+            store=False,
+            max_output_tokens=4096,
         )
         input_tokens, output_tokens = self._response_usage(response)
         steps: list[ToolExecutionTrace] = []
@@ -295,12 +297,15 @@ class OperationalAgent:
                         "output": json.dumps(result, ensure_ascii=False, default=str),
                     }
                 )
+            conversation.extend(response.output)
+            conversation.extend(outputs)
             response = await client.responses.create(
                 model=self.settings.openai_model,
-                previous_response_id=response.id,
-                input=outputs,
+                input=conversation,
                 instructions=SYSTEM_PROMPT,
                 tools=tools,
+                store=False,
+                max_output_tokens=4096,
             )
             next_input, next_output = self._response_usage(response)
             input_tokens += next_input
