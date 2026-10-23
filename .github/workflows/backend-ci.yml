@@ -91,7 +91,7 @@ jobs:
           docker compose config --quiet
 
   verify-images:
-    needs: [verify-backend, verify-frontend, verify-infrastructure]
+    needs: [verify-backend, verify-frontend, verify-infrastructure, verify-security]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -103,3 +103,42 @@ jobs:
           --build-arg VITE_API_BASE_URL=https://api.invalid.example
           --tag sgciu-frontend:ci
           frontend
+      - name: Scan backend OS and Python packages
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: sgciu-backend:ci
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - name: Scan frontend OS packages
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: sgciu-frontend:ci
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+  verify-security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan all fetched history for credentials
+        uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: 'false'
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'false'
+          GITLEAKS_LOG_OPTS: '--all --full-history'
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.13'
+      - name: Audit Python source for security issues
+        run: |
+          pip install bandit==1.9.4
+          bandit -r backend/app -ll

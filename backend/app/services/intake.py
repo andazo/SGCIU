@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import time
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -60,9 +61,21 @@ class IntakeService:
         self.provider = provider or get_intake_provider()
         self.process_semantic = process_semantic
 
-    def start(self, registration_mode: RegistrationMode = "complete") -> IntakeSession:
+    def start(
+        self,
+        registration_mode: RegistrationMode = "complete",
+        *,
+        access_token: str | None = None,
+        audience: str = "citizen",
+        owner_user_id: int | None = None,
+    ) -> IntakeSession:
         session = IntakeSession(
             id=str(uuid.uuid4()),
+            access_token_hash=(
+                hashlib.sha256(access_token.encode()).hexdigest() if access_token else None
+            ),
+            audience=audience,
+            owner_user_id=owner_user_id,
             registration_mode=registration_mode,
             messages=[{"role": "assistant", "content": INITIAL_MESSAGE}],
             extracted_data=ComplaintExtractedData().model_dump(),
@@ -82,11 +95,20 @@ class IntakeService:
 
     def add_user_message(self, session_id: str, content: str) -> IntakeSessionResponse:
         session = self.db.scalar(
-            select(IntakeSession).where(IntakeSession.id == session_id).with_for_update()
+            select(IntakeSession)
+            .where(IntakeSession.id == session_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if session is None:
             raise IntakeSessionNotFoundError(session_id)
+        if session.submitted_at is not None:
+            raise IncompleteIntakeError("La sesión ya fue enviada; inicie un nuevo reporte.")
+        if len(session.messages) >= 41:
+            raise IncompleteIntakeError("Se alcanzó el límite de mensajes de esta sesión.")
         messages = [ChatMessage.model_validate(message) for message in session.messages]
+        if sum(len(message.content) for message in messages) + len(content) > 64_000:
+            raise IncompleteIntakeError("Se alcanzó el límite de texto de esta sesión.")
         messages.append(ChatMessage(role="user", content=content))
         stored_data = dict(session.extracted_data)
         previous_workflow = stored_data.pop("_workflow", {})
@@ -235,7 +257,16 @@ class IntakeService:
         entered_by_badge: str | None = None,
         source: str = "persistent_intake",
     ):
-        session = self.get(session_id)
+        session = self.db.scalar(
+            select(IntakeSession)
+            .where(IntakeSession.id == session_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if session is None:
+            raise IntakeSessionNotFoundError(session_id)
+        if session.submitted_at is not None:
+            raise IncompleteIntakeError("La sesión ya fue enviada; inicie un nuevo reporte.")
         response = self.to_response(session)
         if not session.is_complete:
             raise IncompleteIntakeError(
@@ -276,10 +307,16 @@ class IntakeService:
             data_usage_consent=data_usage_consent,
             police_input=police_input,
         )
-        return IncidentService(self.db).create(
+        # The existing row lock and this marker commit with the initial incident,
+        # before any external AI work releases the transaction.
+        session.submitted_at = datetime.now(UTC)
+        incident = IncidentService(self.db).create(
             incident_payload,
             process_semantic=self.process_semantic,
         )
+        session.submitted_incident_id = incident.id
+        self.db.commit()
+        return incident
 
     def to_response(self, session: IntakeSession) -> IntakeSessionResponse:
         extracted = dict(session.extracted_data or {})

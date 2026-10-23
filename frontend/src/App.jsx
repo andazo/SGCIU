@@ -5,7 +5,21 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000
 const ADMIN_ROUTE = '/admin';
 const ADMIN_AUTH_STORAGE_KEY = 'sgciu.admin.auth';
 const CITIZEN_SESSION_STORAGE_KEY = 'sgciu.citizen.intake.session';
+const CITIZEN_ACCESS_STORAGE_KEY = 'sgciu.citizen.intake.access';
+
+function citizenHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'X-Intake-Token': sessionStorage.getItem(CITIZEN_ACCESS_STORAGE_KEY) || '',
+  };
+}
 const OPERATIONAL_SESSION_STORAGE_KEY = 'sgciu.operational.session';
+
+function clearAdminSession() {
+  sessionStorage.removeItem(ADMIN_AUTH_STORAGE_KEY);
+  sessionStorage.removeItem(OPERATIONAL_SESSION_STORAGE_KEY);
+  sessionStorage.removeItem('sgciu.policy.history');
+}
 const NAV_ITEMS = [
   { label: 'Inicio', icon: '⌂' },
   { label: 'Registrar incidente', icon: '+' },
@@ -70,7 +84,7 @@ async function apiRequest(path, options = {}) {
   try {
     storedAuth = JSON.parse(sessionStorage.getItem(ADMIN_AUTH_STORAGE_KEY) || 'null');
   } catch {
-    sessionStorage.removeItem(ADMIN_AUTH_STORAGE_KEY);
+    clearAdminSession();
   }
   if (storedAuth?.access_token && !path.startsWith('/v1/auth/login')) {
     headers.set('Authorization', `Bearer ${storedAuth.access_token}`);
@@ -78,7 +92,7 @@ async function apiRequest(path, options = {}) {
   const response = await fetch(API_BASE_URL + path, { ...options, headers });
   if (!response.ok) {
     if (response.status === 401 && !path.startsWith('/v1/auth/')) {
-      sessionStorage.removeItem(ADMIN_AUTH_STORAGE_KEY);
+      clearAdminSession();
       window.dispatchEvent(new Event('sgciu-auth-expired'));
     }
     let message = 'La operación no se pudo completar (' + response.status + ').';
@@ -1694,6 +1708,7 @@ function AdminLogin({ onAuthenticated }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: username.trim(), password }),
       });
+      clearAdminSession();
       sessionStorage.setItem(ADMIN_AUTH_STORAGE_KEY, JSON.stringify(session));
       onAuthenticated(session.user);
     } catch (requestError) {
@@ -1756,7 +1771,7 @@ function AdminDashboard() {
         const currentUser = await apiRequest('/v1/auth/me');
         if (!cancelled) setUser(currentUser);
       } catch {
-        sessionStorage.removeItem(ADMIN_AUTH_STORAGE_KEY);
+        clearAdminSession();
       } finally {
         if (!cancelled) setIsChecking(false);
       }
@@ -1776,7 +1791,7 @@ function AdminDashboard() {
     try {
       await apiRequest('/v1/auth/logout', { method: 'POST' });
     } finally {
-      sessionStorage.removeItem(ADMIN_AUTH_STORAGE_KEY);
+      clearAdminSession();
       setUser(null);
     }
   }
@@ -1846,12 +1861,15 @@ function CitizenComplaintForm() {
       const storedSessionId = sessionStorage.getItem(CITIZEN_SESSION_STORAGE_KEY);
       if (!storedSessionId) return;
       try {
-        const response = await fetch(`${API_BASE_URL}/v1/intake/sessions/${storedSessionId}`);
+        const response = await fetch(`${API_BASE_URL}/v1/intake/sessions/${storedSessionId}`, {
+          headers: citizenHeaders(),
+        });
         if (!response.ok) throw new Error('La sesión ya no está disponible.');
         const data = await response.json();
         if (!cancelled) hydrateSession(data);
       } catch {
         sessionStorage.removeItem(CITIZEN_SESSION_STORAGE_KEY);
+        sessionStorage.removeItem(CITIZEN_ACCESS_STORAGE_KEY);
       }
     }
     restoreSession();
@@ -1877,6 +1895,7 @@ function CitizenComplaintForm() {
       });
       if (!response.ok) throw new Error((await response.text()) || 'No se pudo iniciar la sesión.');
       const data = await response.json();
+      sessionStorage.setItem(CITIZEN_ACCESS_STORAGE_KEY, data.access_token);
       hydrateSession({
         ...data,
         messages: [{ role: 'assistant', content: data.assistant_message }],
@@ -1920,9 +1939,7 @@ function CitizenComplaintForm() {
     try {
       const response = await fetch(`${API_BASE_URL}/v1/intake/sessions/${sessionId}/messages`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: citizenHeaders(),
         body: JSON.stringify({ content: trimmedMessage }),
       });
 
@@ -1961,9 +1978,7 @@ function CitizenComplaintForm() {
     try {
       const response = await fetch(`${API_BASE_URL}/v1/intake/sessions/${sessionId}/submit`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: citizenHeaders(),
         body: JSON.stringify({
           name: registrationMode === 'anonymous' ? null : (contactData.name || null),
           email: registrationMode === 'anonymous' ? null : (contactData.email || null),
@@ -1982,6 +1997,7 @@ function CitizenComplaintForm() {
       setSavedComplaint(saved);
       setSuccessMessage('Denuncia guardada correctamente en la base de datos.');
       sessionStorage.removeItem(CITIZEN_SESSION_STORAGE_KEY);
+      sessionStorage.removeItem(CITIZEN_ACCESS_STORAGE_KEY);
       setRegistrationMode('');
       setSessionId('');
       setContactData({ name: '', email: '', phone: '' });
