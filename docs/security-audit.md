@@ -30,12 +30,13 @@ privados en la publicación.
 | Aislamiento de conversaciones | Se añadió capacidad ciudadana separada con hash y caducidad, propietario de sesiones internas/operativas y separación de audiencias. Las sesiones previas sin estos datos requieren iniciarse de nuevo. |
 | Reenvíos y abuso | Se impide enviar dos veces la misma sesión; se añaden cuotas atómicas compartidas, límites de cuerpo/contexto/salida y protección de intentos de login. Las escrituras públicas heredadas se deshabilitan en producción. |
 | Errores y retención | Se evita reflejar payloads privados en errores, se ocultan parámetros SQL y texto sensible de excepciones y se utiliza `store=False` en el agente operativo. |
-| Infraestructura | Se exige TLS en Cloud SQL y se retiran los roles de Editor, administrador de Cloud Run y escritor de imágenes de la antigua cuenta Compute, que no utiliza el despliegue actual. No se abren redes autorizadas a la base de datos. |
+| Infraestructura | Se exige TLS en Cloud SQL y se retiran los roles amplios y la capacidad de actuar como runtime de la antigua cuenta Compute. El permiso de bootstrap de secretos de Cloud Build se limita a sus cinco secretos de conexión GitHub, en lugar de todo el proyecto. No se abren redes autorizadas a la base de datos. |
+| Arranque y ramas | Compose solo publica puertos en loopback; Cloud Run exige modo de producción y autenticación. Las 21 ramas históricas se preservan mediante etiquetas `archive/2026-10-22/*`; `main` y `Develop` son las ramas soportadas. |
 | Prevención | Se añaden Gitleaks/Bandit/Trivy a CI, CodeQL, Dependabot y política de seguridad. GitHub debe exigir las comprobaciones antes de aceptar cambios en las ramas soportadas. |
 
 ## Evidencia de validación
 
-- 113 pruebas aprobadas; cobertura del 79,28 % en la ejecución local registrada.
+- 114 pruebas aprobadas; cobertura del 79,31 % en la ejecución local registrada.
 - Migraciones verificadas desde cero en SQLite y PostgreSQL con pgvector.
 - PostgreSQL: 40 intentos simultáneos contra una cuota de siete permitieron exactamente
   siete; dos envíos concurrentes de una misma sesión crearon un único incidente.

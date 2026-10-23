@@ -218,3 +218,19 @@ def test_concurrent_instances_cannot_overrun_a_shared_quota(tmp_path, monkeypatc
     with ThreadPoolExecutor(max_workers=8) as pool:
         assert sum(pool.map(attempt, range(30))) == 7
     engine.dispose()
+
+
+def test_cloud_run_without_explicit_environment_cannot_default_to_open_admin(monkeypatch):
+    monkeypatch.setenv("K_SERVICE", "test-cloud-run")
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("REQUIRE_ADMIN_AUTH", raising=False)
+    get_settings.cache_clear()
+    try:
+        assert get_settings().is_production
+        assert get_settings().require_admin_auth
+        monkeypatch.setenv("APP_ENV", "development")
+        get_settings.cache_clear()
+        with pytest.raises(ValueError, match="Cloud Run"):
+            get_settings()
+    finally:
+        get_settings.cache_clear()

@@ -85,7 +85,14 @@ class Settings:
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    app_env = os.getenv("APP_ENV", "development").strip().lower()
+    default_env = "production" if os.getenv("K_SERVICE") else "development"
+    app_env = _as_choice(
+        os.getenv("APP_ENV") or default_env,
+        {"development", "test", "testing", "production"},
+        "APP_ENV",
+    )
+    if os.getenv("K_SERVICE") and app_env != "production":
+        raise ValueError("Cloud Run requiere APP_ENV=production.")
     admin_api_key = os.getenv("ADMIN_API_KEY") or None
     require_admin_auth = _as_bool(
         os.getenv("REQUIRE_ADMIN_AUTH"),
