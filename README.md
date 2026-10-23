@@ -239,6 +239,10 @@ frontend/src/
 Los formularios actuales se consolidaron en `App.jsx`; la antigua configuración estática
 de `formQuestions.js` ya no formaba parte de la aplicación y se retiró en la versión 1.0.0.
 
+## Presentación final
+
+[Ver la presentación en PDF](presentation/SGCIU-defensa-respaldo.pdf)
+
 ## Documentación técnica
 
 - [Arquitectura](docs/architecture.md)
