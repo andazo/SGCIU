@@ -33,6 +33,7 @@ privados en la publicación.
 | Infraestructura | Se exige TLS en Cloud SQL y se retiran los roles amplios y la capacidad de actuar como runtime de la antigua cuenta Compute. El permiso de bootstrap de secretos de Cloud Build se limita a sus cinco secretos de conexión GitHub, en lugar de todo el proyecto. No se abren redes autorizadas a la base de datos. |
 | Arranque y ramas | Compose solo publica puertos en loopback; Cloud Run exige modo de producción y autenticación. Las 21 ramas históricas se preservan mediante etiquetas `archive/2026-10-22/*`; `main` y `Develop` son las ramas soportadas. |
 | Prevención | Se añaden Gitleaks/Bandit/Trivy a CI, CodeQL, Dependabot y política de seguridad. GitHub debe exigir las comprobaciones antes de aceptar cambios en las ramas soportadas. |
+| Presentación en PDF | El primer CodeQL público detectó nueve alertas en Reveal.js/Notes incrustados, fuera del runtime de la aplicación. Se retiran el HTML y sus componentes de las ramas soportadas; se conserva únicamente el PDF final, enlazado desde el README. El historial se conserva por decisión del autor. |
 
 ## Evidencia de validación
 
@@ -46,8 +47,8 @@ privados en la publicación.
   hallazgos medios/altos y Semgrep sin hallazgos en los conjuntos aplicados.
 - Escaneos históricos y de logs/documentos sin credenciales reales detectadas.
 
-La entrega debe completar además CI en GitHub y el despliegue con sus smoke tests antes
-de cambiar la visibilidad del repositorio.
+La entrega completó CI en GitHub, el despliegue y los smoke tests de producción.
+El repositorio es público y las dos ramas soportadas exigen las comprobaciones de CI.
 
 ## Límites
 
