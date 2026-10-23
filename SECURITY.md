@@ -11,6 +11,8 @@ explotación contra producción en issues públicos.
 
 ## Controles del proyecto
 
+- Docker Compose publica sus puertos solo en loopback. Cloud Run exige modo de
+  producción y lo aplica por defecto cuando no se ha especificado `APP_ENV`.
 - Secretos de producción en Secret Manager; no se empaquetan en Git ni en las imágenes.
 - Sesiones institucionales opacas de ocho horas; se almacena el hash del token.
   Las contraseñas se verifican mediante PBKDF2 con sal individual.
