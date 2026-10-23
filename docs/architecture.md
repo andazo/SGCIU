@@ -1,4 +1,16 @@
-# Arquitectura del backend SGCIU
+# Arquitectura de SGCIU
+
+[← Volver al proyecto](../README.md) · [Flujo ciudadano](#flujo-de-denuncia) · [Agente operativo](#flujo-del-agente-operativo) · [RAG normativo](#rag-normativo)
+
+## Vista general
+
+[![Arquitectura: del usuario a los servicios de IA](assets/arquitectura-usuario-servicios-ia.png)](assets/arquitectura-usuario-servicios-ia.png)
+
+*Selecciona la imagen para verla a tamaño completo.*
+
+El portal ciudadano y el panel institucional comparten un frontend React. El backend en Cloud Run concentra la autenticación y los servicios de incidentes, el agente ReAct con herramientas MCP y el RAG normativo. Cloud SQL conserva los datos y vectores; OpenAI proporciona los modelos y embeddings mediante llamadas desde el backend.
+
+Los siguientes diagramas detallan los flujos y los límites entre componentes.
 
 ## Principios
 
