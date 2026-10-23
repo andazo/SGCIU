@@ -45,7 +45,7 @@ configure_logging(settings.log_level)
 logger = logging.getLogger(__name__)
 DbSession = Annotated[Session, Depends(get_db)]
 
-app = FastAPI(title=settings.app_name, version="0.4.0")
+app = FastAPI(title=settings.app_name, version="1.0.0")
 app.include_router(intake_router, prefix="/v1")
 app.include_router(incidents_router, prefix="/v1")
 app.include_router(internal_intake_router, prefix="/v1")
